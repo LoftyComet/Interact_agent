@@ -106,6 +106,47 @@ def test_case_question_detects_case_intent() -> None:
     assert "控件形态" in structure.output_frame
 
 
+def test_design_evaluation_intent_extracts_structure() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse(
+        "请评估这个设计方案：在音乐播放器界面，用户长按音量旋钮后拖动来调节音量，松手后系统高亮确认。"
+    )
+
+    assert structure.intent == "design_evaluation"
+    assert "设计评估" in structure.focus
+    assert structure.design_evaluation is not None
+    assert "旋钮" in structure.design_evaluation.control_forms
+    assert "长按" in structure.design_evaluation.mechanisms
+    assert "拖动" in structure.design_evaluation.mechanisms
+    assert structure.design_evaluation.user_goal == "调节音量"
+    assert "高亮" in structure.design_evaluation.system_feedback
+    assert "问题诊断" in structure.output_frame
+
+
+def test_design_evaluation_with_image_prefers_evaluation_over_case_analysis() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("请评估这张界面图里的交互方案是否合理", image_paths=["case.png"])
+
+    assert structure.intent == "design_evaluation"
+    assert structure.design_evaluation is not None
+    assert "image" in structure.design_evaluation.modality
+
+
+def test_design_evaluation_requires_clarification_when_too_vague() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    resolution = parser.resolve_intent("帮我评估这个方案")
+
+    assert resolution.intent == "design_evaluation"
+    assert resolution.needs_clarification is True
+    assert "评估设计方案" in resolution.clarification_question
+
+
 def test_resolve_intent_requires_clarification_for_vague_query() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)

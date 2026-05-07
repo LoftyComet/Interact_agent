@@ -4,9 +4,11 @@ import re
 from typing import Optional
 
 from gesture_agent.core.models import Intent, IntentCandidate, IntentResolution, Layer, QuestionStructure
+from gesture_agent.evaluation import parse_design_evaluation
 from gesture_agent.knowledge.base import KnowledgeBase
 
 
+DESIGN_EVALUATION_RE = re.compile(r"(评估|评价|评审|设计方案|这个方案|方案合理|合理吗|有什么问题|哪里有问题|改进建议|优化建议|怎么优化|帮我看看.*设计|设计.*建议)")
 COMPARE_RE = re.compile(r"(对比|比较|区别|差异|不同|vs|VS|相比|哪个更|如何选择)")
 CASE_RE = re.compile(r"(案例|例子|图片|图中|截图|这个交互|这个设计|分析|拆解|应用)")
 PODCAST_RE = re.compile(r"(播客|podcast|口播|脚本|讲稿|音频节目|节目稿|访谈)")
@@ -31,6 +33,7 @@ INTENT_LABELS: dict[Intent, str] = {
     "interaction_compare": "交互机制对比",
     "background_knowledge": "背景知识",
     "case_analysis": "理解交互案例",
+    "design_evaluation": "设计方案评估",
 }
 
 
@@ -53,6 +56,11 @@ class QuestionParser:
         case_modality = self._detect_case_modality(query, image_paths)
         missing_info = self._missing_info(intent, query, image_paths)
         output_frame = self._output_frame(intent)
+        design_evaluation = (
+            parse_design_evaluation(query, image_paths=image_paths, terms=terms)
+            if intent == "design_evaluation"
+            else None
+        )
 
         return QuestionStructure(
             raw_query=query,
@@ -64,6 +72,7 @@ class QuestionParser:
             case_modality=case_modality,
             missing_info=missing_info,
             output_frame=output_frame,
+            design_evaluation=design_evaluation,
         )
 
     def resolve_intent(self, query: str, image_paths: Optional[list[str]] = None) -> IntentResolution:
@@ -107,8 +116,10 @@ class QuestionParser:
             if current is None or score > current.score:
                 candidates[intent] = IntentCandidate(intent=intent, score=score, reason=reason)
 
+        if DESIGN_EVALUATION_RE.search(query):
+            add("design_evaluation", 0.99, "问题包含评估/评价/优化设计方案等设计评审信号。")
         if image_paths:
-            add("case_analysis", 1.0, "用户提供了图片，需要理解交互案例。")
+            add("case_analysis", 0.94, "用户提供了图片，需要理解交互案例。")
         if CASE_RE.search(query):
             add("case_analysis", 0.92, "问题包含案例/图片/分析/拆解等案例理解信号。")
         if COMPARE_RE.search(query):
@@ -158,6 +169,7 @@ class QuestionParser:
             "advanced_interaction_mechanism": "interaction_mechanism",
             "control_form": "control_form",
             "case_analysis": "interaction_case",
+            "design_evaluation": "design_evaluation",
             "multimodal_interaction": "multimodal_interaction",
             "voice_interaction": "voice_interaction",
             "podcast_content": "podcast_content",
@@ -186,6 +198,7 @@ class QuestionParser:
             ("交互特性", ["特性", "响应速度", "操作难度", "容错", "安全"]),
             ("适用边界", ["适用", "不适用", "场景", "边界", "什么时候"]),
             ("案例理解", ["案例", "例子", "图片", "图中", "截图"]),
+            ("设计评估", ["评估", "评价", "评审", "设计方案", "合理吗", "有什么问题", "优化", "改进建议"]),
             ("学习引导", ["引导", "追问", "测验", "学习"]),
         ]
         focus = [name for name, keys in mapping if any(key in query for key in keys)]
@@ -213,6 +226,9 @@ class QuestionParser:
         return modality or ["text"]
 
     def _missing_info(self, intent: Intent, query: str, image_paths: list[str]) -> list[str]:
+        if intent == "design_evaluation":
+            terms = self.kb.find_terms(query)
+            return parse_design_evaluation(query, image_paths=image_paths, terms=terms).missing_info
         return self._blocking_missing_info(intent, query, image_paths)
 
     def _blocking_missing_info(self, intent: Intent, query: str, image_paths: list[str]) -> list[str]:
@@ -223,6 +239,19 @@ class QuestionParser:
             missing.append("对比对象不够明确，建议至少给出两个交互方式或控件形态。")
         if intent == "podcast_content" and len(query) < 20:
             missing.append("播客主题较短，建议补充听众对象、时长、栏目风格或希望讲解的知识点。")
+        if intent == "design_evaluation":
+            terms = self.kb.find_terms(query)
+            evaluation = parse_design_evaluation(query, image_paths=image_paths, terms=terms)
+            critical_missing = [
+                item
+                for item in evaluation.missing_info
+                if item.startswith("设计方案描述较短")
+                or item.startswith("缺少用户目标")
+                or item.startswith("缺少明确的交互机制")
+            ]
+            if not image_paths and not evaluation.control_forms and not evaluation.mechanisms:
+                critical_missing.append("缺少可拆解的控件形态和交互机制。")
+            missing.extend(critical_missing)
         return missing
 
     def _build_clarification_question(
@@ -239,11 +268,13 @@ class QuestionParser:
                 return "这个案例信息还不够。请补充：界面/产品是什么、用户做了什么动作、系统有什么反馈；或者直接提供图片。"
             if candidates and candidates[0].intent == "podcast_content":
                 return "播客方向可以确定，但还缺少制作参数。请补充听众对象、预计时长、风格，以及想重点讲哪个知识点。"
+            if candidates and candidates[0].intent == "design_evaluation":
+                return "要评估设计方案，还需要补充：产品/界面场景、用户目标、用户动作、控件形态、系统反馈或状态变化。"
 
         if not candidates:
             return (
                 "这个问题目前无法确定要按哪类任务处理。你是想问：基础交互机制、控件形态、基础属性、"
-                "交互机制对比、背景知识、案例分析，还是播客/语音/多模态内容？请补充一个具体对象或场景。"
+                "交互机制对比、背景知识、案例分析、设计方案评估，还是播客/语音/多模态内容？请补充一个具体对象或场景。"
             )
 
         options = "、".join(f"{INTENT_LABELS[item.intent]}({item.reason})" for item in candidates[:3])
@@ -261,6 +292,7 @@ class QuestionParser:
             "interaction_compare": ["对比对象", "共同基础", "核心差异", "适用边界", "选择建议"],
             "background_knowledge": ["背景问题", "核心观点", "词典中的位置", "为什么重要", "与后续知识的关系"],
             "case_analysis": ["案例描述", "控件形态", "基础属性", "交互机制", "响应逻辑", "设计判断", "追问"],
+            "design_evaluation": ["方案复述", "结构拆解", "问题诊断", "修改建议", "规范术语版本", "需要补充的信息"],
         }
         return frames[intent]
 

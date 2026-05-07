@@ -1,6 +1,6 @@
 # 手势词典学习 Agent 原型
 
-这是一个面向“手势词典”的第一版学习辅助 agent。它先在本地完成问题结构拆分和资料检索，再通过 OpenAI 兼容 SDK 把结构化上下文交给硅基流动 Chat Completions API 生成答案。
+这是一个面向“手势词典”的学习与设计评估 agent。它先在本地完成问题结构拆分和资料检索，再通过 OpenAI 兼容 SDK 把结构化上下文交给硅基流动 Chat Completions API 生成答案。
 
 ## 当前支持的 Intent
 
@@ -14,13 +14,14 @@
 8. `interaction_compare`：交互机制对比，例如“单击和长按有什么区别？”
 9. `background_knowledge`：背景知识，例如“交互的本质和操控力视角是什么？”
 10. `case_analysis`：理解交互案例，支持文字案例，也预留图片案例输入。
+11. `design_evaluation`：设计方案评估，例如“请评估这个设计方案是否合理，并用手势词典术语给修改建议。”
 
 ## 问题结构
 
 每个用户问题会先被拆成：
 
-- `intent`：上述 10 类任务类型
-- `layers`：`basic_property`、`interaction_mechanism`、`control_form`、`interaction_case`
+- `intent`：上述 11 类任务类型
+- `layers`：`basic_property`、`interaction_mechanism`、`control_form`、`interaction_case`、`design_evaluation`
 - `terms`：命中的词典术语
 - `focus`：定义、属性、逻辑关系、交互特性、适用边界等
 - `output_frame`：回答时必须遵循的结构
@@ -75,6 +76,16 @@ uv run python -m gesture_agent.cli "请用手势词典结构分析这张图里�
 ```
 
 传入 `--image` 时，如果没有显式设置 `--model`，系统会优先使用 `.env` 中的 `SILICONFLOW_VISION_MODEL`。
+
+设计方案评估：
+
+```bash
+uv run python -m gesture_agent.cli \
+  "请评估这个设计方案：在音乐播放器界面，用户长按音量旋钮后拖动来调节音量，松手后系统高亮确认。" \
+  --dry-run
+```
+
+评估模式会先把方案拆成“控件形态、基础属性、交互机制、响应逻辑、系统反馈”，再按手势词典术语输出问题诊断和修改建议。
 
 ## 配置
 

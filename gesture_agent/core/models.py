@@ -15,6 +15,7 @@ Intent = Literal[
     "interaction_compare",
     "background_knowledge",
     "case_analysis",
+    "design_evaluation",
 ]
 
 Layer = Literal[
@@ -26,6 +27,7 @@ Layer = Literal[
     "voice_interaction",
     "podcast_content",
     "background_knowledge",
+    "design_evaluation",
     "unknown",
 ]
 
@@ -47,6 +49,20 @@ class SourceChunk:
 
 
 @dataclass
+class DesignEvaluationStructure:
+    raw_proposal: str
+    modality: list[str]
+    product_context: str = ""
+    user_goal: str = ""
+    control_forms: list[str] = field(default_factory=list)
+    basic_properties: list[str] = field(default_factory=list)
+    mechanisms: list[str] = field(default_factory=list)
+    system_feedback: list[str] = field(default_factory=list)
+    risk_points: list[str] = field(default_factory=list)
+    missing_info: list[str] = field(default_factory=list)
+
+
+@dataclass
 class QuestionStructure:
     raw_query: str
     intent: Intent
@@ -57,6 +73,7 @@ class QuestionStructure:
     case_modality: list[str] = field(default_factory=list)
     missing_info: list[str] = field(default_factory=list)
     output_frame: list[str] = field(default_factory=list)
+    design_evaluation: Optional[DesignEvaluationStructure] = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
