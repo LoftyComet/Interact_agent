@@ -41,6 +41,8 @@ uv run python -m gesture_agent.cli "单击和长按有什么区别？" --show-st
 uv run python -m gesture_agent.cli "拖拽是什么？" --dry-run
 ```
 
+交互机制对比资料会读取 `data/交互机制对比.md`，并按小节切块检索。例如“快击和点击缓冲有什么区别？”会优先命中“快击 VS 点击缓冲”小节，而不是只检索到整篇文档。
+
 连续提问：
 
 ```bash
@@ -55,7 +57,9 @@ uv run python -m gesture_agent.cli --interactive
 uv run python -m gesture_agent.cli --interactive --llm-intent
 ```
 
-`--llm-intent` 会先用本地规则产生候选，再调用硅基流动模型结合对话记忆做二次判断；如果 API 不可用，会回退到本地规则。`--dry-run` 永远不调用 API，因此会自动跳过大模型 intent 判断。
+交互式模式默认使用“规则 + LLM 兜底”：先用本地规则判断；如果本地规则认为信息不足、准备反问，系统会调用硅基流动模型结合对话记忆再判断一次。如果 API 不可用，会回退到本地规则。
+
+`--llm-intent` 会让每一轮都使用大模型辅助判断 intent。`--no-llm-clarify` 可以关闭默认的 LLM 兜底。`--dry-run` 永远不调用 API，因此会自动跳过大模型 intent 判断。
 
 检查 API 连通性：
 

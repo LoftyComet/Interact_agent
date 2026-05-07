@@ -22,6 +22,14 @@ class LLMIntentResolver:
         memory_context: str = "",
     ) -> IntentResolution:
         rule_resolution = self.parser.resolve_intent(query, image_paths=image_paths)
+        return self._resolve_with_rule(query, rule_resolution, memory_context)
+
+    def _resolve_with_rule(
+        self,
+        query: str,
+        rule_resolution: IntentResolution,
+        memory_context: str,
+    ) -> IntentResolution:
         prompt = self._build_prompt(query, rule_resolution, memory_context)
 
         try:
@@ -87,9 +95,10 @@ class LLMIntentResolver:
 
 判定要求：
 1. 如果当前输入是追问，例如“它”“这个”“那它和长按有什么区别”，必须结合对话记忆补全指代。
-2. 如果能明确判断 intent，输出 needs_clarification=false。
-3. 如果仍缺少关键对象或场景，输出 needs_clarification=true，并给出一个简短反问。
-4. 只输出 JSON，不要输出解释文本。
+2. 如果上一轮是 design_evaluation，当前输入说“这个案例/这个方案/如何应用/主要风险/怎么改/微变”，通常应继续判为 design_evaluation，而不是机械判为 case_analysis。
+3. 如果能明确判断 intent，输出 needs_clarification=false。
+4. 如果仍缺少关键对象或场景，输出 needs_clarification=true，并给出一个简短反问。
+5. 只输出 JSON，不要输出解释文本。
 
 JSON 格式：
 {{
@@ -106,6 +115,22 @@ JSON 格式：
         if start < 0 or end < start:
             raise ValueError("No JSON object found in LLM intent response.")
         return json.loads(text[start : end + 1])
+
+
+class ClarificationIntentResolver(LLMIntentResolver):
+    """Only ask the LLM when local rules would otherwise ask the user to clarify."""
+
+    def resolve(
+        self,
+        query: str,
+        *,
+        image_paths: Optional[list[str]] = None,
+        memory_context: str = "",
+    ) -> IntentResolution:
+        rule_resolution = self.parser.resolve_intent(query, image_paths=image_paths)
+        if not rule_resolution.needs_clarification and rule_resolution.intent is not None:
+            return rule_resolution
+        return self._resolve_with_rule(query, rule_resolution, memory_context)
 
 
 def _coerce_float(value: Any, default: float) -> float:

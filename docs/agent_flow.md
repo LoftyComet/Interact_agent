@@ -104,6 +104,7 @@ kb = KnowledgeBase.load(args.data_dir)
 - `data/2.md`
 - `data/3.md`
 - `data/dic.md`
+- `data/交互机制对比.md`
 
 注意：当前还没有读取 `data/手势词典大纲定稿.xlsx`。
 
@@ -120,6 +121,7 @@ kb = KnowledgeBase.load(args.data_dir)
 - `interaction_mechanism`：交互机制，如单击、长按、拖拽、甩动。
 - `control_form`：控件形态，如按钮、旋钮、触控面、手势。
 - `interaction_case`：交互案例。
+- `design_evaluation`：设计方案评估结构。
 - `unknown`：暂未识别的章节。
 
 ### 第 3 步：拆解用户问题结构
@@ -140,6 +142,8 @@ kb = KnowledgeBase.load(args.data_dir)
 2. `LLMIntentResolver` 把“当前输入 + 对话记忆 + 规则候选”交给硅基流动模型，要求只返回结构化 JSON。
 3. 如果大模型给出合法 intent 且不需要澄清，session 使用该 intent 调用 `QuestionParser.parse(..., forced_intent=...)`。
 4. 如果大模型返回不合法 JSON、API 失败或没有合法 intent，系统回退到本地规则；如果仍不明确，继续反问。
+
+交互式模式默认还有一层轻量兜底：不加 `--llm-intent` 时，系统不会每轮都调用大模型；只有当本地规则判断 `needs_clarification=true` 或 `intent=None`，才调用 `ClarificationIntentResolver` 做二次判断。这样可以减少“关键词规则误以为信息不足”的情况，同时避免每轮都增加 API 延迟。可用 `--no-llm-clarify` 关闭该兜底。
 
 示例：
 
@@ -232,7 +236,8 @@ chunks = kb.search(question, top_k=args.top_k, prefer_terms=structure.terms)
 2. 对问题和资料标题/正文做轻量分词。
 3. 标题命中权重大于正文命中。
 4. `interaction_mechanism` 会略微加权，因为当前核心学习内容主要是交互机制。
-5. 对结果去重，保留排名最高的 `top-k` 条。
+5. `data/交互机制对比.md` 会按“开关 vs 单击 vs 按下”“快击 VS 点击缓冲”等编号小节切块，并从标题中拆出对比对象术语。
+6. 对结果去重，保留排名最高的 `top-k` 条。
 
 示例：用户问“什么是单击？”时，`--dry-run` 会检索到类似：
 
@@ -240,6 +245,12 @@ chunks = kb.search(question, top_k=args.top_k, prefer_terms=structure.terms)
 1. 1-b 单击(010变化) (data/2.md:43-66)
 2. 4-a 快击(单击vs长按) (data/2.md:760-784)
 3. 4-b 点击缓冲 (单击vs双击) (data/2.md:785-809)
+```
+
+示例：用户问“快击和点击缓冲有什么区别？”时，会优先命中：
+
+```text
+1. 3、快击 VS 点击缓冲(顺序提前) (data/交互机制对比.md:36-50)
 ```
 
 这些片段会成为模型回答的依据。
@@ -370,11 +381,12 @@ UV_CACHE_DIR=/tmp/uv-cache uv run python -m gesture_agent.cli "单击和长按�
 
 - 自动读取 `.env`。
 - 读取 `data/*.md` 并拆分为知识片段。
+- 将 `data/交互机制对比.md` 按对比小节切块，提升交互机制对比类问题的检索命中率。
 - 识别十一类用户意图，并为每类分配独立 `output_frame`。
 - 支持 `design_evaluation`：把用户设计方案拆成控件形态、基础属性、交互机制、响应逻辑、系统反馈和风险点，再给规范术语版本与修改建议。
 - 在交互式模式下管理 session：模糊问题会先反问，补充信息进入 pending session，直到 intent 明确后再回答。
 - 记录短期对话记忆：回答成功后保存前几轮问题结构和回答摘要，支持“它/这个/继续/区别”等追问。
-- 可选使用 `--llm-intent`：用硅基流动模型结合规则候选和对话记忆辅助判断 intent，失败时回退到本地规则。
+- 默认在本地规则信息不足时用大模型二次判断 intent；可选使用 `--llm-intent` 让每轮都由大模型辅助判断，失败时回退到本地规则。
 - 基于术语和文本匹配进行本地检索。
 - 将问题结构、短期对话记忆和检索资料注入 prompt。
 - 通过硅基流动 OpenAI 兼容接口生成回答。
@@ -385,7 +397,7 @@ UV_CACHE_DIR=/tmp/uv-cache uv run python -m gesture_agent.cli "单击和长按�
 - 还没有使用向量数据库，检索是关键词和轻量分词匹配。
 - 还没有读取 Excel 大纲文件。
 - 图片案例只完成接口预留，实际效果取决于所选模型是否支持视觉输入。
-- LLM intent 判断是可选能力；不加 `--llm-intent` 时仍使用本地规则。
+- 默认只在本地规则信息不足时调用 LLM 兜底；如果完全不希望 intent 阶段调用模型，需要显式使用 `--no-llm-clarify`。
 - 当前只有短期会话记忆，没有跨进程/跨天的长期记忆。
 
 ## 7. 下一步可汇报的优化方向

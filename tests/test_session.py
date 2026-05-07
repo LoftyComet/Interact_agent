@@ -70,6 +70,56 @@ def test_follow_up_uses_previous_turn_memory() -> None:
     assert "对话记忆" in second.resolved_query
 
 
+def test_design_evaluation_follow_up_keeps_evaluation_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+    session = ConversationSession(parser)
+
+    first = session.receive("请评估这个设计方案：在音乐播放器界面，用户长按音量旋钮后拖动来调节音量，松手后系统高亮确认。")
+    assert first.status == "ready"
+    assert first.structure is not None
+    assert first.structure.intent == "design_evaluation"
+    session.record_turn(
+        user_query=first.user_query,
+        resolved_query=first.resolved_query,
+        structure=first.structure,
+        answer="建议将长按拖拽改为更直接的旋转拖拽，并使用微变响应提供连续反馈。",
+    )
+
+    second = session.receive("如何应用微变")
+
+    assert second.status == "ready"
+    assert second.structure is not None
+    assert second.structure.intent == "design_evaluation"
+    assert second.structure.design_evaluation is not None
+    assert second.structure.design_evaluation.product_context == "音乐播放器"
+    assert second.structure.design_evaluation.user_goal == "调节音量"
+    assert "对话记忆" in second.resolved_query
+
+
+def test_design_evaluation_case_word_follow_up_does_not_fall_back_to_case_analysis() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+    session = ConversationSession(parser)
+
+    first = session.receive("请评估这个设计方案：在音乐播放器界面，用户长按音量旋钮后拖动来调节音量，松手后系统高亮确认。")
+    assert first.status == "ready"
+    assert first.structure is not None
+    session.record_turn(
+        user_query=first.user_query,
+        resolved_query=first.resolved_query,
+        structure=first.structure,
+        answer="评估完成。",
+    )
+
+    second = session.receive("就是刚才那个案例如何应用微变")
+
+    assert second.status == "ready"
+    assert second.structure is not None
+    assert second.structure.intent == "design_evaluation"
+    assert session.pending is None
+
+
 def test_session_can_use_llm_intent_resolver() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)

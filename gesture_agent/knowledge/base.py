@@ -12,6 +12,9 @@ MECHANISM_HEADING_RE = re.compile(r"^\d+-[a-z]\s+[^、，,]{1,80}$", re.IGNORECA
 PROPERTY_HEADING_RE = re.compile(r"^[（(]\d+[）)][^,，。；;]{0,30}(?:属性|信号|阶次控制)[^,，。；;]{0,40}$")
 FORM_HEADING_RE = re.compile(r"^[（(]\d+[）)][^：:]{1,24}$")
 TOP_HEADING_RE = re.compile(r"^\d+\.\s+[^：:]{2,40}$")
+COMPARISON_FILENAME = "交互机制对比.md"
+COMPARISON_HEADING_RE = re.compile(r"^\d+、.{2,80}$")
+COMPARISON_SPLIT_RE = re.compile(r"\s*(?:vs|VS|Vs|和|与|、|/)\s*")
 
 
 class KnowledgeBase:
@@ -89,6 +92,10 @@ class KnowledgeBase:
             stripped = line.strip()
             if not stripped:
                 continue
+            if filename == COMPARISON_FILENAME:
+                if idx == 0 or COMPARISON_HEADING_RE.match(stripped):
+                    indexes.append(idx)
+                continue
             if MECHANISM_HEADING_RE.match(stripped):
                 indexes.append(idx)
                 continue
@@ -103,6 +110,8 @@ class KnowledgeBase:
         return sorted(set(indexes))
 
     def _infer_layer(self, filename: str, title: str) -> Layer:
+        if filename == COMPARISON_FILENAME:
+            return "interaction_mechanism"
         if MECHANISM_HEADING_RE.match(title):
             return "interaction_mechanism"
         if "多模态" in title:
@@ -121,6 +130,12 @@ class KnowledgeBase:
         base = strip_heading_prefix(cleaned)
         if base:
             terms.append(base)
+            if "vs" in base.lower() or "与" in base or "和" in base or "、" in base or "/" in base:
+                terms.extend(
+                    item.strip()
+                    for item in COMPARISON_SPLIT_RE.split(base)
+                    if 1 < len(item.strip()) <= 24
+                )
         code_match = re.match(r"^(\d+-[a-z])\s+(.+)$", cleaned, flags=re.IGNORECASE)
         if code_match:
             terms.append(code_match.group(1).lower())

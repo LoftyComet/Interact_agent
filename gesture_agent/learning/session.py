@@ -4,12 +4,15 @@ from dataclasses import dataclass, field
 import re
 from typing import Optional
 
-from gesture_agent.core.models import IntentCandidate, QuestionStructure, SessionResult
+from gesture_agent.core.models import Intent, IntentCandidate, IntentResolution, QuestionStructure, SessionResult
 
 from .llm_intent import LLMIntentResolver
 from .question_parser import QuestionParser
 
-FOLLOW_UP_RE = re.compile(r"(它|这个|那个|上述|刚才|继续|那|再|还有|前面|上一|区别|相比|为什么|怎么用|适用)")
+FOLLOW_UP_RE = re.compile(r"(它|这个|那个|上述|刚才|继续|那|再|还有|前面|上一|区别|相比|为什么|怎么用|如何|适用|应用)")
+DESIGN_EVALUATION_FOLLOW_UP_RE = re.compile(
+    r"(这个方案|那个方案|刚才.*方案|上述方案|这个案例|刚才.*案例|微变|主要风险|风险|问题诊断|怎么改|修改|优化|建议|规范术语)"
+)
 
 
 @dataclass
@@ -69,7 +72,14 @@ class ConversationSession:
 
         memory_context = self.memory_summary()
         contextual_query = self._contextualize_query(user_query, memory_context)
-        result = self._try_resolve(contextual_query, image_paths, user_query=user_query, memory_context=memory_context)
+        carried_intent = self._carried_intent(user_query)
+        result = self._try_resolve(
+            contextual_query,
+            image_paths,
+            user_query=user_query,
+            memory_context=memory_context,
+            forced_intent=carried_intent,
+        )
         if result.status == "clarify":
             resolution = result.resolution
             self.pending = PendingClarification(
@@ -123,8 +133,22 @@ class ConversationSession:
         *,
         user_query: str,
         memory_context: str,
+        forced_intent: Optional[Intent] = None,
     ) -> SessionResult:
-        if self.intent_resolver:
+        if forced_intent:
+            resolution = IntentResolution(
+                intent=forced_intent,
+                confidence=0.93,
+                candidates=[
+                    IntentCandidate(
+                        intent=forced_intent,
+                        score=0.93,
+                        reason="根据上一轮会话意图和当前追问延续判断。",
+                    )
+                ],
+                needs_clarification=False,
+            )
+        elif self.intent_resolver:
             resolution = self.intent_resolver.resolve(query, image_paths=image_paths, memory_context=memory_context)
         else:
             resolution = self.parser.resolve_intent(query, image_paths=image_paths)
@@ -152,9 +176,17 @@ class ConversationSession:
     def _contextualize_query(self, user_query: str, memory_context: str) -> str:
         if not memory_context:
             return user_query
-        if FOLLOW_UP_RE.search(user_query):
+        if FOLLOW_UP_RE.search(user_query) or self._carried_intent(user_query):
             return f"{user_query}\n对话记忆：\n{memory_context}"
         return user_query
+
+    def _carried_intent(self, user_query: str) -> Optional[Intent]:
+        if not self.turns:
+            return None
+        last_intent = self.turns[-1].structure.intent
+        if last_intent == "design_evaluation" and DESIGN_EVALUATION_FOLLOW_UP_RE.search(user_query):
+            return "design_evaluation"
+        return None
 
 
 def _summarize_answer(answer: str, limit: int = 220) -> str:

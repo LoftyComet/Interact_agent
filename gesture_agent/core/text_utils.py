@@ -42,6 +42,7 @@ def tokenize(text: str) -> set[str]:
 
 def strip_heading_prefix(title: str) -> str:
     title = clean_text(title).strip()
+    title = re.sub(r"^\d+\s*、\s*", "", title)
     title = re.sub(r"^\d+\s*[.-]\s*", "", title)
     title = re.sub(r"^\d+-[a-z]\s*", "", title, flags=re.IGNORECASE)
     title = re.sub(r"^[(（]\d+[)）]\s*", "", title)

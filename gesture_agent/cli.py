@@ -8,7 +8,7 @@ from typing import Optional
 
 from .core.models import QuestionStructure
 from .knowledge import KnowledgeBase
-from .learning import ConversationSession, LLMIntentResolver, QuestionParser
+from .learning import ClarificationIntentResolver, ConversationSession, LLMIntentResolver, QuestionParser
 from .learning.prompt_builder import build_messages
 from .media import image_path_to_data_url
 from .providers import SiliconFlowClient, SiliconFlowError
@@ -42,7 +42,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--show-context", action="store_true", help="输出检索到的资料标题。")
     parser.add_argument("--dry-run", action="store_true", help="只做拆解和检索，不调用 API。")
     parser.add_argument("--interactive", action="store_true", help="连续问答模式。")
-    parser.add_argument("--llm-intent", action="store_true", help="使用硅基流动大模型辅助判断 intent；失败时回退到本地规则。")
+    parser.add_argument("--llm-intent", action="store_true", help="每轮都使用硅基流动大模型辅助判断 intent；失败时回退到本地规则。")
+    parser.add_argument("--no-llm-clarify", action="store_true", help="关闭“本地规则信息不足时用大模型二次判断”的默认行为。")
     return parser
 
 
@@ -194,7 +195,7 @@ def resolve_structure(args: argparse.Namespace, parser: QuestionParser, question
 
 
 def build_intent_resolver(args: argparse.Namespace, parser: QuestionParser) -> Optional[LLMIntentResolver]:
-    if not args.llm_intent or args.dry_run:
+    if args.dry_run or (args.no_llm_clarify and not args.llm_intent):
         return None
     try:
         client = SiliconFlowClient.from_env(
@@ -206,7 +207,9 @@ def build_intent_resolver(args: argparse.Namespace, parser: QuestionParser) -> O
     except SiliconFlowError as exc:
         print(f"LLM intent 判断不可用，已回退到本地规则：{exc}", file=sys.stderr)
         return None
-    return LLMIntentResolver(parser, client)
+    if args.llm_intent:
+        return LLMIntentResolver(parser, client)
+    return ClarificationIntentResolver(parser, client)
 
 
 def check_api(args: argparse.Namespace) -> int:
