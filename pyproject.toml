@@ -1,0 +1,16 @@
+[project]
+name = "gesture-dictionary-agent"
+version = "0.1.0"
+description = "A structured learning agent prototype for an interaction design gesture dictionary."
+requires-python = ">=3.9"
+dependencies = [
+    "openai>=1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
