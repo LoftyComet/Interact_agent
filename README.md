@@ -26,6 +26,77 @@
 - `focus`：定义、属性、逻辑关系、交互特性、适用边界等
 - `output_frame`：回答时必须遵循的结构
 
+知识库加载时还会生成 `term_inventory` 术语枚举，按 `basic_property`、`interaction_mechanism`、`control_form` 等层级保存手势词典中的规范术语。模型回答时会把这些枚举注入 prompt，要求控件形态、基础属性、交互机制等专有名词必须来自枚举或检索资料标题，避免创造混乱术语。
+
+专家标注后的术语可以写在 `by_type` 中，例如“基础交互机制、控件形态、响应类型”；旧的 `by_layer` 仍兼容，用于和代码内部检索层级对齐。
+
+查看当前生效的术语枚举：
+
+```bash
+uv run python -m gesture_agent.cli --show-term-inventory
+```
+
+导出当前术语枚举作为可编辑配置：
+
+```bash
+uv run python -m gesture_agent.cli --export-term-inventory data/term_inventory.json
+```
+
+也可以从模板开始：
+
+```bash
+cp data/term_inventory.example.json data/term_inventory.json
+```
+
+`data/term_inventory.json` 会被默认读取。配置中的 `mode` 支持：
+
+- `merge`：把你定义的术语放在自动生成术语前面，同时保留自动生成结果。
+- `replace`：完全使用配置文件中的术语枚举。
+
+如果想使用其他路径：
+
+```bash
+uv run python -m gesture_agent.cli "什么是单击？" --term-inventory ./my_terms.json
+```
+
+推荐的专家标注导入格式：
+
+```json
+{
+  "mode": "merge",
+  "by_type": {
+    "基础交互机制": ["单击", "双击", "长按", "拖拽"],
+    "高级交互机制": ["快击", "点击缓冲", "长按拖拽"],
+    "控件形态": ["按钮", "旋钮", "触控面"],
+    "响应类型": ["微变", "确认反馈"]
+  }
+}
+```
+
+Intent 输出框架也可以由专家标注后配置。默认读取 `data/output_frames.json`，也可以从模板开始：
+
+```bash
+cp data/output_frames.example.json data/output_frames.json
+```
+
+查看或导出当前生效的输出框架：
+
+```bash
+uv run python -m gesture_agent.cli --show-output-frames
+uv run python -m gesture_agent.cli --export-output-frames data/output_frames.json
+```
+
+配置中的 `mode` 支持：
+
+- `merge`：只覆盖配置中写到的 intent，未写的 intent 继续使用默认输出框架。
+- `replace`：完全使用配置文件；必须提供全部 11 类 intent 的输出框架。
+
+如果想使用其他路径：
+
+```bash
+uv run python -m gesture_agent.cli "什么是单击？" --output-frames ./my_output_frames.json
+```
+
 ## 使用
 
 ```bash

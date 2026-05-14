@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
-from gesture_agent.core.models import Layer, SourceChunk
+from gesture_agent.core.models import Layer, SourceChunk, TermInventory
 from gesture_agent.core.text_utils import clean_text, compact_whitespace, strip_heading_prefix, tokenize
 
 
@@ -15,17 +16,47 @@ TOP_HEADING_RE = re.compile(r"^\d+\.\s+[^：:]{2,40}$")
 COMPARISON_FILENAME = "交互机制对比.md"
 COMPARISON_HEADING_RE = re.compile(r"^\d+、.{2,80}$")
 COMPARISON_SPLIT_RE = re.compile(r"\s*(?:vs|VS|Vs|和|与|、|/)\s*")
+TERM_CODE_RE = re.compile(r"^(?:\d+-[a-z]|[0-9A-Za-z /×÷+\-]+)$", re.IGNORECASE)
+STRUCTURAL_TERMS = [
+    "控件形态",
+    "基本属性",
+    "基础属性",
+    "交互机制",
+    "响应逻辑",
+    "交互特性",
+    "适用边界",
+    "不适用场景",
+    "系统反馈",
+    "状态/变化序列",
+    "方案复述",
+    "结构拆解",
+    "问题诊断",
+    "修改建议",
+    "规范术语版本",
+]
+DEFAULT_TERM_INVENTORY_FILENAME = "term_inventory.json"
+TERM_INVENTORY_MODES = {"merge", "replace"}
 
 
 class KnowledgeBase:
-    def __init__(self, data_dir: Union[str, Path] = "data") -> None:
+    def __init__(
+        self,
+        data_dir: Union[str, Path] = "data",
+        term_inventory_path: Optional[Union[str, Path]] = None,
+    ) -> None:
         self.data_dir = Path(data_dir)
+        self.term_inventory_path = Path(term_inventory_path) if term_inventory_path else self.data_dir / DEFAULT_TERM_INVENTORY_FILENAME
         self.chunks: list[SourceChunk] = []
         self.terms: list[str] = []
+        self.term_inventory = TermInventory()
 
     @classmethod
-    def load(cls, data_dir: Union[str, Path] = "data") -> "KnowledgeBase":
-        kb = cls(data_dir)
+    def load(
+        cls,
+        data_dir: Union[str, Path] = "data",
+        term_inventory_path: Optional[Union[str, Path]] = None,
+    ) -> "KnowledgeBase":
+        kb = cls(data_dir, term_inventory_path=term_inventory_path)
         kb._load()
         return kb
 
@@ -41,6 +72,10 @@ class KnowledgeBase:
         term_set: set[str] = set()
         for chunk in chunks:
             term_set.update(chunk.terms)
+        self.terms = sorted(term_set, key=lambda item: (-len(item), item))
+        generated_inventory = self._build_term_inventory(chunks)
+        self.term_inventory = self._load_term_inventory_config(generated_inventory)
+        term_set.update(self.term_inventory.all_terms())
         self.terms = sorted(term_set, key=lambda item: (-len(item), item))
 
     def _parse_markdown(self, path: Path) -> list[SourceChunk]:
@@ -157,6 +192,36 @@ class KnowledgeBase:
             unique.append(term)
         return unique
 
+    def _build_term_inventory(self, chunks: list[SourceChunk]) -> TermInventory:
+        by_layer: dict[Layer, list[str]] = {}
+        for chunk in chunks:
+            layer_terms = by_layer.setdefault(chunk.layer, [])
+            for term in chunk.terms:
+                canonical = _canonical_output_term(term)
+                if canonical and canonical not in layer_terms:
+                    layer_terms.append(canonical)
+
+        for layer, terms in list(by_layer.items()):
+            by_layer[layer] = sorted(terms, key=lambda item: (-len(item), item))
+        return TermInventory(by_layer=by_layer, structural_terms=STRUCTURAL_TERMS, source="generated")
+
+    def _load_term_inventory_config(self, generated: TermInventory) -> TermInventory:
+        if not self.term_inventory_path.exists():
+            return generated
+
+        raw = json.loads(self.term_inventory_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            raise ValueError(f"Term inventory config must be a JSON object: {self.term_inventory_path}")
+
+        mode = str(raw.get("mode", "merge")).strip().lower()
+        if mode not in TERM_INVENTORY_MODES:
+            raise ValueError(f"Unsupported term inventory mode `{mode}`. Use one of: {sorted(TERM_INVENTORY_MODES)}")
+
+        config_inventory = _term_inventory_from_config(raw, source=str(self.term_inventory_path))
+        if mode == "replace":
+            return config_inventory
+        return _merge_term_inventory(generated, config_inventory, source=f"generated+{self.term_inventory_path}")
+
     def find_terms(self, query: str) -> list[str]:
         normalized = clean_text(query).lower()
         found: list[str] = []
@@ -221,3 +286,67 @@ class KnowledgeBase:
             seen.add(key)
             deduped.append(chunk)
         return deduped
+
+
+def _canonical_output_term(term: str) -> str:
+    canonical = compact_whitespace(term).strip("* ")
+    if not canonical or len(canonical) > 32:
+        return ""
+    if re.match(r"^\d", canonical):
+        return ""
+    if TERM_CODE_RE.fullmatch(canonical):
+        return ""
+    if re.match(r"^[a-z]\s+", canonical, flags=re.IGNORECASE):
+        return ""
+    if "vs" in canonical.lower():
+        return ""
+    return canonical
+
+
+def _term_inventory_from_config(raw: dict[str, Any], *, source: str) -> TermInventory:
+    structural_terms = _normalize_terms(raw.get("structural_terms", STRUCTURAL_TERMS))
+    by_layer_raw = raw.get("by_layer", {})
+    if not isinstance(by_layer_raw, dict):
+        raise ValueError("Term inventory `by_layer` must be an object.")
+    by_type_raw = raw.get("by_type", raw.get("term_types", {}))
+    if not isinstance(by_type_raw, dict):
+        raise ValueError("Term inventory `by_type` must be an object.")
+
+    by_layer: dict[Layer, list[str]] = {}
+    valid_layers = set(Layer.__args__)  # type: ignore[attr-defined]
+    for layer, terms in by_layer_raw.items():
+        if layer not in valid_layers:
+            raise ValueError(f"Unknown term inventory layer `{layer}`.")
+        by_layer[layer] = _normalize_terms(terms)
+
+    by_type = {str(term_type).strip(): _normalize_terms(terms) for term_type, terms in by_type_raw.items() if str(term_type).strip()}
+    return TermInventory(by_layer=by_layer, by_type=by_type, structural_terms=structural_terms, source=source)
+
+
+def _merge_term_inventory(generated: TermInventory, custom: TermInventory, *, source: str) -> TermInventory:
+    by_layer: dict[Layer, list[str]] = {}
+    for layer in set(generated.by_layer) | set(custom.by_layer):
+        by_layer[layer] = _dedupe_terms(custom.by_layer.get(layer, []) + generated.by_layer.get(layer, []))
+    by_type: dict[str, list[str]] = {}
+    for term_type in set(generated.by_type) | set(custom.by_type):
+        by_type[term_type] = _dedupe_terms(custom.by_type.get(term_type, []) + generated.by_type.get(term_type, []))
+    return TermInventory(
+        by_layer=by_layer,
+        by_type=by_type,
+        structural_terms=_dedupe_terms(custom.structural_terms + generated.structural_terms),
+        source=source,
+    )
+
+
+def _normalize_terms(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError("Term inventory term lists must be arrays.")
+    return _dedupe_terms(str(item).strip() for item in value if str(item).strip())
+
+
+def _dedupe_terms(items) -> list[str]:
+    terms: list[str] = []
+    for item in items:
+        if item and item not in terms:
+            terms.append(item)
+    return terms

@@ -3,9 +3,10 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from gesture_agent.core.models import Intent, IntentCandidate, IntentResolution, Layer, QuestionStructure
+from gesture_agent.core.models import Intent, IntentCandidate, IntentOutputFrames, IntentResolution, Layer, QuestionStructure
 from gesture_agent.evaluation import parse_design_evaluation
 from gesture_agent.knowledge.base import KnowledgeBase
+from gesture_agent.learning.output_frames import load_output_frames
 
 
 DESIGN_EVALUATION_RE = re.compile(r"(评估|评价|评审|设计方案|这个方案|方案合理|合理吗|有什么问题|哪里有问题|改进建议|优化建议|怎么优化|帮我看看.*设计|设计.*建议)")
@@ -38,8 +39,9 @@ INTENT_LABELS: dict[Intent, str] = {
 
 
 class QuestionParser:
-    def __init__(self, kb: KnowledgeBase) -> None:
+    def __init__(self, kb: KnowledgeBase, output_frames: Optional[IntentOutputFrames] = None) -> None:
         self.kb = kb
+        self.output_frames = output_frames or load_output_frames(kb.data_dir)
 
     def parse(
         self,
@@ -281,20 +283,7 @@ class QuestionParser:
         return f"这个问题可能有多种理解：{options}。你希望我按哪一种来回答？也可以补充具体对象、场景或输出形式。"
 
     def _output_frame(self, intent: Intent) -> list[str]:
-        frames = {
-            "basic_interaction_mechanism": ["核心定义", "基础属性", "状态/变化序列", "响应逻辑", "适用与不适用", "关联机制"],
-            "advanced_interaction_mechanism": ["要解决的问题", "构成机制", "判定条件", "响应逻辑", "设计收益与代价", "关联基础机制"],
-            "control_form": ["控件定义", "可用属性", "可承载的交互机制", "典型案例", "设计注意点"],
-            "basic_property": ["核心含义", "连续性/维度/感知灵敏度", "相关案例", "适用与不适用", "可组合方向"],
-            "multimodal_interaction": ["模态组成", "信息分工", "融合/切换逻辑", "适用场景", "风险与校准", "案例或启发"],
-            "voice_interaction": ["输入内容与声学属性", "识别/触发逻辑", "反馈闭环", "适用场景", "限制与替代入口"],
-            "podcast_content": ["主题定位", "听众对象", "内容大纲", "关键讲述点", "示例口播", "延伸问题"],
-            "interaction_compare": ["对比对象", "共同基础", "核心差异", "适用边界", "选择建议"],
-            "background_knowledge": ["背景问题", "核心观点", "词典中的位置", "为什么重要", "与后续知识的关系"],
-            "case_analysis": ["案例描述", "控件形态", "基础属性", "交互机制", "响应逻辑", "设计判断", "追问"],
-            "design_evaluation": ["方案复述", "结构拆解", "问题诊断", "修改建议", "规范术语版本", "需要补充的信息"],
-        }
-        return frames[intent]
+        return self.output_frames.frame_for(intent)
 
     def _detect_mechanism_intent(self, query: str, terms: list[str]) -> Intent:
         if ADVANCED_MECHANISM_RE.search(query):

@@ -3,12 +3,14 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Optional
 
 from .core.models import QuestionStructure
 from .knowledge import KnowledgeBase
 from .learning import ClarificationIntentResolver, ConversationSession, LLMIntentResolver, QuestionParser
+from .learning.output_frames import load_output_frames
 from .learning.prompt_builder import build_messages
 from .media import image_path_to_data_url
 from .providers import SiliconFlowClient, SiliconFlowError
@@ -25,6 +27,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Gesture dictionary learning agent.")
     parser.add_argument("question", nargs="*", help="用户问题。留空并使用 --interactive 可进入连续提问。")
     parser.add_argument("--data-dir", default="data", help="Markdown 资料目录，默认 data。")
+    parser.add_argument("--term-inventory", default=None, help="术语枚举配置 JSON；默认尝试读取 data/term_inventory.json。")
+    parser.add_argument("--show-term-inventory", action="store_true", help="输出当前生效的术语枚举并退出。")
+    parser.add_argument("--export-term-inventory", default=None, help="把当前生效的术语枚举导出到指定 JSON 文件并退出。")
+    parser.add_argument("--output-frames", default=None, help="Intent 输出框架配置 JSON；默认尝试读取 data/output_frames.json。")
+    parser.add_argument("--show-output-frames", action="store_true", help="输出当前生效的 Intent 输出框架并退出。")
+    parser.add_argument("--export-output-frames", default=None, help="把当前生效的 Intent 输出框架导出到指定 JSON 文件并退出。")
     parser.add_argument("--top-k", type=int, default=6, help="检索资料片段数量。")
     parser.add_argument("--image", action="append", default=[], help="图片案例路径，可重复传入。")
     parser.add_argument(
@@ -52,8 +60,27 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.check_api:
         return check_api(args)
 
-    kb = KnowledgeBase.load(args.data_dir)
-    parser = QuestionParser(kb)
+    kb = KnowledgeBase.load(args.data_dir, term_inventory_path=args.term_inventory)
+    if args.show_term_inventory:
+        print(json.dumps(asdict(kb.term_inventory), ensure_ascii=False, indent=2))
+        return 0
+    if args.export_term_inventory:
+        output_path = Path(args.export_term_inventory)
+        output_path.write_text(json.dumps(asdict(kb.term_inventory), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"已导出术语枚举：{output_path}")
+        return 0
+
+    output_frames = load_output_frames(args.data_dir, output_frames_path=args.output_frames)
+    if args.show_output_frames:
+        print(json.dumps(asdict(output_frames), ensure_ascii=False, indent=2))
+        return 0
+    if args.export_output_frames:
+        output_path = Path(args.export_output_frames)
+        output_path.write_text(json.dumps(asdict(output_frames), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"已导出 Intent 输出框架：{output_path}")
+        return 0
+
+    parser = QuestionParser(kb, output_frames=output_frames)
 
     if args.interactive:
         return interactive_loop(args, kb, parser)
@@ -133,7 +160,13 @@ def run_once(
 
     try:
         image_urls = [image_path_to_data_url(path) for path in args.image]
-        messages = build_messages(structure, chunks, image_urls=image_urls, memory_context=memory_context)
+        messages = build_messages(
+            structure,
+            chunks,
+            image_urls=image_urls,
+            memory_context=memory_context,
+            term_inventory=kb.term_inventory,
+        )
         client = SiliconFlowClient.from_env(
             model=args.model,
             base_url=args.base_url,

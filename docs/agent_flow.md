@@ -82,6 +82,12 @@ CLI 会读取以下参数：
 
 - `question`：用户问题。
 - `--data-dir`：资料目录，默认是 `data`。
+- `--term-inventory`：术语枚举配置 JSON；默认尝试读取 `data/term_inventory.json`。
+- `--show-term-inventory`：输出当前生效的术语枚举并退出。
+- `--export-term-inventory`：导出当前生效的术语枚举到指定 JSON 文件并退出。
+- `--output-frames`：Intent 输出框架配置 JSON；默认尝试读取 `data/output_frames.json`。
+- `--show-output-frames`：输出当前生效的 Intent 输出框架并退出。
+- `--export-output-frames`：导出当前生效的 Intent 输出框架到指定 JSON 文件并退出。
 - `--top-k`：检索多少条资料片段，默认 6。
 - `--stream`：是否流式输出。
 - `--model`：指定硅基流动模型；不填则读取 `.env` 中的 `SILICONFLOW_MODEL`，传入 `--image` 时优先读取 `SILICONFLOW_VISION_MODEL`。
@@ -114,6 +120,54 @@ kb = KnowledgeBase.load(args.data_dir)
 2. 按标题规则切分成多个 `SourceChunk`。
 3. 为每个片段记录标题、来源文件、起止行号、正文、知识层级、术语。
 4. 建立术语列表，用于后续问题匹配和检索。
+5. 生成 `TermInventory` 术语枚举，按知识层级保存规范术语，用于约束模型输出。
+
+术语枚举默认自动生成；如果存在 `data/term_inventory.json`，系统会读取它作为人工配置。也可以通过 `--term-inventory ./my_terms.json` 指定其他文件。
+
+配置文件格式：
+
+```json
+{
+  "mode": "merge",
+  "structural_terms": ["控件形态", "基础属性", "交互机制", "响应逻辑"],
+  "by_type": {
+    "基础交互机制": ["单击", "长按", "拖拽"],
+    "高级交互机制": ["快击", "点击缓冲"],
+    "控件形态": ["按钮", "旋钮", "触控面"],
+    "响应类型": ["微变", "确认反馈"]
+  },
+  "by_layer": {
+    "interaction_mechanism": ["单击", "长按", "拖拽"],
+    "control_form": ["按钮", "旋钮", "触控面"],
+    "basic_property": ["二元属性", "位置属性", "时间属性"]
+  }
+}
+```
+
+- `merge`：人工配置优先，同时保留自动生成术语。
+- `replace`：完全使用人工配置。
+- `by_type`：推荐给专家标注使用，直接对应“术语类型”。
+- `by_layer`：兼容代码内部检索层级，保留给工程调试或旧配置使用。
+
+可用 `--show-term-inventory` 查看当前生效枚举，用 `--export-term-inventory data/term_inventory.json` 导出当前枚举作为编辑起点。
+
+专家标注后的 Intent 输出框架可写入 `data/output_frames.json`。系统启动时默认读取这个文件，也可以通过 `--output-frames ./my_output_frames.json` 指定其他路径。
+
+配置文件格式：
+
+```json
+{
+  "mode": "merge",
+  "frames": {
+    "design_evaluation": ["方案复述", "结构拆解", "问题诊断", "修改建议", "规范术语版本", "需要补充的信息"],
+    "interaction_compare": ["对比对象", "共同基础", "核心差异", "适用边界", "选择建议"]
+  }
+}
+```
+
+- `merge`：只覆盖配置中出现的 intent，其他 intent 继续使用默认框架。
+- `replace`：完全使用配置文件；必须提供全部 11 类 intent 的输出框架，缺少任何 intent 都会在启动时报错。
+- 可用 `--show-output-frames` 查看当前生效框架，用 `--export-output-frames data/output_frames.json` 导出默认框架作为专家编辑起点。
 
 知识层级包括：
 
@@ -187,7 +241,7 @@ Agent：结合记忆把“它”补全为“单击”，重新判断 intent=inte
 - `layers`：判断问题涉及哪个知识层级。
 - `terms`：从词典中命中的术语。
 - `focus`：判断用户关注定义、属性、逻辑、场景还是案例。
-- `output_frame`：规定模型回答时必须遵守的结构。
+- `output_frame`：规定模型回答时必须遵守的结构；优先来自 `data/output_frames.json`，没有配置时使用内置默认框架。
 
 十一类意图对应的输出框架：
 
@@ -257,18 +311,19 @@ chunks = kb.search(question, top_k=args.top_k, prefer_terms=structure.terms)
 
 ### 第 5 步：组装 Prompt
 
-`PromptBuilder` 会把三类信息组合成模型输入：
+`PromptBuilder` 会把四类信息组合成模型输入：
 
 1. 系统提示词：规定 Agent 身份、回答原则和约束。
 2. 问题结构：把 `QuestionStructure` 以 JSON 形式放入 prompt。
 3. 检索资料：把 `SourceChunk` 的标题、来源、层级、匹配分、正文放入 prompt。
+4. 术语枚举：把 `TermInventory` 中与问题层级相关的规范术语放入 prompt，约束专有名词输出。
 
 系统提示词核心要求：
 
 - 先按“问题结构”理解用户意图。
 - 只依据给定词典资料回答。
 - 优先使用词典结构语言。
-- 面向学习，不只给结论，还要指出下一步观察或追问什么。
+- 不创造新的手势词典专有名词；控件形态、基础属性、交互机制等必须来自术语枚举或检索资料标题。
 - 回答准确、结构化、简洁。
 
 模型最终看到的用户 prompt 结构大致是：
@@ -284,6 +339,10 @@ chunks = kb.search(question, top_k=args.top_k, prefer_terms=structure.terms)
 [1] 1-b 单击(010变化)
 来源：data/2.md:43-66；层级：interaction_mechanism；匹配分：...
 ...
+
+术语枚举约束：
+结构术语：控件形态、基本属性、交互机制、响应逻辑、...
+interaction_mechanism：单击、长按、拖拽、快击、点击缓冲、...
 
 请按问题结构中的 output_frame 回答。
 ```

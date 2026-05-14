@@ -49,6 +49,41 @@ class SourceChunk:
 
 
 @dataclass
+class TermInventory:
+    by_layer: dict[Layer, list[str]] = field(default_factory=dict)
+    by_type: dict[str, list[str]] = field(default_factory=dict)
+    structural_terms: list[str] = field(default_factory=list)
+    source: str = "generated"
+
+    def all_terms(self) -> list[str]:
+        terms: list[str] = []
+        for term in self.structural_terms:
+            if term not in terms:
+                terms.append(term)
+        for layer_terms in self.by_layer.values():
+            for term in layer_terms:
+                if term not in terms:
+                    terms.append(term)
+        for type_terms in self.by_type.values():
+            for term in type_terms:
+                if term not in terms:
+                    terms.append(term)
+        return terms
+
+
+@dataclass
+class IntentOutputFrames:
+    frames: dict[Intent, list[str]] = field(default_factory=dict)
+    source: str = "defaults"
+
+    def frame_for(self, intent: Intent) -> list[str]:
+        frame = self.frames.get(intent)
+        if frame is None:
+            raise KeyError(f"Missing output frame for intent `{intent}`.")
+        return list(frame)
+
+
+@dataclass
 class DesignEvaluationStructure:
     raw_proposal: str
     modality: list[str]
