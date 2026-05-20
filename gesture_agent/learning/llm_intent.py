@@ -38,7 +38,7 @@ class LLMIntentResolver:
                 temperature=0.0,
                 top_p=0.2,
                 max_tokens=700,
-                enable_thinking=False,
+                enable_thinking=None,
             )
             parsed = self._parse_json(raw)
         except (SiliconFlowError, ValueError, json.JSONDecodeError):

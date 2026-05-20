@@ -1,5 +1,6 @@
 .DS_Store
 .env
+agent_config.json
 .venv/
 .pytest_cache/
 __pycache__/

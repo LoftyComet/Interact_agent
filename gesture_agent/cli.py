@@ -14,6 +14,7 @@ from .learning.output_frames import load_output_frames
 from .learning.prompt_builder import build_messages
 from .media import image_path_to_data_url
 from .providers import SiliconFlowClient, SiliconFlowError
+from .settings.app_config import DEFAULT_AGENT_CONFIG_PATH, load_agent_config
 
 
 @dataclass
@@ -25,38 +26,45 @@ class RunResult:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Gesture dictionary learning agent.")
-    parser.add_argument("question", nargs="*", help="用户问题。留空并使用 --interactive 可进入连续提问。")
-    parser.add_argument("--data-dir", default="data", help="Markdown 资料目录，默认 data。")
+    parser.add_argument("question", nargs="*", help="用户问题。留空时默认进入连续问答。")
+    parser.add_argument("--config", default=None, help=f"Agent 运行配置 JSON；默认自动读取 {DEFAULT_AGENT_CONFIG_PATH}。")
+    parser.add_argument("--data-dir", default=None, help="Markdown 资料目录，默认 data。")
     parser.add_argument("--term-inventory", default=None, help="术语枚举配置 JSON；默认尝试读取 data/term_inventory.json。")
-    parser.add_argument("--show-term-inventory", action="store_true", help="输出当前生效的术语枚举并退出。")
+    parser.add_argument("--show-term-inventory", action="store_true", default=None, help="输出当前生效的术语枚举并退出。")
     parser.add_argument("--export-term-inventory", default=None, help="把当前生效的术语枚举导出到指定 JSON 文件并退出。")
     parser.add_argument("--output-frames", default=None, help="Intent 输出框架配置 JSON；默认尝试读取 data/output_frames.json。")
-    parser.add_argument("--show-output-frames", action="store_true", help="输出当前生效的 Intent 输出框架并退出。")
+    parser.add_argument("--show-output-frames", action="store_true", default=None, help="输出当前生效的 Intent 输出框架并退出。")
     parser.add_argument("--export-output-frames", default=None, help="把当前生效的 Intent 输出框架导出到指定 JSON 文件并退出。")
-    parser.add_argument("--top-k", type=int, default=6, help="检索资料片段数量。")
-    parser.add_argument("--image", action="append", default=[], help="图片案例路径，可重复传入。")
+    parser.add_argument("--top-k", type=int, default=None, help="检索资料片段数量。")
+    parser.add_argument("--image", action="append", default=None, help="图片案例路径，可重复传入。")
     parser.add_argument(
         "--model",
         default=None,
         help="SiliconFlow 模型名。默认读取 SILICONFLOW_MODEL；传入 --image 时优先读取 SILICONFLOW_VISION_MODEL。",
     )
     parser.add_argument("--base-url", default=None, help="SiliconFlow base URL。")
-    parser.add_argument("--temperature", type=float, default=0.2)
-    parser.add_argument("--max-tokens", type=int, default=1600, help="模型最大输出 token 数；回答半句停止通常需要调大它。")
+    parser.add_argument("--temperature", type=float, default=None)
+    parser.add_argument("--max-tokens", type=int, default=None, help="模型最大输出 token 数；回答半句停止通常需要调大它。")
     parser.add_argument("--timeout", type=int, default=None, help="API 请求超时时间，单位秒。默认读取 SILICONFLOW_TIMEOUT 或 60。")
-    parser.add_argument("--stream", action="store_true", help="使用流式输出，避免长回答结束前终端无反馈。")
-    parser.add_argument("--check-api", action="store_true", help="只检查 SiliconFlow API 连通性和模型列表，不读取词典、不提问。")
-    parser.add_argument("--show-structure", action="store_true", help="输出问题结构。")
-    parser.add_argument("--show-context", action="store_true", help="输出检索到的资料标题。")
-    parser.add_argument("--dry-run", action="store_true", help="只做拆解和检索，不调用 API。")
-    parser.add_argument("--interactive", action="store_true", help="连续问答模式。")
-    parser.add_argument("--llm-intent", action="store_true", help="每轮都使用硅基流动大模型辅助判断 intent；失败时回退到本地规则。")
-    parser.add_argument("--no-llm-clarify", action="store_true", help="关闭“本地规则信息不足时用大模型二次判断”的默认行为。")
+    parser.add_argument("--stream", action="store_true", default=None, help="使用流式输出，避免长回答结束前终端无反馈。")
+    parser.add_argument("--check-api", action="store_true", default=None, help="只检查 SiliconFlow API 连通性和模型列表，不读取词典、不提问。")
+    parser.add_argument("--show-structure", action="store_true", default=None, help="输出问题结构。")
+    parser.add_argument("--show-context", action="store_true", default=None, help="输出检索到的资料标题。")
+    parser.add_argument("--dry-run", action="store_true", default=None, help="只做拆解和检索，不调用 API。")
+    parser.add_argument("--interactive", action="store_true", default=None, help="强制进入连续问答模式。")
+    parser.add_argument("--llm-intent", action="store_true", default=None, help="每轮都使用硅基流动大模型辅助判断 intent；失败时回退到本地规则。")
+    parser.add_argument("--no-llm-clarify", action="store_true", default=None, help="关闭“本地规则信息不足时用大模型二次判断”的默认行为。")
     return parser
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    raw_args = build_arg_parser().parse_args(argv)
+    try:
+        args = apply_agent_config(raw_args)
+    except (FileNotFoundError, ValueError, json.JSONDecodeError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
     if args.check_api:
         return check_api(args)
 
@@ -82,15 +90,52 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     parser = QuestionParser(kb, output_frames=output_frames)
 
-    if args.interactive:
+    question = " ".join(args.question).strip()
+    if args.interactive or (not question and args.default_interactive):
         return interactive_loop(args, kb, parser)
 
-    question = " ".join(args.question).strip()
     if not question:
         print("请提供问题，或使用 --interactive。", file=sys.stderr)
         return 2
     result = run_once(args, kb, parser, question)
     return result.exit_code
+
+
+def apply_agent_config(args: argparse.Namespace) -> argparse.Namespace:
+    config = load_agent_config(args.config)
+    args.config_source = config.source
+    args.data_dir = _pick(args.data_dir, config.data_dir)
+    args.term_inventory = _pick(args.term_inventory, config.term_inventory)
+    args.output_frames = _pick(args.output_frames, config.output_frames)
+    args.top_k = _pick(args.top_k, config.top_k)
+    args.image = args.image if args.image is not None else list(config.images)
+    args.model = _pick(args.model, config.model)
+    args.base_url = _pick(args.base_url, config.base_url)
+    args.temperature = _pick(args.temperature, config.temperature)
+    args.max_tokens = _pick(args.max_tokens, config.max_tokens)
+    args.timeout = _pick(args.timeout, config.timeout)
+    args.enable_thinking = config.enable_thinking
+    args.stream = _pick_bool(args.stream, config.stream)
+    args.check_api = _pick_bool(args.check_api, config.check_api)
+    args.show_structure = _pick_bool(args.show_structure, config.show_structure)
+    args.show_context = _pick_bool(args.show_context, config.show_context)
+    args.dry_run = _pick_bool(args.dry_run, config.dry_run)
+    args.interactive = _pick_bool(args.interactive, False)
+    args.default_interactive = config.default_interactive
+    args.llm_intent = _pick_bool(args.llm_intent, config.llm_intent)
+    args.no_llm_clarify = _pick_bool(args.no_llm_clarify, not config.llm_clarify)
+    args.show_term_inventory = _pick_bool(args.show_term_inventory, False)
+    args.show_output_frames = _pick_bool(args.show_output_frames, False)
+    args.prompt_config = config.prompt
+    return args
+
+
+def _pick(value, fallback):
+    return fallback if value is None else value
+
+
+def _pick_bool(value: Optional[bool], fallback: bool) -> bool:
+    return bool(fallback if value is None else value)
 
 
 def interactive_loop(args: argparse.Namespace, kb: KnowledgeBase, parser: QuestionParser) -> int:
@@ -166,6 +211,7 @@ def run_once(
             image_urls=image_urls,
             memory_context=memory_context,
             term_inventory=kb.term_inventory,
+            prompt_config=args.prompt_config,
         )
         client = SiliconFlowClient.from_env(
             model=args.model,
@@ -182,7 +228,7 @@ def run_once(
             messages,
             temperature=args.temperature,
             max_tokens=args.max_tokens,
-            enable_thinking=False,
+            enable_thinking=args.enable_thinking,
         ) if not args.stream else None
         if args.stream:
             answer_parts: list[str] = []
@@ -190,7 +236,7 @@ def run_once(
                 messages,
                 temperature=args.temperature,
                 max_tokens=args.max_tokens,
-                enable_thinking=False,
+                enable_thinking=args.enable_thinking,
             ):
                 print(delta, end="", flush=True)
                 answer_parts.append(delta)

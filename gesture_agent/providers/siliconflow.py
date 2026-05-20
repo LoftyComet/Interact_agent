@@ -54,7 +54,7 @@ class SiliconFlowClient:
         temperature: float = 0.2,
         top_p: float = 0.7,
         max_tokens: int = 1600,
-        enable_thinking: Optional[bool] = False,
+        enable_thinking: Optional[bool] = None,
     ) -> str:
         try:
             from openai import APIConnectionError, APIError, APIStatusError, APITimeoutError, OpenAI
@@ -110,7 +110,7 @@ class SiliconFlowClient:
         temperature: float = 0.2,
         top_p: float = 0.7,
         max_tokens: int = 1600,
-        enable_thinking: Optional[bool] = False,
+        enable_thinking: Optional[bool] = None,
     ) -> Iterator[str]:
         client = self._openai_client()
         extra_body: dict[str, Any] = {}

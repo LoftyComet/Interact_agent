@@ -4,6 +4,7 @@ import json
 from typing import Optional
 
 from gesture_agent.core.models import Layer, QuestionStructure, SourceChunk, TermInventory
+from gesture_agent.settings.app_config import PromptConfig
 
 
 SYSTEM_PROMPT = """你是“手势词典”的学习与设计评估 Agent，服务对象是交互设计学习者和设计师。
@@ -18,11 +19,27 @@ SYSTEM_PROMPT = """你是“手势词典”的学习与设计评估 Agent，服�
 """
 
 
+DEFAULT_RESPONSE_INSTRUCTIONS = [
+    "术语约束：凡是作为“手势词典专有名词”的控件形态、基础属性、交互机制、响应类型或结构词，必须来自上面的术语枚举或检索资料标题；不要创造新的交互机制名或控件名。",
+    "如果用户使用了口语化说法，先映射到枚举中的最接近术语；如果枚举和资料中没有对应术语，明确写“词典中没有对应术语”，再用普通描述解释，不要把普通描述包装成新术语。",
+    "基础交互机制：强调基础属性、状态/变化序列、响应逻辑和适用边界。",
+    "高级交互机制：强调它解决的组合或冲突问题、判定条件、收益与代价。",
+    "控件形态：强调控件能承载哪些属性，以及这些属性能组合出哪些交互机制。",
+    "基础属性：强调连续性、维度、感知灵敏度和可组合方向。",
+    "多模态/语音交互：强调模态分工、识别逻辑、反馈闭环、风险和替代入口。",
+    "播客内容：输出适合口播的结构，避免写成论文段落。",
+    "交互机制对比：优先用表格或清晰分组说明共同基础、核心差异和选择建议。",
+    "案例理解：必须按“控件形态 -> 基础属性 -> 交互机制 -> 响应逻辑 -> 设计判断”拆解。",
+    "设计方案评估：先用规范术语复述方案，再按“控件形态 -> 基础属性 -> 交互机制 -> 响应逻辑”拆解；重点指出术语混乱、机制冲突、反馈缺失、适用边界错误，并给出可执行修改建议。",
+]
+
+
 def build_user_prompt(
     question: QuestionStructure,
     chunks: list[SourceChunk],
     memory_context: str = "",
     term_inventory: Optional[TermInventory] = None,
+    prompt_config: Optional[PromptConfig] = None,
 ) -> str:
     context = "\n\n".join(format_chunk(idx + 1, chunk) for idx, chunk in enumerate(chunks))
     structure_json = json.dumps(question.to_dict(), ensure_ascii=False, indent=2)
@@ -32,6 +49,7 @@ def build_user_prompt(
         else ""
     )
     term_section = format_term_inventory(term_inventory, question, chunks)
+    instruction_section = format_response_instructions(prompt_config)
     return f"""用户原问题：
 {question.raw_query}
 {memory_section}
@@ -48,17 +66,7 @@ def build_user_prompt(
 {term_section}
 
 请严格按问题结构中的 output_frame 组织回答，并根据 intent 使用相应的分析口径：
-- 术语约束：凡是作为“手势词典专有名词”的控件形态、基础属性、交互机制、响应类型或结构词，必须来自上面的术语枚举或检索资料标题；不要创造新的交互机制名或控件名。
-- 如果用户使用了口语化说法，先映射到枚举中的最接近术语；如果枚举和资料中没有对应术语，明确写“词典中没有对应术语”，再用普通描述解释，不要把普通描述包装成新术语。
-- 基础交互机制：强调基础属性、状态/变化序列、响应逻辑和适用边界。
-- 高级交互机制：强调它解决的组合或冲突问题、判定条件、收益与代价。
-- 控件形态：强调控件能承载哪些属性，以及这些属性能组合出哪些交互机制。
-- 基础属性：强调连续性、维度、感知灵敏度和可组合方向。
-- 多模态/语音交互：强调模态分工、识别逻辑、反馈闭环、风险和替代入口。
-- 播客内容：输出适合口播的结构，避免写成论文段落。
-- 交互机制对比：优先用表格或清晰分组说明共同基础、核心差异和选择建议。
-- 案例理解：必须按“控件形态 -> 基础属性 -> 交互机制 -> 响应逻辑 -> 设计判断”拆解。
-- 设计方案评估：先用规范术语复述方案，再按“控件形态 -> 基础属性 -> 交互机制 -> 响应逻辑”拆解；重点指出术语混乱、机制冲突、反馈缺失、适用边界错误，并给出可执行修改建议。"""
+{instruction_section}"""
 
 
 def format_chunk(index: int, chunk: SourceChunk) -> str:
@@ -105,22 +113,43 @@ def format_term_inventory(
     return "\n".join(lines)
 
 
+def format_response_instructions(prompt_config: Optional[PromptConfig] = None) -> str:
+    instructions = list(DEFAULT_RESPONSE_INSTRUCTIONS)
+    if prompt_config and prompt_config.response_instructions is not None:
+        instructions = list(prompt_config.response_instructions)
+    if prompt_config:
+        instructions.extend(prompt_config.extra_response_instructions)
+    return "\n".join(f"- {item}" for item in instructions)
+
+
+def resolve_system_prompt(prompt_config: Optional[PromptConfig] = None) -> str:
+    if prompt_config is None:
+        return SYSTEM_PROMPT
+    system_prompt = prompt_config.system_prompt or SYSTEM_PROMPT
+    if prompt_config.extra_system_prompt:
+        return f"{system_prompt.rstrip()}\n\n{prompt_config.extra_system_prompt.strip()}\n"
+    return system_prompt
+
+
 def build_messages(
     question: QuestionStructure,
     chunks: list[SourceChunk],
     image_urls: Optional[list[str]] = None,
     memory_context: str = "",
     term_inventory: Optional[TermInventory] = None,
+    prompt_config: Optional[PromptConfig] = None,
 ) -> list[dict]:
     user_prompt = build_user_prompt(
         question,
         chunks,
         memory_context=memory_context,
         term_inventory=term_inventory,
+        prompt_config=prompt_config,
     )
+    system_prompt = resolve_system_prompt(prompt_config)
     if not image_urls:
         return [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -128,6 +157,6 @@ def build_messages(
     for url in image_urls:
         content_parts.append({"type": "image_url", "image_url": {"url": url, "detail": "high"}})
     return [
-        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": content_parts},
     ]

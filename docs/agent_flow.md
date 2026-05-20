@@ -81,6 +81,7 @@ UV_CACHE_DIR=/tmp/uv-cache uv run python -m gesture_agent.cli "什么是单击�
 CLI 会读取以下参数：
 
 - `question`：用户问题。
+- `--config`：Agent 运行配置 JSON；默认自动读取项目根目录的 `agent_config.json`。
 - `--data-dir`：资料目录，默认是 `data`。
 - `--term-inventory`：术语枚举配置 JSON；默认尝试读取 `data/term_inventory.json`。
 - `--show-term-inventory`：输出当前生效的术语枚举并退出。
@@ -93,6 +94,17 @@ CLI 会读取以下参数：
 - `--model`：指定硅基流动模型；不填则读取 `.env` 中的 `SILICONFLOW_MODEL`，传入 `--image` 时优先读取 `SILICONFLOW_VISION_MODEL`。
 - `--timeout`：API 请求超时时间。
 - `--max-tokens`：模型最大输出长度。
+
+日常使用时不需要把这些参数都写在命令行里。推荐流程是复制 `agent_config.example.json` 为 `agent_config.json`，然后在该文件里统一修改运行参数和 Prompt：
+
+```bash
+cp agent_config.example.json agent_config.json
+uv run python -m gesture_agent.cli
+```
+
+当命令中没有问题文本时，程序默认进入连续问答模式，用户后续直接在命令行输入 prompt。命令行参数仍然保留，用于临时覆盖配置文件。
+
+`agent_config.json` 支持 JSONC 风格注释，即 `//` 单行注释和 `/* ... */` 块注释，便于在每个参数旁边写说明。
 
 入口代码在 `gesture_agent/cli.py` 的 `main()` 和 `run_once()`。
 

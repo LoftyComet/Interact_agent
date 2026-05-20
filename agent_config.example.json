@@ -1,0 +1,77 @@
+{
+  // 资料和人工标注配置。日常改 data/term_inventory.json 和 data/output_frames.json 即可。
+  "data": {
+    // Markdown 知识库目录。
+    "data_dir": "data",
+    // 专家标注后的术语枚举；文件不存在时会自动使用知识库生成的术语。
+    "term_inventory": "data/term_inventory.json",
+    // 专家标注后的 Intent 输出框架；文件不存在时会使用内置默认框架。
+    "output_frames": "data/output_frames.json"
+  },
+
+  // 本地检索配置。
+  "retrieval": {
+    // 每次回答检索多少条资料。越大上下文越多，但回答更慢、更容易发散。
+    "top_k": 6
+  },
+
+  // 模型调用配置。API Key 不放这里，仍然放在 .env 的 SILICONFLOW_API_KEY。
+  "model": {
+    // 为 null 时读取 .env 里的 SILICONFLOW_MODEL；传图片时优先读取 SILICONFLOW_VISION_MODEL。
+    "model": null,
+    // 为 null 时读取 .env 里的 SILICONFLOW_BASE_URL。
+    "base_url": null,
+    // 输出随机性。学习/评估类任务建议 0.1-0.3。
+    "temperature": 0.2,
+    // 最大输出长度。回答半句停止时调大。
+    "max_tokens": 1600,
+    // 请求超时时间，单位秒。推理模型慢时调到 120。
+    "timeout": 60,
+    // 硅基流动部分模型支持 enable_thinking，视觉模型通常不支持。null 表示不发送该参数。
+    "enable_thinking": null
+  },
+
+  // 运行模式配置。
+  "runtime": {
+    // 命令行没有输入问题时，是否默认进入连续对话。
+    "default_interactive": true,
+    // 是否流式输出。建议保持 true，长回答不会卡住。
+    "stream": true,
+    // true 时只检查 API 连通性，不读取词典、不提问。
+    "check_api": false,
+    // 是否打印 QuestionStructure。
+    "show_structure": false,
+    // 是否打印检索到的资料标题。
+    "show_context": false,
+    // true 时只做本地拆解和检索，不调用 API。
+    "dry_run": false
+  },
+
+  // Intent 判断配置。
+  "intent": {
+    // true 时每轮都调用大模型辅助判断 intent；更准但更慢。
+    "llm_intent": false,
+    // true 时只有本地规则判断信息不足，才调用大模型二次判断。
+    "llm_clarify": true
+  },
+
+  // 图片案例配置。也可以临时用命令行 --image 传入。
+  "media": {
+    "images": ["./case.png"]
+  },
+
+  // Prompt 配置。
+  "prompt": {
+    // 完整替换系统提示词；为 null 时使用代码内置默认系统提示词。
+    "system_prompt": null,
+    // 追加到默认系统提示词后，适合放你自己的长期偏好。
+    "extra_system_prompt": "回答时优先使用短段落和清晰标题；不要输出与手势词典无关的泛泛建议。",
+    // 完整替换回答规则；为 null 时使用代码内置默认回答规则。
+    "response_instructions": null,
+    // 追加回答规则，适合放临时实验规则。
+    "extra_response_instructions": [
+      "回答标题必须尽量使用 output_frame 中的栏目名称。",
+      "如果需要提出建议，先指出对应的控件形态、基础属性、交互机制或响应逻辑。"
+    ]
+  }
+}

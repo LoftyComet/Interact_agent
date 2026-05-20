@@ -103,7 +103,19 @@ uv run python -m gesture_agent.cli "什么是单击？" --output-frames ./my_out
 uv sync --group dev
 cp .env.example .env
 # 编辑 .env，将 SILICONFLOW_API_KEY 改成你的硅基流动 API Key
-uv run python -m gesture_agent.cli "单击和长按有什么区别？" --show-structure --show-context
+cp agent_config.example.json agent_config.json
+# 编辑 agent_config.json，配置模型参数、检索数量、是否流式输出和 Prompt 文案
+uv run python -m gesture_agent.cli
+```
+
+默认命令 `uv run python -m gesture_agent.cli` 会读取 `agent_config.json` 并进入连续问答模式；启动后直接在命令行输入问题即可。`agent_config.json` 已加入 `.gitignore`，适合存放本机运行偏好；需要给别人参考时改 `agent_config.example.json`。
+
+`agent_config.json` 支持 `//` 单行注释和 `/* ... */` 块注释，可以直接在参数旁边写说明。
+
+如果只想临时问一次，也可以继续把问题放在命令里：
+
+```bash
+uv run python -m gesture_agent.cli "单击和长按有什么区别？"
 ```
 
 只看本地拆解和检索，不调用 API：
@@ -117,7 +129,7 @@ uv run python -m gesture_agent.cli "拖拽是什么？" --dry-run
 连续提问：
 
 ```bash
-uv run python -m gesture_agent.cli --interactive
+uv run python -m gesture_agent.cli
 ```
 
 交互式模式会管理澄清 session 和短期对话记忆。模糊问题不会直接回答，而是先反问；用户补充信息后，系统会合并上下文重新判断 intent。已经回答过的轮次会被记录，后续追问如“那它和长按有什么区别？”会结合前文补全“它”的指代，并重新判断 intent。
@@ -164,7 +176,27 @@ uv run python -m gesture_agent.cli \
 
 ## 配置
 
-默认会自动读取项目根目录的 `.env`，也可以用 shell 环境变量覆盖：
+运行配置优先从 `agent_config.json` 读取，适合放模型参数、检索参数、是否流式输出、是否显示结构、Prompt 文案等。命令行参数仍然保留，用于临时覆盖配置文件。
+
+常用配置项：
+
+- `data.data_dir`：资料目录，默认 `data`。
+- `data.term_inventory`：术语枚举配置，默认可指向 `data/term_inventory.json`。
+- `data.output_frames`：Intent 输出框架配置，默认可指向 `data/output_frames.json`。
+- `retrieval.top_k`：检索资料片段数量。
+- `model.model`：硅基流动模型名；为 `null` 时读取 `.env` 中的 `SILICONFLOW_MODEL`。
+- `model.timeout`、`model.max_tokens`、`model.temperature`：模型调用参数。
+- `model.enable_thinking`：是否向硅基流动发送 `enable_thinking`；默认 `null` 表示不发送，视觉模型通常应保持 `null`。
+- `runtime.default_interactive`：没有在命令中输入问题时是否默认进入连续问答。
+- `runtime.stream`：是否流式输出。
+- `intent.llm_intent`：是否每轮都用大模型判断 intent。
+- `intent.llm_clarify`：本地规则信息不足时是否用大模型二次判断。
+- `prompt.system_prompt`：完整替换系统提示词；为 `null` 时使用内置默认系统提示词。
+- `prompt.extra_system_prompt`：追加到默认系统提示词后。
+- `prompt.response_instructions`：完整替换回答规则；为 `null` 时使用内置默认回答规则。
+- `prompt.extra_response_instructions`：追加回答规则。
+
+API key 仍然放在 `.env`，也可以用 shell 环境变量覆盖：
 
 - `SILICONFLOW_API_KEY`：必填。
 - `SILICONFLOW_MODEL`：文本问答默认模型，默认 `Qwen/Qwen3-32B`。
