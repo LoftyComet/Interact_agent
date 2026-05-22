@@ -35,6 +35,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-frames", default=None, help="Intent 输出框架配置 JSON；默认尝试读取 data/output_frames.json。")
     parser.add_argument("--show-output-frames", action="store_true", default=None, help="输出当前生效的 Intent 输出框架并退出。")
     parser.add_argument("--export-output-frames", default=None, help="把当前生效的 Intent 输出框架导出到指定 JSON 文件并退出。")
+    parser.add_argument("--structured-knowledge", default=None, help="结构化知识库 JSON；默认尝试读取 data/structured_knowledge.json。")
+    parser.add_argument("--export-structured-knowledge", default=None, help="把当前生成/合并后的结构化知识库导出到指定 JSON 文件并退出。")
     parser.add_argument("--top-k", type=int, default=None, help="检索资料片段数量。")
     parser.add_argument("--image", action="append", default=None, help="图片案例路径，可重复传入。")
     parser.add_argument(
@@ -68,7 +70,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.check_api:
         return check_api(args)
 
-    kb = KnowledgeBase.load(args.data_dir, term_inventory_path=args.term_inventory)
+    kb = KnowledgeBase.load(
+        args.data_dir,
+        term_inventory_path=args.term_inventory,
+        structured_knowledge_path=args.structured_knowledge,
+    )
     if args.show_term_inventory:
         print(json.dumps(asdict(kb.term_inventory), ensure_ascii=False, indent=2))
         return 0
@@ -76,6 +82,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         output_path = Path(args.export_term_inventory)
         output_path.write_text(json.dumps(asdict(kb.term_inventory), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"已导出术语枚举：{output_path}")
+        return 0
+    if args.export_structured_knowledge:
+        kb.export_structured_knowledge(args.export_structured_knowledge)
+        print(f"已导出结构化知识库：{args.export_structured_knowledge}")
         return 0
 
     output_frames = load_output_frames(args.data_dir, output_frames_path=args.output_frames)
@@ -107,6 +117,7 @@ def apply_agent_config(args: argparse.Namespace) -> argparse.Namespace:
     args.data_dir = _pick(args.data_dir, config.data_dir)
     args.term_inventory = _pick(args.term_inventory, config.term_inventory)
     args.output_frames = _pick(args.output_frames, config.output_frames)
+    args.structured_knowledge = _pick(args.structured_knowledge, config.structured_knowledge)
     args.top_k = _pick(args.top_k, config.top_k)
     args.image = args.image if args.image is not None else list(config.images)
     args.model = _pick(args.model, config.model)

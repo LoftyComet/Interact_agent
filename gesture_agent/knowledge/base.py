@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import math
 import re
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from gesture_agent.core.models import Layer, SourceChunk, TermInventory
+from gesture_agent.core.models import Layer, SourceChunk, StructuredKnowledgeItem, TermInventory
 from gesture_agent.core.text_utils import clean_text, compact_whitespace, strip_heading_prefix, tokenize
 
 
@@ -35,7 +37,21 @@ STRUCTURAL_TERMS = [
     "规范术语版本",
 ]
 DEFAULT_TERM_INVENTORY_FILENAME = "term_inventory.json"
+DEFAULT_STRUCTURED_KNOWLEDGE_FILENAME = "structured_knowledge.json"
 TERM_INVENTORY_MODES = {"merge", "replace"}
+DEFAULT_ALIASES = {
+    "点一下": "单击",
+    "点击一下": "单击",
+    "按一下": "按下",
+    "按住": "长按",
+    "长摁": "长按",
+    "拖动": "拖拽",
+    "滑一下": "滑动",
+    "双点": "双击",
+    "连点两下": "双击",
+    "knob": "旋钮",
+    "slider": "滑块",
+}
 
 
 class KnowledgeBase:
@@ -43,11 +59,18 @@ class KnowledgeBase:
         self,
         data_dir: Union[str, Path] = "data",
         term_inventory_path: Optional[Union[str, Path]] = None,
+        structured_knowledge_path: Optional[Union[str, Path]] = None,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.term_inventory_path = Path(term_inventory_path) if term_inventory_path else self.data_dir / DEFAULT_TERM_INVENTORY_FILENAME
+        self.structured_knowledge_path = (
+            Path(structured_knowledge_path)
+            if structured_knowledge_path
+            else self.data_dir / DEFAULT_STRUCTURED_KNOWLEDGE_FILENAME
+        )
         self.chunks: list[SourceChunk] = []
         self.terms: list[str] = []
+        self.structured_items: list[StructuredKnowledgeItem] = []
         self.term_inventory = TermInventory()
 
     @classmethod
@@ -55,8 +78,13 @@ class KnowledgeBase:
         cls,
         data_dir: Union[str, Path] = "data",
         term_inventory_path: Optional[Union[str, Path]] = None,
+        structured_knowledge_path: Optional[Union[str, Path]] = None,
     ) -> "KnowledgeBase":
-        kb = cls(data_dir, term_inventory_path=term_inventory_path)
+        kb = cls(
+            data_dir,
+            term_inventory_path=term_inventory_path,
+            structured_knowledge_path=structured_knowledge_path,
+        )
         kb._load()
         return kb
 
@@ -77,6 +105,9 @@ class KnowledgeBase:
         self.term_inventory = self._load_term_inventory_config(generated_inventory)
         term_set.update(self.term_inventory.all_terms())
         self.terms = sorted(term_set, key=lambda item: (-len(item), item))
+        generated_structured = self._build_structured_items(chunks)
+        self.structured_items = self._load_structured_knowledge_config(generated_structured)
+        self._apply_structured_items()
 
     def _parse_markdown(self, path: Path) -> list[SourceChunk]:
         raw_lines = path.read_text(encoding="utf-8").splitlines()
@@ -222,41 +253,155 @@ class KnowledgeBase:
             return config_inventory
         return _merge_term_inventory(generated, config_inventory, source=f"generated+{self.term_inventory_path}")
 
+    def _build_structured_items(self, chunks: list[SourceChunk]) -> list[StructuredKnowledgeItem]:
+        items: list[StructuredKnowledgeItem] = []
+        for chunk in chunks:
+            term = _canonical_output_term(strip_heading_prefix(chunk.title))
+            if not term and chunk.terms:
+                term = _canonical_output_term(chunk.terms[0])
+            if not term:
+                continue
+            items.append(
+                StructuredKnowledgeItem(
+                    id=chunk.id,
+                    term=term,
+                    term_type=_term_type_for_layer(chunk.layer, chunk.title),
+                    layer=chunk.layer,
+                    definition=_first_meaningful_line(chunk.text),
+                    aliases=[alias for alias, canonical in DEFAULT_ALIASES.items() if canonical == term],
+                    properties=_terms_for_layer(self.term_inventory, "basic_property", chunk.text),
+                    mechanisms=_terms_for_layer(self.term_inventory, "interaction_mechanism", chunk.text),
+                    control_forms=_terms_for_layer(self.term_inventory, "control_form", chunk.text),
+                    response_logic=_extract_response_logic(chunk.text),
+                    related_terms=[item for item in chunk.terms if item != term],
+                    source=chunk.citation(),
+                    evidence=chunk.text[:800],
+                )
+            )
+        return items
+
+    def _load_structured_knowledge_config(
+        self,
+        generated: list[StructuredKnowledgeItem],
+    ) -> list[StructuredKnowledgeItem]:
+        if not self.structured_knowledge_path.exists():
+            return generated
+
+        raw = json.loads(self.structured_knowledge_path.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            raw_items = raw.get("items", [])
+        else:
+            raw_items = raw
+        if not isinstance(raw_items, list):
+            raise ValueError(f"Structured knowledge config must be an array or an object with `items`: {self.structured_knowledge_path}")
+
+        custom_items = [_structured_item_from_config(item, source=str(self.structured_knowledge_path)) for item in raw_items]
+        generated_by_term = {item.term: item for item in generated}
+        merged: list[StructuredKnowledgeItem] = []
+        seen: set[str] = set()
+        for item in custom_items:
+            base = generated_by_term.get(item.term)
+            merged_item = _merge_structured_item(base, item) if base else item
+            merged.append(merged_item)
+            seen.add(item.term)
+        for item in generated:
+            if item.term not in seen:
+                merged.append(item)
+        return merged
+
+    def _apply_structured_items(self) -> None:
+        term_set = set(self.terms)
+        aliases = {**DEFAULT_ALIASES, **self.term_inventory.aliases}
+        for item in self.structured_items:
+            values = [
+                item.term,
+                *item.aliases,
+                *item.properties,
+                *item.mechanisms,
+                *item.control_forms,
+                *item.related_terms,
+            ]
+            for value in values:
+                if value:
+                    term_set.add(value)
+            for alias in item.aliases:
+                aliases[alias] = item.term
+        self.term_inventory.aliases = {alias: canonical for alias, canonical in aliases.items() if alias and canonical}
+        term_set.update(self.term_inventory.all_terms())
+        self.terms = sorted(term_set, key=lambda item: (-len(item), item))
+
+    def export_structured_knowledge(self, output_path: Union[str, Path]) -> None:
+        path = Path(output_path)
+        payload = {
+            "items": [asdict(item) for item in self.structured_items],
+        }
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    def normalize_query(self, query: str) -> str:
+        rewritten = clean_text(query)
+        for alias, canonical in sorted(self.term_inventory.aliases.items(), key=lambda item: (-len(item[0]), item[0])):
+            if alias and canonical and alias.lower() in rewritten.lower():
+                rewritten = _replace_case_insensitive(rewritten, alias, canonical)
+        return compact_whitespace(rewritten)
+
+    def rewrite_query(self, query: str, prefer_terms: Optional[list[str]] = None) -> str:
+        normalized = self.normalize_query(query)
+        terms = _dedupe_terms((prefer_terms or []) + self.find_terms(normalized))
+        expansions: list[str] = []
+        for item in self.structured_items:
+            if item.term not in terms:
+                continue
+            expansions.extend([item.term, item.term_type, *item.aliases, *item.properties, *item.mechanisms, *item.control_forms, *item.related_terms])
+            if item.response_logic:
+                expansions.append(item.response_logic)
+        if not expansions:
+            return normalized
+        return compact_whitespace(normalized + " " + " ".join(_dedupe_terms(expansions)))
+
     def find_terms(self, query: str) -> list[str]:
-        normalized = clean_text(query).lower()
+        normalized = self.normalize_query(query).lower()
         found: list[str] = []
+        for alias, canonical in sorted(self.term_inventory.aliases.items(), key=lambda item: (-len(item[0]), item[0])):
+            if alias.lower() in normalized and canonical not in found:
+                found.append(canonical)
         for term in self.terms:
-            if term.lower() in normalized and term not in found:
-                found.append(term)
+            canonical = self.term_inventory.aliases.get(term, term)
+            if term.lower() in normalized and canonical not in found:
+                found.append(canonical)
         return found
 
     def search(self, query: str, top_k: int = 6, prefer_terms: Optional[list[str]] = None) -> list[SourceChunk]:
-        query_clean = clean_text(query)
+        normalized_query = self.normalize_query(query)
+        prefer_terms = _dedupe_terms((prefer_terms or []) + self.find_terms(normalized_query))
+        query_clean = self.rewrite_query(normalized_query, prefer_terms=prefer_terms)
         query_tokens = tokenize(query_clean)
-        prefer_terms = prefer_terms or self.find_terms(query_clean)
         scored: list[SourceChunk] = []
 
         for chunk in self.chunks:
-            score = 0.0
+            keyword_score = 0.0
             title_lower = chunk.title.lower()
             text_lower = chunk.text.lower()
+            chunk_tokens = self._chunk_tokens(chunk)
 
             for term in prefer_terms:
                 term_lower = term.lower()
                 if term_lower and term_lower in title_lower:
-                    score += 12.0
+                    keyword_score += 12.0
                 elif term_lower and term_lower in text_lower:
-                    score += 5.0
+                    keyword_score += 5.0
 
             title_tokens = tokenize(chunk.title)
-            text_tokens = tokenize(chunk.text[:2500])
-            score += len(query_tokens & title_tokens) * 2.0
-            score += len(query_tokens & text_tokens) * 0.25
+            keyword_score += len(query_tokens & title_tokens) * 2.0
+            keyword_score += len(query_tokens & chunk_tokens) * 0.25
 
             if chunk.source.endswith("dic.md"):
-                score -= 0.4
+                keyword_score -= 0.4
             if chunk.layer == "interaction_mechanism":
-                score += 0.3
+                keyword_score += 0.3
+
+            vector_score = _jaccard_similarity(query_tokens, chunk_tokens)
+            structured_score = self._structured_score(chunk, prefer_terms, query_tokens)
+            score = keyword_score + vector_score * 8.0 + structured_score
 
             if score > 0:
                 scored.append(
@@ -275,6 +420,56 @@ class KnowledgeBase:
 
         scored.sort(key=lambda item: item.score, reverse=True)
         return self._dedupe(scored)[:top_k]
+
+    def _chunk_tokens(self, chunk: SourceChunk) -> set[str]:
+        item = self._structured_item_for_chunk(chunk)
+        structured_text = ""
+        if item:
+            structured_text = " ".join(
+                [
+                    item.term,
+                    item.term_type,
+                    *item.aliases,
+                    *item.properties,
+                    *item.mechanisms,
+                    *item.control_forms,
+                    *item.related_terms,
+                    item.definition,
+                    item.response_logic,
+                ]
+            )
+        return tokenize(f"{chunk.title}\n{chunk.text[:2500]}\n{structured_text}")
+
+    def _structured_score(self, chunk: SourceChunk, prefer_terms: list[str], query_tokens: set[str]) -> float:
+        item = self._structured_item_for_chunk(chunk)
+        if item is None:
+            return 0.0
+        score = 0.0
+        structured_terms = _dedupe_terms(
+            [
+                item.term,
+                *item.aliases,
+                *item.properties,
+                *item.mechanisms,
+                *item.control_forms,
+                *item.related_terms,
+            ]
+        )
+        for term in prefer_terms:
+            if term == item.term:
+                score += 8.0
+            elif term in structured_terms:
+                score += 3.0
+        if item.term_type and tokenize(item.term_type) & query_tokens:
+            score += 1.5
+        return score
+
+    def _structured_item_for_chunk(self, chunk: SourceChunk) -> Optional[StructuredKnowledgeItem]:
+        clean_title = strip_heading_prefix(chunk.title)
+        for item in self.structured_items:
+            if item.id == chunk.id or item.term == clean_title or item.term in chunk.terms:
+                return item
+        return None
 
     def _dedupe(self, chunks: list[SourceChunk]) -> list[SourceChunk]:
         deduped: list[SourceChunk] = []
@@ -303,6 +498,108 @@ def _canonical_output_term(term: str) -> str:
     return canonical
 
 
+def _term_type_for_layer(layer: Layer, title: str) -> str:
+    if layer == "basic_property":
+        return "基础属性"
+    if layer == "control_form":
+        return "控件形态"
+    if layer == "interaction_mechanism":
+        if re.match(r"^[34]-[a-z]", title, flags=re.IGNORECASE):
+            return "高级交互机制"
+        return "基础交互机制"
+    if layer == "multimodal_interaction":
+        return "多模态交互"
+    if layer == "voice_interaction":
+        return "语音交互"
+    if layer == "background_knowledge":
+        return "背景概念"
+    return "待定"
+
+
+def _first_meaningful_line(text: str) -> str:
+    for line in text.splitlines()[1:]:
+        line = compact_whitespace(line).strip("-* ")
+        if line and not line.startswith("##") and not line.startswith("#"):
+            return line[:300]
+    return compact_whitespace(text)[:300]
+
+
+def _terms_for_layer(inventory: TermInventory, layer: Layer, text: str) -> list[str]:
+    lowered = text.lower()
+    return [term for term in inventory.by_layer.get(layer, []) if term.lower() in lowered][:12]
+
+
+def _extract_response_logic(text: str) -> str:
+    lines = [compact_whitespace(line).strip("-* ") for line in text.splitlines()]
+    for idx, line in enumerate(lines):
+        if any(key in line for key in ["响应逻辑", "反馈", "状态", "变化"]):
+            window = " ".join(item for item in lines[idx : idx + 3] if item)
+            return window[:300]
+    return ""
+
+
+def _structured_item_from_config(raw: Any, *, source: str) -> StructuredKnowledgeItem:
+    if not isinstance(raw, dict):
+        raise ValueError(f"Structured knowledge item must be an object: {source}")
+    term = str(raw.get("term", "")).strip()
+    if not term:
+        raise ValueError(f"Structured knowledge item is missing `term`: {source}")
+    layer = str(raw.get("layer", "unknown"))
+    valid_layers = set(Layer.__args__)  # type: ignore[attr-defined]
+    if layer not in valid_layers:
+        raise ValueError(f"Unknown structured knowledge layer `{layer}`.")
+    return StructuredKnowledgeItem(
+        id=str(raw.get("id") or f"structured:{term}"),
+        term=term,
+        term_type=str(raw.get("term_type") or _term_type_for_layer(layer, "")),
+        layer=layer,  # type: ignore[arg-type]
+        definition=str(raw.get("definition") or ""),
+        aliases=_normalize_terms(raw.get("aliases", [])),
+        properties=_normalize_terms(raw.get("properties", [])),
+        mechanisms=_normalize_terms(raw.get("mechanisms", [])),
+        control_forms=_normalize_terms(raw.get("control_forms", [])),
+        response_logic=str(raw.get("response_logic") or ""),
+        related_terms=_normalize_terms(raw.get("related_terms", [])),
+        source=str(raw.get("source") or source),
+        evidence=str(raw.get("evidence") or ""),
+    )
+
+
+def _merge_structured_item(
+    base: Optional[StructuredKnowledgeItem],
+    custom: StructuredKnowledgeItem,
+) -> StructuredKnowledgeItem:
+    if base is None:
+        return custom
+    return StructuredKnowledgeItem(
+        id=custom.id or base.id,
+        term=custom.term or base.term,
+        term_type=custom.term_type or base.term_type,
+        layer=custom.layer or base.layer,
+        definition=custom.definition or base.definition,
+        aliases=_dedupe_terms(custom.aliases + base.aliases),
+        properties=_dedupe_terms(custom.properties + base.properties),
+        mechanisms=_dedupe_terms(custom.mechanisms + base.mechanisms),
+        control_forms=_dedupe_terms(custom.control_forms + base.control_forms),
+        response_logic=custom.response_logic or base.response_logic,
+        related_terms=_dedupe_terms(custom.related_terms + base.related_terms),
+        source=custom.source or base.source,
+        evidence=custom.evidence or base.evidence,
+    )
+
+
+def _replace_case_insensitive(text: str, old: str, new: str) -> str:
+    return re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
+
+
+def _jaccard_similarity(left: set[str], right: set[str]) -> float:
+    if not left or not right:
+        return 0.0
+    intersection = len(left & right)
+    union = len(left | right)
+    return intersection / union if union else 0.0
+
+
 def _term_inventory_from_config(raw: dict[str, Any], *, source: str) -> TermInventory:
     structural_terms = _normalize_terms(raw.get("structural_terms", STRUCTURAL_TERMS))
     by_layer_raw = raw.get("by_layer", {})
@@ -311,6 +608,9 @@ def _term_inventory_from_config(raw: dict[str, Any], *, source: str) -> TermInve
     by_type_raw = raw.get("by_type", raw.get("term_types", {}))
     if not isinstance(by_type_raw, dict):
         raise ValueError("Term inventory `by_type` must be an object.")
+    aliases_raw = raw.get("aliases", {})
+    if not isinstance(aliases_raw, dict):
+        raise ValueError("Term inventory `aliases` must be an object.")
 
     by_layer: dict[Layer, list[str]] = {}
     valid_layers = set(Layer.__args__)  # type: ignore[attr-defined]
@@ -320,7 +620,8 @@ def _term_inventory_from_config(raw: dict[str, Any], *, source: str) -> TermInve
         by_layer[layer] = _normalize_terms(terms)
 
     by_type = {str(term_type).strip(): _normalize_terms(terms) for term_type, terms in by_type_raw.items() if str(term_type).strip()}
-    return TermInventory(by_layer=by_layer, by_type=by_type, structural_terms=structural_terms, source=source)
+    aliases = {str(alias).strip(): str(canonical).strip() for alias, canonical in aliases_raw.items() if str(alias).strip() and str(canonical).strip()}
+    return TermInventory(by_layer=by_layer, by_type=by_type, aliases=aliases, structural_terms=structural_terms, source=source)
 
 
 def _merge_term_inventory(generated: TermInventory, custom: TermInventory, *, source: str) -> TermInventory:
@@ -333,6 +634,7 @@ def _merge_term_inventory(generated: TermInventory, custom: TermInventory, *, so
     return TermInventory(
         by_layer=by_layer,
         by_type=by_type,
+        aliases={**generated.aliases, **custom.aliases},
         structural_terms=_dedupe_terms(custom.structural_terms + generated.structural_terms),
         source=source,
     )

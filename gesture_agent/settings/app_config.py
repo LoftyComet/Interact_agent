@@ -23,6 +23,7 @@ class AgentConfig:
     data_dir: str = "data"
     term_inventory: Optional[str] = None
     output_frames: Optional[str] = None
+    structured_knowledge: Optional[str] = None
     top_k: int = 6
     images: list[str] = field(default_factory=list)
     model: Optional[str] = None
@@ -69,6 +70,7 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
         data_dir=str(data.get("data_dir", "data")),
         term_inventory=_optional_str(data.get("term_inventory")),
         output_frames=_optional_str(data.get("output_frames")),
+        structured_knowledge=_optional_str(data.get("structured_knowledge")),
         top_k=_int_value(retrieval.get("top_k", 6), "retrieval.top_k"),
         images=_string_list(media.get("images", []), "media.images"),
         model=_optional_str(model.get("model")),

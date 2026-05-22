@@ -140,7 +140,7 @@ class QuestionParser:
             add("background_knowledge", 0.86, "问题包含背景知识、操控力、IxDL 或声明式等信号。")
         if ADVANCED_MECHANISM_RE.search(query):
             add("advanced_interaction_mechanism", 0.9, "问题包含高级机制、组合或冲突调和信号。")
-        if MECHANISM_RE.search(query) or self._has_interaction_mechanism_match(query, terms):
+        if MECHANISM_RE.search(query) or self._has_interaction_mechanism_match(query, terms, query_text=query):
             add(self._detect_mechanism_intent(query, terms), 0.86, "问题命中交互机制术语或机制章节。")
 
         for chunk in self.kb.search(query, top_k=5, prefer_terms=terms):
@@ -298,10 +298,16 @@ class QuestionParser:
                 return "basic_interaction_mechanism"
         return "basic_interaction_mechanism"
 
-    def _has_interaction_mechanism_match(self, query: str, terms: list[str]) -> bool:
+    def _has_interaction_mechanism_match(self, query: str, terms: list[str], *, query_text: Optional[str] = None) -> bool:
         if not terms:
             return False
+        mechanism_terms = set(self.kb.term_inventory.by_layer.get("interaction_mechanism", []))
+        mechanism_terms.update(self.kb.term_inventory.by_type.get("基础交互机制", []))
+        mechanism_terms.update(self.kb.term_inventory.by_type.get("高级交互机制", []))
+        if not any(term in mechanism_terms for term in terms):
+            return False
+        source_query = query_text or query
         return any(
             chunk.layer == "interaction_mechanism" and chunk.score >= 3.0
-            for chunk in self.kb.search(query, top_k=3, prefer_terms=terms)
+            for chunk in self.kb.search(source_query, top_k=3, prefer_terms=[term for term in terms if term in mechanism_terms])
         )

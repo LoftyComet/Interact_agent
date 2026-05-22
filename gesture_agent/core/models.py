@@ -49,9 +49,27 @@ class SourceChunk:
 
 
 @dataclass
+class StructuredKnowledgeItem:
+    id: str
+    term: str
+    term_type: str
+    layer: Layer
+    definition: str = ""
+    aliases: list[str] = field(default_factory=list)
+    properties: list[str] = field(default_factory=list)
+    mechanisms: list[str] = field(default_factory=list)
+    control_forms: list[str] = field(default_factory=list)
+    response_logic: str = ""
+    related_terms: list[str] = field(default_factory=list)
+    source: str = ""
+    evidence: str = ""
+
+
+@dataclass
 class TermInventory:
     by_layer: dict[Layer, list[str]] = field(default_factory=dict)
     by_type: dict[str, list[str]] = field(default_factory=dict)
+    aliases: dict[str, str] = field(default_factory=dict)
     structural_terms: list[str] = field(default_factory=list)
     source: str = "generated"
 
@@ -68,6 +86,11 @@ class TermInventory:
             for term in type_terms:
                 if term not in terms:
                     terms.append(term)
+        for alias, canonical in self.aliases.items():
+            if alias not in terms:
+                terms.append(alias)
+            if canonical not in terms:
+                terms.append(canonical)
         return terms
 
 

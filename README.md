@@ -30,6 +30,18 @@
 
 专家标注后的术语可以写在 `by_type` 中，例如“基础交互机制、控件形态、响应类型”；旧的 `by_layer` 仍兼容，用于和代码内部检索层级对齐。
 
+`term_inventory.json` 还支持 `aliases`，用于把用户口语映射为规范术语：
+
+```json
+{
+  "aliases": {
+    "点一下": "单击",
+    "按住": "长按",
+    "拖动": "拖拽"
+  }
+}
+```
+
 查看当前生效的术语枚举：
 
 ```bash
@@ -96,6 +108,14 @@ uv run python -m gesture_agent.cli --export-output-frames data/output_frames.jso
 ```bash
 uv run python -m gesture_agent.cli "什么是单击？" --output-frames ./my_output_frames.json
 ```
+
+结构化知识库可以从 Markdown 自动生成，也可以导出后人工编辑：
+
+```bash
+uv run python -m gesture_agent.cli --export-structured-knowledge data/structured_knowledge.json
+```
+
+`data/structured_knowledge.json` 会被默认读取。它用于 Query Rewrite、混合检索和 rerank，例如把“单击”扩展为对应的术语类型、相关属性、关联机制和响应逻辑。
 
 ## 使用
 
@@ -183,6 +203,7 @@ uv run python -m gesture_agent.cli \
 - `data.data_dir`：资料目录，默认 `data`。
 - `data.term_inventory`：术语枚举配置，默认可指向 `data/term_inventory.json`。
 - `data.output_frames`：Intent 输出框架配置，默认可指向 `data/output_frames.json`。
+- `data.structured_knowledge`：结构化知识库配置，默认可指向 `data/structured_knowledge.json`。
 - `retrieval.top_k`：检索资料片段数量。
 - `model.model`：硅基流动模型名；为 `null` 时读取 `.env` 中的 `SILICONFLOW_MODEL`。
 - `model.timeout`、`model.max_tokens`、`model.temperature`：模型调用参数。
@@ -244,3 +265,4 @@ response = client.chat.completions.create(
 ## 汇报文档
 
 - [从用户输入到回答的处理流程](docs/agent_flow.md)
+- [检索能力升级汇报](docs/retrieval_upgrade_report.md)

@@ -87,6 +87,9 @@ def test_load_agent_config_reads_runtime_and_prompt(tmp_path) -> None:
   "retrieval": {
     "top_k": 2
   },
+  "data": {
+    "structured_knowledge": "data/custom_structured.json"
+  },
   /*
     运行配置也支持块注释。
   */
@@ -109,6 +112,7 @@ def test_load_agent_config_reads_runtime_and_prompt(tmp_path) -> None:
     loaded = load_agent_config(config)
 
     assert loaded.top_k == 2
+    assert loaded.structured_knowledge == "data/custom_structured.json"
     assert loaded.stream is True
     assert loaded.default_interactive is False
     assert loaded.enable_thinking is None
