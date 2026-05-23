@@ -14,6 +14,9 @@ DESIGN_EVALUATION_FOLLOW_UP_RE = re.compile(
     r"(这个方案|那个方案|刚才.*方案|上述方案|这个案例|刚才.*案例|微变|主要风险|风险|问题诊断|怎么改|修改|优化|建议|规范术语)"
 )
 
+MAX_HISTORY_TURNS = 6
+MAX_CLARIFICATION_ATTEMPTS = 3
+
 
 @dataclass
 class PendingClarification:
@@ -55,6 +58,15 @@ class ConversationSession:
         if self.pending:
             self.pending.collected_details.append(user_query)
             self.pending.attempts += 1
+
+            if self.pending.attempts >= MAX_CLARIFICATION_ATTEMPTS:
+                self.pending = None
+                return SessionResult(
+                    status="clarify",
+                    message="已多次尝试仍无法确定意图，请重新描述你的问题。",
+                    user_query=user_query,
+                )
+
             combined_query = self.pending.combined_query()
             result = self._try_resolve(
                 combined_query,
@@ -110,7 +122,7 @@ class ConversationSession:
                 answer_summary=_summarize_answer(answer),
             )
         )
-        self.turns = self.turns[-6:]
+        self.turns = self.turns[-MAX_HISTORY_TURNS:]
 
     def memory_summary(self, max_turns: int = 4) -> str:
         if not self.turns:

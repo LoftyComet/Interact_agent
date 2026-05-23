@@ -69,12 +69,24 @@ def build_user_prompt(
 {instruction_section}"""
 
 
-def format_chunk(index: int, chunk: SourceChunk) -> str:
+def format_chunk(index: int, chunk: SourceChunk, max_chars: int = 3600) -> str:
+    text = _truncate_at_sentence(chunk.text, max_chars)
     return (
         f"[{index}] {chunk.title}\n"
         f"来源：{chunk.citation()}；层级：{chunk.layer}；匹配分：{chunk.score}\n"
-        f"{chunk.text[:3600]}"
+        f"{text}"
     )
+
+
+def _truncate_at_sentence(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    # Try to cut at a sentence boundary (Chinese or Latin punctuation)
+    for sep in ("。", "；", "\n", ".", ";"):
+        pos = text.rfind(sep, 0, limit)
+        if pos >= limit // 2:
+            return text[: pos + 1]
+    return text[:limit]
 
 
 def format_term_inventory(
@@ -94,20 +106,28 @@ def format_term_inventory(
         if chunk.layer not in layers:
             layers.append(chunk.layer)
 
+    query_terms = set(question.terms)
+
+    def _rank_terms(terms: list[str]) -> list[str]:
+        """Sort terms so query-matched ones appear first, then by length descending."""
+        return sorted(terms, key=lambda t: (t not in query_terms, -len(t)))
+
     lines = [
         "结构术语：" + "、".join(term_inventory.structural_terms),
     ]
     for term_type, terms in term_inventory.by_type.items():
         if not terms:
             continue
-        clipped = terms[:max_terms_per_layer]
+        ranked = _rank_terms(terms)
+        clipped = ranked[:max_terms_per_layer]
         suffix = f"（另有 {len(terms) - len(clipped)} 项未列出）" if len(terms) > len(clipped) else ""
         lines.append(f"术语类型-{term_type}：" + "、".join(clipped) + suffix)
     for layer in layers:
         terms = term_inventory.by_layer.get(layer, [])
         if not terms:
             continue
-        clipped = terms[:max_terms_per_layer]
+        ranked = _rank_terms(terms)
+        clipped = ranked[:max_terms_per_layer]
         suffix = f"（另有 {len(terms) - len(clipped)} 项未列出）" if len(terms) > len(clipped) else ""
         lines.append(f"{layer}：" + "、".join(clipped) + suffix)
     return "\n".join(lines)

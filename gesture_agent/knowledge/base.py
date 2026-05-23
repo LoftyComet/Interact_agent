@@ -19,6 +19,17 @@ COMPARISON_FILENAME = "交互机制对比.md"
 COMPARISON_HEADING_RE = re.compile(r"^\d+、.{2,80}$")
 COMPARISON_SPLIT_RE = re.compile(r"\s*(?:vs|VS|Vs|和|与|、|/)\s*")
 TERM_CODE_RE = re.compile(r"^(?:\d+-[a-z]|[0-9A-Za-z /×÷+\-]+)$", re.IGNORECASE)
+
+# Retrieval scoring weights
+SCORE_TERM_IN_TITLE = 12.0
+SCORE_TERM_IN_TEXT = 5.0
+SCORE_QUERY_TOKEN_IN_TITLE = 2.0
+SCORE_QUERY_TOKEN_IN_BODY = 0.25
+SCORE_JACCARD_MULTIPLIER = 8.0
+SCORE_LAYER_MECHANISM_BONUS = 0.3
+SCORE_STRUCTURED_EXACT_MATCH = 8.0
+SCORE_STRUCTURED_RELATED_MATCH = 3.0
+SCORE_STRUCTURED_TYPE_MATCH = 1.5
 STRUCTURAL_TERMS = [
     "控件形态",
     "基本属性",
@@ -165,13 +176,13 @@ class KnowledgeBase:
             if MECHANISM_HEADING_RE.match(stripped):
                 indexes.append(idx)
                 continue
-            if filename == "1.md" and PROPERTY_HEADING_RE.match(stripped):
+            if filename == "序篇_基础属性.md" and PROPERTY_HEADING_RE.match(stripped):
                 indexes.append(idx)
                 continue
-            if filename == "3.md" and FORM_HEADING_RE.match(stripped):
+            if filename == "控件形态与含义.md" and FORM_HEADING_RE.match(stripped):
                 indexes.append(idx)
                 continue
-            if TOP_HEADING_RE.match(stripped) and filename in {"1.md", "2.md", "3.md"}:
+            if TOP_HEADING_RE.match(stripped) and filename in {"序篇_基础属性.md", "交互机制.md", "控件形态与含义.md"}:
                 indexes.append(idx)
         return sorted(set(indexes))
 
@@ -184,7 +195,7 @@ class KnowledgeBase:
             return "multimodal_interaction"
         if "属性" in title or "生理信号" in title or "阶次控制" in title:
             return "basic_property"
-        if filename == "3.md" and FORM_HEADING_RE.match(title):
+        if filename == "控件形态与含义.md" and FORM_HEADING_RE.match(title):
             return "control_form"
         if "案例" in title:
             return "interaction_case"
@@ -348,12 +359,18 @@ class KnowledgeBase:
         normalized = self.normalize_query(query)
         terms = _dedupe_terms((prefer_terms or []) + self.find_terms(normalized))
         expansions: list[str] = []
+        related_to_expand: list[str] = []
         for item in self.structured_items:
             if item.term not in terms:
                 continue
             expansions.extend([item.term, item.term_type, *item.aliases, *item.properties, *item.mechanisms, *item.control_forms, *item.related_terms])
             if item.response_logic:
                 expansions.append(item.response_logic)
+            related_to_expand.extend(item.related_terms)
+        # Expand one level of related_terms
+        for item in self.structured_items:
+            if item.term in related_to_expand and item.term not in terms:
+                expansions.extend([item.term, *item.aliases, *item.properties, *item.mechanisms])
         if not expansions:
             return normalized
         return compact_whitespace(normalized + " " + " ".join(_dedupe_terms(expansions)))
@@ -386,22 +403,20 @@ class KnowledgeBase:
             for term in prefer_terms:
                 term_lower = term.lower()
                 if term_lower and term_lower in title_lower:
-                    keyword_score += 12.0
+                    keyword_score += SCORE_TERM_IN_TITLE
                 elif term_lower and term_lower in text_lower:
-                    keyword_score += 5.0
+                    keyword_score += SCORE_TERM_IN_TEXT
 
             title_tokens = tokenize(chunk.title)
-            keyword_score += len(query_tokens & title_tokens) * 2.0
-            keyword_score += len(query_tokens & chunk_tokens) * 0.25
+            keyword_score += len(query_tokens & title_tokens) * SCORE_QUERY_TOKEN_IN_TITLE
+            keyword_score += len(query_tokens & chunk_tokens) * SCORE_QUERY_TOKEN_IN_BODY
 
-            if chunk.source.endswith("dic.md"):
-                keyword_score -= 0.4
             if chunk.layer == "interaction_mechanism":
-                keyword_score += 0.3
+                keyword_score += SCORE_LAYER_MECHANISM_BONUS
 
             vector_score = _jaccard_similarity(query_tokens, chunk_tokens)
             structured_score = self._structured_score(chunk, prefer_terms, query_tokens)
-            score = keyword_score + vector_score * 8.0 + structured_score
+            score = keyword_score + vector_score * SCORE_JACCARD_MULTIPLIER + structured_score
 
             if score > 0:
                 scored.append(
@@ -457,11 +472,11 @@ class KnowledgeBase:
         )
         for term in prefer_terms:
             if term == item.term:
-                score += 8.0
+                score += SCORE_STRUCTURED_EXACT_MATCH
             elif term in structured_terms:
-                score += 3.0
+                score += SCORE_STRUCTURED_RELATED_MATCH
         if item.term_type and tokenize(item.term_type) & query_tokens:
-            score += 1.5
+            score += SCORE_STRUCTURED_TYPE_MATCH
         return score
 
     def _structured_item_for_chunk(self, chunk: SourceChunk) -> Optional[StructuredKnowledgeItem]:
@@ -472,6 +487,7 @@ class KnowledgeBase:
         return None
 
     def _dedupe(self, chunks: list[SourceChunk]) -> list[SourceChunk]:
+        # Input must be sorted by score descending so the first occurrence is the highest-scoring one.
         deduped: list[SourceChunk] = []
         seen: set[tuple[str, str]] = set()
         for chunk in chunks:

@@ -37,6 +37,11 @@ INTENT_LABELS: dict[Intent, str] = {
     "design_evaluation": "设计方案评估",
 }
 
+# Intent classification thresholds — shared with llm_intent.py
+CONFIDENCE_THRESHOLD = 0.65
+CLOSE_CALL_MARGIN = 0.15
+HIGH_CONFIDENCE_THRESHOLD = 0.9
+
 
 class QuestionParser:
     def __init__(self, kb: KnowledgeBase, output_frames: Optional[IntentOutputFrames] = None) -> None:
@@ -93,8 +98,8 @@ class QuestionParser:
         top = candidates[0]
         second = candidates[1] if len(candidates) > 1 else None
         missing_info = self._blocking_missing_info(top.intent, query, image_paths)
-        is_low_confidence = top.score < 0.65
-        is_close_call = bool(second and top.score < 0.9 and top.score - second.score < 0.15)
+        is_low_confidence = top.score < CONFIDENCE_THRESHOLD
+        is_close_call = bool(second and top.score < HIGH_CONFIDENCE_THRESHOLD and top.score - second.score < CLOSE_CALL_MARGIN)
         needs_clarification = is_low_confidence or is_close_call or bool(missing_info)
 
         return IntentResolution(

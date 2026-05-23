@@ -243,15 +243,19 @@ def run_once(
         ) if not args.stream else None
         if args.stream:
             answer_parts: list[str] = []
-            for delta in client.chat_stream(
-                messages,
-                temperature=args.temperature,
-                max_tokens=args.max_tokens,
-                enable_thinking=args.enable_thinking,
-            ):
-                print(delta, end="", flush=True)
-                answer_parts.append(delta)
-            print()
+            try:
+                for delta in client.chat_stream(
+                    messages,
+                    temperature=args.temperature,
+                    max_tokens=args.max_tokens,
+                    enable_thinking=args.enable_thinking,
+                ):
+                    print(delta, end="", flush=True)
+                    answer_parts.append(delta)
+            except KeyboardInterrupt:
+                print("\n[已中断]", file=sys.stderr)
+            finally:
+                print()
             answer = "".join(answer_parts)
     except SiliconFlowError as exc:
         if "Missing SILICONFLOW_API_KEY" in str(exc):

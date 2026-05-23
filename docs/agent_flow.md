@@ -194,10 +194,10 @@ kb = KnowledgeBase.load(args.data_dir)
 
 在交互式模式下，系统会先经过 `ConversationSession` 判断问题是否足够明确：
 
-1. 如果 intent 明确，例如“什么是单击？”，直接进入问题结构拆解。
-2. 如果问题模糊，例如“这个怎么用？”，系统会先反问。
+1. 如果 intent 明确，例如”什么是单击？”，直接进入问题结构拆解。
+2. 如果问题模糊，例如”这个怎么用？”，系统会先反问。
 3. 用户补充信息会被保存到 pending session 中，并与原始问题合并。
-4. 合并后再次判断 intent；如果仍不明确，继续反问。
+4. 合并后再次判断 intent；如果仍不明确，继续反问，最多反问 `MAX_CLARIFICATION_ATTEMPTS`（当前为 3）次，超过后提示用户重新描述。
 5. intent 明确后，清空 pending session，并进入检索和回答流程。
 6. 回答成功后，`ConversationSession.record_turn()` 会记录本轮的用户问题、resolved query、intent、命中术语、output frame 和回答摘要。
 7. 下一轮如果出现“它、这个、继续、区别、相比”等追问信号，session 会把短期对话记忆拼入 resolved query，重新判断 intent 并重新检索。
@@ -424,6 +424,7 @@ SILICONFLOW_MAX_RETRIES=0
 - 模型生成一点就输出一点。
 - 更适合长回答和推理模型。
 - 如果达到 `--max-tokens` 上限，会提示回答被截断。
+- 支持 Ctrl-C 中断，已收集内容不会丢失。
 
 推荐演示命令：
 

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from gesture_agent.core.models import Intent, IntentCandidate, IntentResolution
 from gesture_agent.providers import SiliconFlowClient, SiliconFlowError
 
-from .question_parser import INTENT_LABELS, QuestionParser
+from .question_parser import CONFIDENCE_THRESHOLD, INTENT_LABELS, QuestionParser
 
 
 class LLMIntentResolver:
@@ -41,7 +44,11 @@ class LLMIntentResolver:
                 enable_thinking=None,
             )
             parsed = self._parse_json(raw)
-        except (SiliconFlowError, ValueError, json.JSONDecodeError):
+        except SiliconFlowError as exc:
+            logger.warning("LLM intent API call failed, falling back to rule-based: %s", exc)
+            return rule_resolution
+        except (ValueError, json.JSONDecodeError) as exc:
+            logger.warning("LLM intent response parse failed, falling back to rule-based: %s", exc)
             return rule_resolution
 
         intent = parsed.get("intent")
@@ -51,7 +58,7 @@ class LLMIntentResolver:
         confidence = _coerce_float(parsed.get("confidence"), default=0.0)
         needs_clarification = _coerce_bool(
             parsed.get("needs_clarification"),
-            default=confidence < 0.65 or intent is None,
+            default=confidence < CONFIDENCE_THRESHOLD or intent is None,
         )
         if intent is None:
             needs_clarification = True
@@ -111,10 +118,12 @@ JSON 格式：
 
     def _parse_json(self, text: str) -> dict[str, Any]:
         start = text.find("{")
-        end = text.rfind("}")
-        if start < 0 or end < start:
+        if start < 0:
             raise ValueError("No JSON object found in LLM intent response.")
-        return json.loads(text[start : end + 1])
+        obj, _ = json.JSONDecoder().raw_decode(text, start)
+        if not isinstance(obj, dict):
+            raise ValueError(f"Expected JSON object, got {type(obj).__name__}")
+        return obj
 
 
 class ClarificationIntentResolver(LLMIntentResolver):
