@@ -1,0 +1,334 @@
+"""Flask backend for the gesture agent web UI.
+
+Stays in `web/backend/` so it doesn't mix with the core `gesture_agent` package.
+Reuses the existing pipeline: KnowledgeBase → QuestionParser → ConversationSession →
+PromptBuilder → SiliconFlowClient.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import threading
+import uuid
+from dataclasses import asdict
+from pathlib import Path
+from typing import Any, Optional
+
+# Make the project root importable so `gesture_agent` resolves regardless of cwd.
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from flask import Flask, Response, jsonify, request, send_from_directory, stream_with_context
+from flask_cors import CORS
+
+from gesture_agent.core.models import QuestionStructure, SourceChunk
+from gesture_agent.knowledge import KnowledgeBase
+from gesture_agent.learning import ClarificationIntentResolver, ConversationSession, QuestionParser
+from gesture_agent.learning.output_frames import load_output_frames
+from gesture_agent.learning.prompt_builder import build_messages
+from gesture_agent.media import image_path_to_data_url
+from gesture_agent.providers import SiliconFlowClient, SiliconFlowError
+from gesture_agent.settings.app_config import load_agent_config
+
+
+FRONTEND_DIR = (Path(__file__).resolve().parent.parent / "frontend").resolve()
+
+
+class AgentRuntime:
+    """Holds the singletons the request handlers need."""
+
+    def __init__(self, config_path: Optional[str] = None) -> None:
+        self.config = load_agent_config(config_path)
+        self.kb = KnowledgeBase.load(
+            self.config.data_dir,
+            term_inventory_path=self.config.term_inventory,
+            structured_knowledge_path=self.config.structured_knowledge,
+        )
+        self.output_frames = load_output_frames(
+            self.config.data_dir, output_frames_path=self.config.output_frames
+        )
+        self.parser = QuestionParser(self.kb, output_frames=self.output_frames)
+        self._sessions: dict[str, ConversationSession] = {}
+        self._sessions_lock = threading.Lock()
+
+    def get_session(self, session_id: str) -> ConversationSession:
+        with self._sessions_lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                session = ConversationSession(
+                    self.parser, intent_resolver=self._build_intent_resolver()
+                )
+                self._sessions[session_id] = session
+            return session
+
+    def reset_session(self, session_id: str) -> None:
+        with self._sessions_lock:
+            if session_id in self._sessions:
+                self._sessions[session_id].reset()
+
+    def drop_session(self, session_id: str) -> None:
+        with self._sessions_lock:
+            self._sessions.pop(session_id, None)
+
+    def _build_intent_resolver(self):
+        if not self.config.llm_clarify and not self.config.llm_intent:
+            return None
+        try:
+            client = SiliconFlowClient.from_env(
+                model=self.config.model,
+                base_url=self.config.base_url,
+                timeout=self.config.timeout,
+            )
+        except SiliconFlowError:
+            return None
+        return ClarificationIntentResolver(self.parser, client)
+
+    def make_chat_client(self, use_vision: bool) -> SiliconFlowClient:
+        return SiliconFlowClient.from_env(
+            model=self.config.model,
+            base_url=self.config.base_url,
+            timeout=self.config.timeout,
+            use_vision_model=use_vision,
+        )
+
+
+def serialize_chunk(chunk: SourceChunk) -> dict[str, Any]:
+    return {
+        "id": chunk.id,
+        "title": chunk.title,
+        "source": chunk.source,
+        "citation": chunk.citation(),
+        "layer": chunk.layer,
+        "score": chunk.score,
+        "start_line": chunk.start_line,
+        "end_line": chunk.end_line,
+        "terms": list(chunk.terms),
+        "text": chunk.text,
+    }
+
+
+def serialize_structure(structure: Optional[QuestionStructure]) -> Optional[dict[str, Any]]:
+    if structure is None:
+        return None
+    return structure.to_dict()
+
+
+def create_app(config_path: Optional[str] = None) -> Flask:
+    runtime = AgentRuntime(config_path=config_path)
+    app = Flask(
+        __name__,
+        static_folder=str(FRONTEND_DIR),
+        static_url_path="",
+    )
+    CORS(app)
+
+    app.config["AGENT_RUNTIME"] = runtime
+
+    @app.get("/")
+    def index() -> Response:
+        index_path = FRONTEND_DIR / "index.html"
+        if not index_path.exists():
+            return Response("frontend/index.html not found", status=404)
+        return send_from_directory(str(FRONTEND_DIR), "index.html")
+
+    @app.get("/api/health")
+    def health() -> Response:
+        rt: AgentRuntime = app.config["AGENT_RUNTIME"]
+        info = {
+            "status": "ok",
+            "data_dir": rt.config.data_dir,
+            "model": rt.config.model,
+            "base_url": rt.config.base_url,
+            "top_k": rt.config.top_k,
+            "term_count": len(rt.kb.term_inventory.all_terms()),
+            "doc_count": len(rt.kb.chunks),
+        }
+        return jsonify(info)
+
+    @app.get("/api/intents")
+    def intents() -> Response:
+        rt: AgentRuntime = app.config["AGENT_RUNTIME"]
+        return jsonify({"frames": {k: list(v) for k, v in rt.output_frames.frames.items()}})
+
+    @app.post("/api/reset")
+    def reset() -> Response:
+        payload = request.get_json(silent=True) or {}
+        session_id = payload.get("session_id") or ""
+        if not session_id:
+            return jsonify({"error": "missing session_id"}), 400
+        rt: AgentRuntime = app.config["AGENT_RUNTIME"]
+        rt.reset_session(session_id)
+        return jsonify({"status": "ok", "session_id": session_id})
+
+    @app.post("/api/session")
+    def new_session() -> Response:
+        return jsonify({"session_id": uuid.uuid4().hex})
+
+    @app.post("/api/ask")
+    def ask() -> Response:
+        rt: AgentRuntime = app.config["AGENT_RUNTIME"]
+        payload = request.get_json(silent=True) or {}
+        question = (payload.get("question") or "").strip()
+        session_id = payload.get("session_id") or uuid.uuid4().hex
+        image_paths = payload.get("images") or []
+        if not question:
+            return jsonify({"error": "missing question"}), 400
+
+        session = rt.get_session(session_id)
+        session_result = session.receive(question, image_paths=image_paths)
+
+        if session_result.status == "clarify":
+            return jsonify(
+                {
+                    "session_id": session_id,
+                    "status": "clarify",
+                    "message": session_result.message,
+                }
+            )
+
+        structure = session_result.structure
+        chunks = rt.kb.search(
+            session_result.resolved_query,
+            top_k=rt.config.top_k,
+            prefer_terms=structure.terms if structure else None,
+        )
+
+        answer = ""
+        error_text: Optional[str] = None
+        try:
+            image_urls = [image_path_to_data_url(p) for p in image_paths]
+            messages = build_messages(
+                structure,
+                chunks,
+                image_urls=image_urls,
+                memory_context=session_result.memory_context,
+                term_inventory=rt.kb.term_inventory,
+                prompt_config=rt.config.prompt,
+            )
+            client = rt.make_chat_client(use_vision=bool(image_paths))
+            answer = client.chat(
+                messages,
+                temperature=rt.config.temperature,
+                max_tokens=rt.config.max_tokens,
+                enable_thinking=rt.config.enable_thinking,
+            )
+        except SiliconFlowError as exc:
+            error_text = str(exc)
+
+        if structure is not None and not error_text:
+            session.record_turn(
+                user_query=session_result.user_query,
+                resolved_query=session_result.resolved_query,
+                structure=structure,
+                answer=answer,
+            )
+
+        body = {
+            "session_id": session_id,
+            "status": "ready",
+            "answer": answer,
+            "error": error_text,
+            "structure": serialize_structure(structure),
+            "chunks": [serialize_chunk(c) for c in chunks],
+            "memory_context": session_result.memory_context,
+        }
+        status_code = 200 if not error_text else 502
+        return jsonify(body), status_code
+
+    @app.post("/api/ask_stream")
+    def ask_stream() -> Response:
+        rt: AgentRuntime = app.config["AGENT_RUNTIME"]
+        payload = request.get_json(silent=True) or {}
+        question = (payload.get("question") or "").strip()
+        session_id = payload.get("session_id") or uuid.uuid4().hex
+        image_paths = payload.get("images") or []
+        if not question:
+            return jsonify({"error": "missing question"}), 400
+
+        session = rt.get_session(session_id)
+        session_result = session.receive(question, image_paths=image_paths)
+
+        def sse(event: str, data: dict[str, Any]) -> str:
+            return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+        if session_result.status == "clarify":
+            def clarify_only():
+                yield sse("clarify", {"message": session_result.message, "session_id": session_id})
+                yield sse("done", {"session_id": session_id})
+            return Response(stream_with_context(clarify_only()), mimetype="text/event-stream")
+
+        structure = session_result.structure
+        chunks = rt.kb.search(
+            session_result.resolved_query,
+            top_k=rt.config.top_k,
+            prefer_terms=structure.terms if structure else None,
+        )
+
+        def generate():
+            yield sse(
+                "meta",
+                {
+                    "session_id": session_id,
+                    "structure": serialize_structure(structure),
+                    "chunks": [serialize_chunk(c) for c in chunks],
+                    "memory_context": session_result.memory_context,
+                },
+            )
+            answer_parts: list[str] = []
+            try:
+                image_urls = [image_path_to_data_url(p) for p in image_paths]
+                messages = build_messages(
+                    structure,
+                    chunks,
+                    image_urls=image_urls,
+                    memory_context=session_result.memory_context,
+                    term_inventory=rt.kb.term_inventory,
+                    prompt_config=rt.config.prompt,
+                )
+                client = rt.make_chat_client(use_vision=bool(image_paths))
+                for delta in client.chat_stream(
+                    messages,
+                    temperature=rt.config.temperature,
+                    max_tokens=rt.config.max_tokens,
+                    enable_thinking=rt.config.enable_thinking,
+                ):
+                    answer_parts.append(delta)
+                    yield sse("delta", {"text": delta})
+            except SiliconFlowError as exc:
+                yield sse("error", {"message": str(exc)})
+                yield sse("done", {"session_id": session_id})
+                return
+            except Exception as exc:  # pragma: no cover - defensive
+                yield sse("error", {"message": f"unexpected error: {exc}"})
+                yield sse("done", {"session_id": session_id})
+                return
+
+            full_answer = "".join(answer_parts)
+            if structure is not None:
+                session.record_turn(
+                    user_query=session_result.user_query,
+                    resolved_query=session_result.resolved_query,
+                    structure=structure,
+                    answer=full_answer,
+                )
+            yield sse("done", {"session_id": session_id, "answer": full_answer})
+
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+    return app
+
+
+def main() -> None:
+    config_path = os.environ.get("AGENT_CONFIG_PATH")
+    host = os.environ.get("WEB_HOST", "127.0.0.1")
+    port = int(os.environ.get("WEB_PORT", "5050"))
+    debug = os.environ.get("WEB_DEBUG", "0") in {"1", "true", "True"}
+    app = create_app(config_path=config_path)
+    app.run(host=host, port=port, debug=debug, threaded=True)
+
+
+if __name__ == "__main__":
+    main()

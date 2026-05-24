@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gesture Agent · 交互手势词典</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="dot"></span>
+        <span class="title">Gesture Agent</span>
+        <span class="subtitle">交互手势词典 · 学习与设计评估</span>
+      </div>
+      <div class="topbar-actions">
+        <span id="health" class="health">connecting…</span>
+        <button id="reset" class="btn ghost" title="清空当前会话记忆">清空会话</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="chat" id="chat">
+        <div class="messages" id="messages"></div>
+
+        <form id="composer" class="composer" autocomplete="off">
+          <div class="composer-row">
+            <textarea
+              id="question"
+              rows="2"
+              placeholder="问点什么 — 比如：拖拽和滑动有什么区别？"
+              required
+            ></textarea>
+            <div class="composer-side">
+              <label class="checkbox">
+                <input type="checkbox" id="stream" checked />
+                <span>流式输出</span>
+              </label>
+              <button type="submit" id="send" class="btn primary">发送</button>
+            </div>
+          </div>
+          <div class="composer-row optional">
+            <input
+              type="text"
+              id="images"
+              placeholder="图片路径（可选，多个用英文逗号分隔；服务器本地路径）"
+            />
+          </div>
+        </form>
+      </section>
+
+      <aside class="inspector">
+        <div class="panel">
+          <h3>问题结构</h3>
+          <pre id="structure" class="codeblock">—</pre>
+        </div>
+        <div class="panel">
+          <h3>检索资料</h3>
+          <ol id="chunks" class="chunks">
+            <li class="muted">尚未提问</li>
+          </ol>
+        </div>
+      </aside>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+    <script src="./app.js" defer></script>
+  </body>
+</html>

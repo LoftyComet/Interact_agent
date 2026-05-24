@@ -16,10 +16,19 @@ SYSTEM_PROMPT = """你是“手势词典”的学习与设计评估 Agent，服�
 4. 如果用户提供的是设计方案，先用词典术语重述方案，再评价；不要沿用用户混乱、口语化或不一致的术语。
 5. 回答要准确、结构化、简洁，避免泛泛而谈。
 6. 不要创造新的手势词典专有名词；控件形态、基础属性、交互机制等专有名词必须来自术语枚举或检索资料标题。
+
+输出格式（强制）：
+- 始终用 GitHub 风格的 Markdown 写作，面向人类阅读，不要返回 JSON、YAML 或其他结构化数据格式。
+- 不要把整个回答放在 ```json 或任何代码块里；正文不要被一对花括号 `{}` 包住。
+- 把问题结构中的 `output_frame` 当作章节顺序，每一项用 Markdown 二级标题（`## 标题`）开头，正文用普通段落、列表或表格。
+- 表格使用 Markdown 表格语法（`| 列1 | 列2 |`），不要用 JSON 数组表示表格。
+- 资料引用直接行内写出，例如“（来源：拖拽.md:12-30）”，不要用 JSON 字段承载。
 """
 
 
 DEFAULT_RESPONSE_INSTRUCTIONS = [
+    "输出格式：必须是面向阅读的 Markdown。禁止把整段回答放在 ```json / ```yaml 代码块里，也不要让正文以 `{` 开头、以 `}` 结尾。",
+    "`output_frame` 中的条目是 Markdown 二级标题（`## …`），不是 JSON key；表格请使用 Markdown 表格语法。",
     "术语约束：凡是作为“手势词典专有名词”的控件形态、基础属性、交互机制、响应类型或结构词，必须来自上面的术语枚举或检索资料标题；不要创造新的交互机制名或控件名。",
     "如果用户使用了口语化说法，先映射到枚举中的最接近术语；如果枚举和资料中没有对应术语，明确写“词典中没有对应术语”，再用普通描述解释，不要把普通描述包装成新术语。",
     "基础交互机制：强调基础属性、状态/变化序列、响应逻辑和适用边界。",
@@ -28,7 +37,7 @@ DEFAULT_RESPONSE_INSTRUCTIONS = [
     "基础属性：强调连续性、维度、感知灵敏度和可组合方向。",
     "多模态/语音交互：强调模态分工、识别逻辑、反馈闭环、风险和替代入口。",
     "播客内容：输出适合口播的结构，避免写成论文段落。",
-    "交互机制对比：优先用表格或清晰分组说明共同基础、核心差异和选择建议。",
+    "交互机制对比：优先用 Markdown 表格或清晰分组说明共同基础、核心差异和选择建议。",
     "案例理解：必须按“控件形态 -> 基础属性 -> 交互机制 -> 响应逻辑 -> 设计判断”拆解。",
     "设计方案评估：先用规范术语复述方案，再按“控件形态 -> 基础属性 -> 交互机制 -> 响应逻辑”拆解；重点指出术语混乱、机制冲突、反馈缺失、适用边界错误，并给出可执行修改建议。",
 ]
@@ -50,11 +59,13 @@ def build_user_prompt(
     )
     term_section = format_term_inventory(term_inventory, question, chunks)
     instruction_section = format_response_instructions(prompt_config)
+    output_frame = question.output_frame or []
+    output_skeleton = "\n".join(f"## {item}\n（这一节的内容）" for item in output_frame) if output_frame else "（按问题结构内的小节自由组织）"
     return f"""用户原问题：
 {question.raw_query}
 {memory_section}
 
-问题结构：
+问题结构（仅供你理解意图，**不要照抄成 JSON 输出**）：
 ```json
 {structure_json}
 ```
@@ -65,7 +76,14 @@ def build_user_prompt(
 术语枚举约束：
 {term_section}
 
-请严格按问题结构中的 output_frame 组织回答，并根据 intent 使用相应的分析口径：
+输出要求：
+- 必须返回 Markdown 正文，禁止把回答整体包成 JSON / YAML / 代码块。
+- 按问题结构中的 `output_frame` 顺序作为 Markdown 二级标题（`##`），每节下用段落、列表或 Markdown 表格展开。
+- 章节骨架（请严格按以下顺序产出，每节至少有一段内容）：
+
+{output_skeleton}
+
+并根据 intent 使用相应的分析口径：
 {instruction_section}"""
 
 
