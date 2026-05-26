@@ -5,6 +5,8 @@ description = "A structured learning agent prototype for an interaction design g
 requires-python = ">=3.9"
 dependencies = [
     "openai>=1.0.0",
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
 ]
 
 [dependency-groups]

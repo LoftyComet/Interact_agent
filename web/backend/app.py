@@ -324,7 +324,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
 def main() -> None:
     config_path = os.environ.get("AGENT_CONFIG_PATH")
     host = os.environ.get("WEB_HOST", "127.0.0.1")
-    port = int(os.environ.get("WEB_PORT", "5050"))
+    port = int(os.environ.get("WEB_PORT", "5000"))
     debug = os.environ.get("WEB_DEBUG", "0") in {"1", "true", "True"}
     app = create_app(config_path=config_path)
     app.run(host=host, port=port, debug=debug, threaded=True)
