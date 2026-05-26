@@ -4,13 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
-WorkingDirectory=/opt/gesture-agent
-EnvironmentFile=/opt/gesture-agent/.env
+User=root
+Group=root
+WorkingDirectory=/root/Interact_agent
+EnvironmentFile=/root/Interact_agent/.env
 Environment=WEB_HOST=127.0.0.1
 Environment=WEB_PORT=5000
-ExecStart=/opt/gesture-agent/.venv/bin/python -m web.backend.app
+ExecStart=/root/Interact_agent/.venv/bin/python -m web.backend.app
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
