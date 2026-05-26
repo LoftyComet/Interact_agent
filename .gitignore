@@ -5,3 +5,4 @@ agent_config.json
 .pytest_cache/
 __pycache__/
 *.py[cod]
+gesture_dictionary_agent.egg-info/
