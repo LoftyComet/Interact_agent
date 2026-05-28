@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import threading
 import uuid
@@ -26,15 +27,36 @@ from flask_cors import CORS
 
 from gesture_agent.core.models import QuestionStructure, SourceChunk
 from gesture_agent.knowledge import KnowledgeBase
+from gesture_agent.knowledge.image_index import ImageIndex
 from gesture_agent.learning import ClarificationIntentResolver, ConversationSession, QuestionParser
 from gesture_agent.learning.output_frames import load_output_frames
 from gesture_agent.learning.prompt_builder import build_messages
 from gesture_agent.media import image_path_to_data_url
 from gesture_agent.providers import SiliconFlowClient, SiliconFlowError
 from gesture_agent.settings.app_config import load_agent_config
+from gesture_agent.verification import InputVerifier, OutputVerifier
+from gesture_agent.verification.prompts import OUTPUT_CORRECTION_PROMPT
 
 
 FRONTEND_DIR = (Path(__file__).resolve().parent.parent / "frontend").resolve()
+EXTRACTED_IMAGES_DIR = (PROJECT_ROOT / "data" / "pictures" / "extracted").resolve()
+
+IMAGE_REF_RE = re.compile(r"!\[([^\]]*)\]\(image:([^)]+)\)")
+
+
+def resolve_image_refs(text: str, image_index: Optional[ImageIndex], base_url: str = "/api/images") -> str:
+    if image_index is None:
+        return text
+
+    def _replacer(match):
+        alt_text = match.group(1)
+        image_id = match.group(2)
+        filename = image_index.get_filename(image_id)
+        if filename:
+            return f"![{alt_text}]({base_url}/{filename})"
+        return match.group(0)
+
+    return IMAGE_REF_RE.sub(_replacer, text)
 
 
 class AgentRuntime:
@@ -53,6 +75,19 @@ class AgentRuntime:
         self.parser = QuestionParser(self.kb, output_frames=self.output_frames)
         self._sessions: dict[str, ConversationSession] = {}
         self._sessions_lock = threading.Lock()
+        self.input_verifier = InputVerifier(
+            term_inventory=self.kb.term_inventory,
+            structured_items=self.kb.structured_items,
+            use_llm=self.config.verification.verify_input_llm,
+        )
+        self.output_verifier = OutputVerifier(
+            term_inventory=self.kb.term_inventory,
+            output_frames=self.output_frames,
+            structured_items=self.kb.structured_items,
+            use_llm=self.config.verification.verify_output_llm,
+        )
+        index_path = Path(self.config.data_dir) / "pictures" / "extracted" / "image_index.json"
+        self.image_index = ImageIndex.load(index_path)
 
     def get_session(self, session_id: str) -> ConversationSession:
         with self._sessions_lock:
@@ -134,6 +169,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             return Response("frontend/index.html not found", status=404)
         return send_from_directory(str(FRONTEND_DIR), "index.html")
 
+    @app.get("/api/images/<path:filename>")
+    def serve_image(filename: str) -> Response:
+        if not EXTRACTED_IMAGES_DIR.exists():
+            return Response("Image directory not found", status=404)
+        return send_from_directory(str(EXTRACTED_IMAGES_DIR), filename)
+
     @app.get("/api/health")
     def health() -> Response:
         rt: AgentRuntime = app.config["AGENT_RUNTIME"]
@@ -190,11 +231,28 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             )
 
         structure = session_result.structure
+
+        # --- 输入验证 ---
+        input_corrections = ""
+        if structure and rt.config.verification.verify_input:
+            iv_result = rt.input_verifier.verify(structure)
+            if iv_result.status == "corrected" and iv_result.corrected_structure:
+                input_corrections = iv_result.correction_summary
+                structure = iv_result.corrected_structure
+
         chunks = rt.kb.search(
             session_result.resolved_query,
             top_k=rt.config.top_k,
             prefer_terms=structure.terms if structure else None,
         )
+
+        available_images = []
+        if rt.image_index:
+            available_images = rt.image_index.search(
+                structure.terms if structure else [],
+                chunks,
+                top_k=3,
+            )
 
         answer = ""
         error_text: Optional[str] = None
@@ -207,6 +265,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 memory_context=session_result.memory_context,
                 term_inventory=rt.kb.term_inventory,
                 prompt_config=rt.config.prompt,
+                available_images=available_images,
             )
             client = rt.make_chat_client(use_vision=bool(image_paths))
             answer = client.chat(
@@ -218,6 +277,27 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         except SiliconFlowError as exc:
             error_text = str(exc)
 
+        # --- 输出验证 ---
+        output_issues: list[str] = []
+        if answer and not error_text and rt.config.verification.verify_output and structure:
+            ov_result = rt.output_verifier.verify(answer, structure)
+            if ov_result.should_retry:
+                correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
+                retry_messages = messages + [
+                    {"role": "assistant", "content": answer},
+                    {"role": "user", "content": correction_prompt},
+                ]
+                try:
+                    answer = client.chat(
+                        retry_messages,
+                        temperature=rt.config.temperature,
+                        max_tokens=rt.config.max_tokens,
+                        enable_thinking=rt.config.enable_thinking,
+                    )
+                except SiliconFlowError:
+                    pass
+            output_issues = [i.description for i in ov_result.issues]
+
         if structure is not None and not error_text:
             session.record_turn(
                 user_query=session_result.user_query,
@@ -226,11 +306,15 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 answer=answer,
             )
 
+        answer = resolve_image_refs(answer, rt.image_index)
+
         body = {
             "session_id": session_id,
             "status": "ready",
             "answer": answer,
             "error": error_text,
+            "input_corrections": input_corrections,
+            "output_issues": output_issues,
             "structure": serialize_structure(structure),
             "chunks": [serialize_chunk(c) for c in chunks],
             "memory_context": session_result.memory_context,
@@ -261,11 +345,28 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             return Response(stream_with_context(clarify_only()), mimetype="text/event-stream")
 
         structure = session_result.structure
+
+        # --- 输入验证 ---
+        input_corrections = ""
+        if structure and rt.config.verification.verify_input:
+            iv_result = rt.input_verifier.verify(structure)
+            if iv_result.status == "corrected" and iv_result.corrected_structure:
+                input_corrections = iv_result.correction_summary
+                structure = iv_result.corrected_structure
+
         chunks = rt.kb.search(
             session_result.resolved_query,
             top_k=rt.config.top_k,
             prefer_terms=structure.terms if structure else None,
         )
+
+        available_images = []
+        if rt.image_index:
+            available_images = rt.image_index.search(
+                structure.terms if structure else [],
+                chunks,
+                top_k=3,
+            )
 
         def generate():
             yield sse(
@@ -275,6 +376,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     "structure": serialize_structure(structure),
                     "chunks": [serialize_chunk(c) for c in chunks],
                     "memory_context": session_result.memory_context,
+                    "input_corrections": input_corrections,
                 },
             )
             answer_parts: list[str] = []
@@ -287,6 +389,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     memory_context=session_result.memory_context,
                     term_inventory=rt.kb.term_inventory,
                     prompt_config=rt.config.prompt,
+                    available_images=available_images,
                 )
                 client = rt.make_chat_client(use_vision=bool(image_paths))
                 for delta in client.chat_stream(
@@ -307,6 +410,31 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 return
 
             full_answer = "".join(answer_parts)
+
+            # --- 输出验证 ---
+            output_issues: list[str] = []
+            if full_answer and rt.config.verification.verify_output and structure:
+                ov_result = rt.output_verifier.verify(full_answer, structure)
+                if ov_result.should_retry:
+                    correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
+                    retry_messages = messages + [
+                        {"role": "assistant", "content": full_answer},
+                        {"role": "user", "content": correction_prompt},
+                    ]
+                    try:
+                        yield sse("retry", {"reason": ov_result.correction_hints})
+                        full_answer = client.chat(
+                            retry_messages,
+                            temperature=rt.config.temperature,
+                            max_tokens=rt.config.max_tokens,
+                            enable_thinking=rt.config.enable_thinking,
+                        )
+                        full_answer = resolve_image_refs(full_answer, rt.image_index)
+                        yield sse("replace", {"text": full_answer})
+                    except SiliconFlowError:
+                        pass
+                output_issues = [i.description for i in ov_result.issues]
+
             if structure is not None:
                 session.record_turn(
                     user_query=session_result.user_query,
@@ -314,7 +442,8 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     structure=structure,
                     answer=full_answer,
                 )
-            yield sse("done", {"session_id": session_id, "answer": full_answer})
+            full_answer = resolve_image_refs(full_answer, rt.image_index)
+            yield sse("done", {"session_id": session_id, "answer": full_answer, "output_issues": output_issues})
 
         return Response(stream_with_context(generate()), mimetype="text/event-stream")
 

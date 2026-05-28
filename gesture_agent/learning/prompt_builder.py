@@ -6,6 +6,11 @@ from typing import Optional
 from gesture_agent.core.models import Layer, QuestionStructure, SourceChunk, TermInventory
 from gesture_agent.settings.app_config import PromptConfig
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from gesture_agent.knowledge.image_index import ImageEntry
+
 
 SYSTEM_PROMPT = """你是“手势词典”的学习与设计评估 Agent，服务对象是交互设计学习者和设计师。
 
@@ -16,6 +21,7 @@ SYSTEM_PROMPT = """你是“手势词典”的学习与设计评估 Agent，服�
 4. 如果用户提供的是设计方案，先用词典术语重述方案，再评价；不要沿用用户混乱、口语化或不一致的术语。
 5. 回答要准确、结构化、简洁，避免泛泛而谈。
 6. 不要创造新的手势词典专有名词；控件形态、基础属性、交互机制等专有名词必须来自术语枚举或检索资料标题。
+7. 如果"可用参考图片"中有与当前回答相关的图片，在合适的位置用 `![图片描述](image:图片ID)` 引用。只引用确实有助于理解的图片，不要强行引用所有图片。
 
 输出格式（强制）：
 - 始终用 GitHub 风格的 Markdown 写作，面向人类阅读，不要返回 JSON、YAML 或其他结构化数据格式。
@@ -37,7 +43,7 @@ DEFAULT_RESPONSE_INSTRUCTIONS = [
     "基础属性：强调连续性、维度、感知灵敏度和可组合方向。",
     "多模态/语音交互：强调模态分工、识别逻辑、反馈闭环、风险和替代入口。",
     "播客内容：输出适合口播的结构，避免写成论文段落。",
-    "交互机制对比：优先用 Markdown 表格或清晰分组说明共同基础、核心差异和选择建议。",
+    "交互机制对比：如果词典检索资料中已有对应的对比内容，严格按照词典原文呈现，不要改写或补充；如果对比对象超出词典已有内容，AI 自行理解并给出恰当描述，但必须参考检索资料中已有对比章节的格式（Markdown 表格 + 共同基础/核心差异/适用边界的分组结构）。",
     "案例理解：必须按“控件形态 -> 基础属性 -> 交互机制 -> 响应逻辑 -> 设计判断”拆解。",
     "设计方案评估：先用规范术语复述方案，再按“控件形态 -> 基础属性 -> 交互机制 -> 响应逻辑”拆解；重点指出术语混乱、机制冲突、反馈缺失、适用边界错误，并给出可执行修改建议。",
 ]
@@ -49,6 +55,7 @@ def build_user_prompt(
     memory_context: str = "",
     term_inventory: Optional[TermInventory] = None,
     prompt_config: Optional[PromptConfig] = None,
+    available_images: Optional[list["ImageEntry"]] = None,
 ) -> str:
     context = "\n\n".join(format_chunk(idx + 1, chunk) for idx, chunk in enumerate(chunks))
     structure_json = json.dumps(question.to_dict(), ensure_ascii=False, indent=2)
@@ -59,6 +66,7 @@ def build_user_prompt(
     )
     term_section = format_term_inventory(term_inventory, question, chunks)
     instruction_section = format_response_instructions(prompt_config)
+    image_section = format_available_images(available_images)
     output_frame = question.output_frame or []
     output_skeleton = "\n".join(f"## {item}\n（这一节的内容）" for item in output_frame) if output_frame else "（按问题结构内的小节自由组织）"
     return f"""用户原问题：
@@ -75,6 +83,7 @@ def build_user_prompt(
 
 术语枚举约束：
 {term_section}
+{image_section}
 
 输出要求：
 - 必须返回 Markdown 正文，禁止把回答整体包成 JSON / YAML / 代码块。
@@ -160,6 +169,15 @@ def format_response_instructions(prompt_config: Optional[PromptConfig] = None) -
     return "\n".join(f"- {item}" for item in instructions)
 
 
+def format_available_images(images: Optional[list["ImageEntry"]]) -> str:
+    if not images:
+        return ""
+    lines = ["\n可用参考图片（在回答中合适位置用 ![描述](image:ID) 引用有助理解的图片）："]
+    for img in images:
+        lines.append(f"- image:{img.id} — {img.annotation}（章节：{img.heading}）")
+    return "\n".join(lines)
+
+
 def resolve_system_prompt(prompt_config: Optional[PromptConfig] = None) -> str:
     if prompt_config is None:
         return SYSTEM_PROMPT
@@ -176,6 +194,7 @@ def build_messages(
     memory_context: str = "",
     term_inventory: Optional[TermInventory] = None,
     prompt_config: Optional[PromptConfig] = None,
+    available_images: Optional[list["ImageEntry"]] = None,
 ) -> list[dict]:
     user_prompt = build_user_prompt(
         question,
@@ -183,6 +202,7 @@ def build_messages(
         memory_context=memory_context,
         term_inventory=term_inventory,
         prompt_config=prompt_config,
+        available_images=available_images,
     )
     system_prompt = resolve_system_prompt(prompt_config)
     if not image_urls:

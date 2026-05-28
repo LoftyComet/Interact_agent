@@ -10,6 +10,15 @@ DEFAULT_AGENT_CONFIG_PATH = "agent_config.json"
 
 
 @dataclass
+class VerificationConfig:
+    verify_input: bool = True
+    verify_input_llm: bool = False
+    verify_output: bool = True
+    verify_output_llm: bool = False
+    output_max_retries: int = 1
+
+
+@dataclass
 class PromptConfig:
     system_prompt: Optional[str] = None
     extra_system_prompt: str = ""
@@ -41,6 +50,7 @@ class AgentConfig:
     llm_intent: bool = False
     llm_clarify: bool = True
     prompt: PromptConfig = field(default_factory=PromptConfig)
+    verification: VerificationConfig = field(default_factory=VerificationConfig)
 
 
 def load_agent_config(config_path: Optional[Union[str, Path]] = None) -> AgentConfig:
@@ -64,6 +74,7 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
     intent = _object_section(raw, "intent")
     media = _object_section(raw, "media")
     prompt = _object_section(raw, "prompt")
+    verification = _object_section(raw, "verification")
 
     return AgentConfig(
         source=source,
@@ -92,6 +103,13 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
             extra_system_prompt=_text_value(prompt.get("extra_system_prompt", "")),
             response_instructions=_optional_string_list(prompt.get("response_instructions"), "prompt.response_instructions"),
             extra_response_instructions=_string_list(prompt.get("extra_response_instructions", []), "prompt.extra_response_instructions"),
+        ),
+        verification=VerificationConfig(
+            verify_input=bool(verification.get("verify_input", True)),
+            verify_input_llm=bool(verification.get("verify_input_llm", False)),
+            verify_output=bool(verification.get("verify_output", True)),
+            verify_output_llm=bool(verification.get("verify_output_llm", False)),
+            output_max_retries=_int_value(verification.get("output_max_retries", 1), "verification.output_max_retries"),
         ),
     )
 

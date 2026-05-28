@@ -15,6 +15,8 @@ from .learning.prompt_builder import build_messages
 from .media import image_path_to_data_url
 from .providers import SiliconFlowClient, SiliconFlowError
 from .settings.app_config import DEFAULT_AGENT_CONFIG_PATH, load_agent_config
+from .verification import InputVerifier, OutputVerifier
+from .verification.prompts import OUTPUT_CORRECTION_PROMPT
 
 
 @dataclass
@@ -138,6 +140,11 @@ def apply_agent_config(args: argparse.Namespace) -> argparse.Namespace:
     args.show_term_inventory = _pick_bool(args.show_term_inventory, False)
     args.show_output_frames = _pick_bool(args.show_output_frames, False)
     args.prompt_config = config.prompt
+    args.verify_input = config.verification.verify_input
+    args.verify_input_llm = config.verification.verify_input_llm
+    args.verify_output = config.verification.verify_output
+    args.verify_output_llm = config.verification.verify_output_llm
+    args.output_max_retries = config.verification.output_max_retries
     return args
 
 
@@ -147,6 +154,18 @@ def _pick(value, fallback):
 
 def _pick_bool(value: Optional[bool], fallback: bool) -> bool:
     return bool(fallback if value is None else value)
+
+
+def _try_build_client(args: argparse.Namespace) -> Optional[SiliconFlowClient]:
+    try:
+        return SiliconFlowClient.from_env(
+            model=args.model,
+            base_url=args.base_url,
+            timeout=args.timeout,
+            use_vision_model=bool(args.image),
+        )
+    except SiliconFlowError:
+        return None
 
 
 def interactive_loop(args: argparse.Namespace, kb: KnowledgeBase, parser: QuestionParser) -> int:
@@ -200,6 +219,22 @@ def run_once(
     memory_context: str = "",
 ) -> RunResult:
     structure = structure or resolve_structure(args, parser, question)
+
+    # --- 输入验证 ---
+    if getattr(args, "verify_input", False) and not args.dry_run:
+        input_verifier = InputVerifier(
+            term_inventory=kb.term_inventory,
+            structured_items=kb.structured_items,
+            client=_try_build_client(args) if getattr(args, "verify_input_llm", False) else None,
+            use_llm=getattr(args, "verify_input_llm", False),
+        )
+        iv_result = input_verifier.verify(structure)
+        if iv_result.status == "corrected" and iv_result.corrected_structure:
+            print(f"[输入修正] {iv_result.correction_summary}", file=sys.stderr)
+            structure = iv_result.corrected_structure
+        elif iv_result.status == "needs_clarification":
+            print(f"[输入问题] {iv_result.correction_summary}", file=sys.stderr)
+
     chunks = kb.search(question, top_k=args.top_k, prefer_terms=structure.terms)
 
     if args.show_structure or args.dry_run:
@@ -268,6 +303,35 @@ def run_once(
             return RunResult(exit_code=1, structure=structure)
         print(str(exc), file=sys.stderr)
         return RunResult(exit_code=1, structure=structure)
+
+    # --- 输出验证 ---
+    if answer and getattr(args, "verify_output", False):
+        output_verifier = OutputVerifier(
+            term_inventory=kb.term_inventory,
+            output_frames=parser.output_frames,
+            structured_items=kb.structured_items,
+            client=_try_build_client(args) if getattr(args, "verify_output_llm", False) else None,
+            use_llm=getattr(args, "verify_output_llm", False),
+        )
+        ov_result = output_verifier.verify(answer, structure)
+        if ov_result.should_retry:
+            max_retries = getattr(args, "output_max_retries", 1)
+            for _ in range(max_retries):
+                correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
+                retry_messages = messages + [
+                    {"role": "assistant", "content": answer},
+                    {"role": "user", "content": correction_prompt},
+                ]
+                try:
+                    print("[输出修正] 检测到问题，正在重试...", file=sys.stderr, flush=True)
+                    answer = client.chat(
+                        retry_messages,
+                        temperature=args.temperature,
+                        max_tokens=args.max_tokens,
+                        enable_thinking=args.enable_thinking,
+                    )
+                except SiliconFlowError:
+                    break
 
     if answer is not None:
         print(answer)

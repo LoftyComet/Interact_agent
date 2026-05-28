@@ -241,6 +241,14 @@ body {
   line-height: 1.6;
 }
 
+.bubble.markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+  display: block;
+}
+
 .bubble.markdown h1,
 .bubble.markdown h2,
 .bubble.markdown h3,

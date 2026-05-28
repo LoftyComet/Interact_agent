@@ -636,7 +636,17 @@ def _term_inventory_from_config(raw: dict[str, Any], *, source: str) -> TermInve
         by_layer[layer] = _normalize_terms(terms)
 
     by_type = {str(term_type).strip(): _normalize_terms(terms) for term_type, terms in by_type_raw.items() if str(term_type).strip()}
-    aliases = {str(alias).strip(): str(canonical).strip() for alias, canonical in aliases_raw.items() if str(alias).strip() and str(canonical).strip()}
+    aliases: dict[str, str] = {}
+    for key, value in aliases_raw.items():
+        if isinstance(value, dict):
+            for alias, canonical in value.items():
+                a, c = str(alias).strip(), str(canonical).strip()
+                if a and c:
+                    aliases[a] = c
+        else:
+            a, c = str(key).strip(), str(value).strip()
+            if a and c:
+                aliases[a] = c
     return TermInventory(by_layer=by_layer, by_type=by_type, aliases=aliases, structural_terms=structural_terms, source=source)
 
 

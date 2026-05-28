@@ -67,7 +67,7 @@ function renderMarkdown(text) {
     }
     const html = window.marked.parse(normalized);
     if (typeof window.DOMPurify !== "undefined") {
-      return window.DOMPurify.sanitize(html);
+      return window.DOMPurify.sanitize(html, { ADD_TAGS: ["img"], ADD_ATTR: ["src", "alt", "loading"] });
     }
     return html;
   }
@@ -396,10 +396,9 @@ async function sendStream(question, images) {
         break;
       case "done":
         if (answerEl) answerEl.classList.remove("typing");
-        if (!clarified && !answerText && payload.answer) {
+        if (payload.answer) {
           ensureAnswerEl();
           setBubbleContent(answerEl, payload.answer, { markdown: true });
-          answerEl.classList.remove("typing");
         }
         break;
       default:
