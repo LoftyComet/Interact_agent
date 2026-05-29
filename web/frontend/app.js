@@ -17,12 +17,13 @@ const els = {
   images: document.getElementById("images"),
   health: document.getElementById("health"),
   structure: document.getElementById("structure"),
-  chunks: document.getElementById("chunks"),
 };
 
 const state = {
   sessionId: localStorage.getItem("gesture_agent_session") || null,
   busy: false,
+  abortController: null,
+  lastChunks: [],
 };
 
 async function api(path, options = {}) {
@@ -212,8 +213,52 @@ function fallbackMarkdown(text) {
 function setBubbleContent(bubble, text, { markdown }) {
   if (markdown) {
     bubble.innerHTML = renderMarkdown(text);
+    linkifyCitations(bubble);
   } else {
     bubble.textContent = text;
+  }
+}
+
+function linkifyCitations(container) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const citationRe = /\[(\d+)\]/g;
+  const nodesToReplace = [];
+  let node;
+  while ((node = walker.nextNode())) {
+    if (node.parentElement && node.parentElement.closest("code, pre, a")) continue;
+    if (citationRe.test(node.textContent)) {
+      nodesToReplace.push(node);
+    }
+    citationRe.lastIndex = 0;
+  }
+  for (const textNode of nodesToReplace) {
+    const frag = document.createDocumentFragment();
+    let lastIdx = 0;
+    const text = textNode.textContent;
+    let match;
+    citationRe.lastIndex = 0;
+    while ((match = citationRe.exec(text)) !== null) {
+      if (match.index > lastIdx) {
+        frag.appendChild(document.createTextNode(text.slice(lastIdx, match.index)));
+      }
+      const idx = parseInt(match[1], 10);
+      const sup = document.createElement("sup");
+      sup.className = "cite-ref";
+      sup.textContent = `[${idx}]`;
+      sup.dataset.citeIdx = idx;
+      sup.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const chunks = state.lastChunks || [];
+        const chunk = chunks[idx - 1];
+        if (chunk) showChunkPopover(sup, chunk, idx);
+      });
+      frag.appendChild(sup);
+      lastIdx = citationRe.lastIndex;
+    }
+    if (lastIdx < text.length) {
+      frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+    }
+    textNode.parentNode.replaceChild(frag, textNode);
   }
 }
 
@@ -245,65 +290,84 @@ function renderStructure(structure) {
 }
 
 function renderChunks(chunks) {
-  els.chunks.innerHTML = "";
-  if (!chunks || chunks.length === 0) {
-    const li = document.createElement("li");
-    li.className = "muted";
-    li.textContent = "本轮没有命中资料";
-    els.chunks.appendChild(li);
-    return;
+  // Store chunks for attaching to the answer bubble later.
+  state.lastChunks = chunks || [];
+}
+
+function attachChunkRefs(messageRow, chunks) {
+  if (!chunks || chunks.length === 0) return;
+  const refBar = document.createElement("div");
+  refBar.className = "ref-bar";
+  for (let i = 0; i < chunks.length; i++) {
+    const chip = document.createElement("button");
+    chip.className = "ref-chip";
+    chip.textContent = `[${i + 1}] ${chunks[i].title || "来源"}`;
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showChunkPopover(chip, chunks[i], i + 1);
+    });
+    refBar.appendChild(chip);
   }
-  for (const chunk of chunks) {
-    const li = document.createElement("li");
-    li.className = "chunk-item";
+  messageRow.appendChild(refBar);
+}
 
-    const details = document.createElement("details");
-    details.className = "chunk-details";
+function showChunkPopover(anchor, chunk, idx) {
+  closeChunkPopover();
+  const pop = document.createElement("div");
+  pop.className = "chunk-popover";
+  pop.id = "chunk-popover-active";
 
-    const summary = document.createElement("summary");
-    summary.className = "chunk-summary";
+  const header = document.createElement("div");
+  header.className = "chunk-pop-header";
+  header.textContent = `[${idx}] ${chunk.title || ""}`;
+  pop.appendChild(header);
 
-    const title = document.createElement("span");
-    title.className = "chunk-title";
-    title.textContent = chunk.title;
-    summary.appendChild(title);
+  const meta = document.createElement("div");
+  meta.className = "chunk-pop-meta";
+  const bits = [chunk.citation, chunk.layer];
+  if (typeof chunk.score === "number") bits.push(`score=${chunk.score}`);
+  meta.textContent = bits.filter(Boolean).join(" · ");
+  pop.appendChild(meta);
 
-    const meta = document.createElement("span");
-    meta.className = "citation";
-    const metaBits = [chunk.citation, chunk.layer];
-    if (typeof chunk.score === "number") metaBits.push(`score=${chunk.score}`);
-    meta.textContent = metaBits.filter(Boolean).join(" · ");
-    summary.appendChild(meta);
-
-    details.appendChild(summary);
-
-    if (Array.isArray(chunk.terms) && chunk.terms.length) {
-      const tagWrap = document.createElement("div");
-      tagWrap.className = "chunk-tags";
-      for (const term of chunk.terms) {
-        const tag = document.createElement("span");
-        tag.className = "tag";
-        tag.textContent = term;
-        tagWrap.appendChild(tag);
-      }
-      details.appendChild(tagWrap);
-    }
-
-    if (chunk.text) {
-      const body = document.createElement("div");
-      body.className = "chunk-body markdown";
-      body.innerHTML = renderMarkdown(chunk.text);
-      details.appendChild(body);
-    } else {
-      const empty = document.createElement("div");
-      empty.className = "chunk-body muted";
-      empty.textContent = "（无正文）";
-      details.appendChild(empty);
-    }
-
-    li.appendChild(details);
-    els.chunks.appendChild(li);
+  if (Array.isArray(chunk.terms) && chunk.terms.length) {
+    const tags = document.createElement("div");
+    tags.className = "chunk-pop-tags";
+    tags.textContent = chunk.terms.join("、");
+    pop.appendChild(tags);
   }
+
+  if (chunk.text) {
+    const body = document.createElement("div");
+    body.className = "chunk-pop-body markdown";
+    body.innerHTML = renderMarkdown(chunk.text);
+    pop.appendChild(body);
+  }
+
+  document.body.appendChild(pop);
+  positionPopover(pop, anchor);
+
+  setTimeout(() => {
+    document.addEventListener("click", closeChunkPopover, { once: true });
+  }, 0);
+}
+
+function positionPopover(pop, anchor) {
+  const rect = anchor.getBoundingClientRect();
+  pop.style.position = "fixed";
+  pop.style.left = `${rect.left}px`;
+  pop.style.top = `${rect.bottom + 6}px`;
+  const popRect = pop.getBoundingClientRect();
+  if (popRect.right > window.innerWidth - 12) {
+    pop.style.left = `${window.innerWidth - popRect.width - 12}px`;
+  }
+  if (popRect.bottom > window.innerHeight - 12) {
+    pop.style.top = `${rect.top - popRect.height - 6}px`;
+  }
+}
+
+function closeChunkPopover() {
+  const existing = document.getElementById("chunk-popover-active");
+  if (existing) existing.remove();
 }
 
 function parseImages(text) {
@@ -316,16 +380,36 @@ function parseImages(text) {
 
 function setBusy(busy) {
   state.busy = busy;
-  els.send.disabled = busy;
-  els.send.textContent = busy ? "请求中…" : "发送";
+  if (busy) {
+    els.send.textContent = "停止";
+    els.send.type = "button";
+    els.send.classList.remove("primary");
+    els.send.classList.add("stop");
+    els.send.disabled = false;
+  } else {
+    els.send.textContent = "发送";
+    els.send.type = "submit";
+    els.send.classList.add("primary");
+    els.send.classList.remove("stop");
+    els.send.disabled = false;
+  }
+}
+
+function abortInflight() {
+  if (state.abortController) {
+    state.abortController.abort();
+    state.abortController = null;
+  }
 }
 
 async function sendOnce(question, images) {
   const sessionId = await ensureSession();
+  state.abortController = new AbortController();
   const res = await api("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, session_id: sessionId, images }),
+    signal: state.abortController.signal,
   });
   const data = await res.json();
   if (data.status === "clarify") {
@@ -338,15 +422,18 @@ async function sendOnce(question, images) {
     appendMessage({ role: "assistant", kind: "error", text: data.error });
     return;
   }
-  appendMessage({ role: "assistant", text: data.answer || "(空响应)" });
+  const { row } = appendMessage({ role: "assistant", text: data.answer || "(空响应)" });
+  attachChunkRefs(row, state.lastChunks);
 }
 
 async function sendStream(question, images) {
   const sessionId = await ensureSession();
+  state.abortController = new AbortController();
   const res = await fetch(`${API_BASE}/api/ask_stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, session_id: sessionId, images }),
+    signal: state.abortController.signal,
   });
   if (!res.ok || !res.body) {
     const text = await res.text().catch(() => "");
@@ -358,7 +445,6 @@ async function sendStream(question, images) {
   let buffer = "";
   let answerEl = null;
   let answerText = "";
-  let clarified = false;
 
   function ensureAnswerEl() {
     if (!answerEl) {
@@ -388,7 +474,6 @@ async function sendStream(question, images) {
         els.messages.scrollTop = els.messages.scrollHeight;
         break;
       case "clarify":
-        clarified = true;
         appendMessage({ role: "system", text: payload.message || "需要澄清。" });
         break;
       case "error":
@@ -406,25 +491,40 @@ async function sendStream(question, images) {
     }
   }
 
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let sepIdx;
-    while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
-      const block = buffer.slice(0, sepIdx);
-      buffer = buffer.slice(sepIdx + 2);
-      if (!block.trim()) continue;
-      let event = "message";
-      const dataLines = [];
-      for (const line of block.split("\n")) {
-        if (line.startsWith("event:")) event = line.slice(6).trim();
-        else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sepIdx;
+      while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
+        const block = buffer.slice(0, sepIdx);
+        buffer = buffer.slice(sepIdx + 2);
+        if (!block.trim()) continue;
+        let event = "message";
+        const dataLines = [];
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+        }
+        handleEvent(event, dataLines.join("\n"));
       }
-      handleEvent(event, dataLines.join("\n"));
+    }
+  } finally {
+    if (answerEl) {
+      answerEl.classList.remove("typing");
+      const msgRow = answerEl.closest(".message");
+      if (msgRow) attachChunkRefs(msgRow, state.lastChunks);
     }
   }
 }
+
+els.send.addEventListener("click", (e) => {
+  if (state.busy) {
+    e.preventDefault();
+    abortInflight();
+  }
+});
 
 els.composer.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -444,8 +544,13 @@ els.composer.addEventListener("submit", async (e) => {
       await sendOnce(question, images);
     }
   } catch (err) {
-    appendMessage({ role: "assistant", kind: "error", text: err.message || String(err) });
+    if (err.name === "AbortError") {
+      // User clicked stop — keep partial content, no error shown.
+    } else {
+      appendMessage({ role: "assistant", kind: "error", text: err.message || String(err) });
+    }
   } finally {
+    state.abortController = null;
     setBusy(false);
   }
 });
@@ -484,7 +589,6 @@ els.reset.addEventListener("click", async () => {
     });
     els.messages.innerHTML = "";
     renderStructure(null);
-    renderChunks([]);
     appendMessage({ role: "system", text: "已清空当前会话记忆。" });
   } catch (err) {
     appendMessage({ role: "assistant", kind: "error", text: err.message || String(err) });
