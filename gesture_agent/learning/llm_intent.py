@@ -103,9 +103,10 @@ class LLMIntentResolver:
 判定要求：
 1. 如果当前输入是追问，例如“它”“这个”“那它和长按有什么区别”，必须结合对话记忆补全指代。
 2. 如果上一轮是 design_evaluation，当前输入说“这个案例/这个方案/如何应用/主要风险/怎么改/微变”，通常应继续判为 design_evaluation，而不是机械判为 case_analysis。
-3. 如果能明确判断 intent，输出 needs_clarification=false。
-4. 如果仍缺少关键对象或场景，输出 needs_clarification=true，并给出一个简短反问。
-5. 只输出 JSON，不要输出解释文本。
+3. 如果用户问题与手势词典/交互设计的前 11 个类别都不沾边（例如闲聊、问编程语言、问天气、问与交互设计无关的常识等），返回 `intent="open_ended"`，并把 `needs_clarification` 设为 false。注意：只要问题与手势、控件、交互机制、设计评估、播客、多模态/语音、词典背景知识等任何一项相关，就应优先匹配对应的预定义 intent，不要轻易判为 open_ended。
+4. 如果能明确判断 intent，输出 needs_clarification=false。
+5. 如果仍缺少关键对象或场景，输出 needs_clarification=true，并给出一个简短反问。
+6. 只输出 JSON，不要输出解释文本。
 
 JSON 格式：
 {{

@@ -450,8 +450,25 @@ els.composer.addEventListener("submit", async (e) => {
   }
 });
 
+els.question.addEventListener("compositionstart", () => {
+  els.question.dataset.composing = "1";
+});
+els.question.addEventListener("compositionend", () => {
+  delete els.question.dataset.composing;
+  // Some IMEs (especially on macOS) fire compositionend right before the Enter
+  // keydown that committed the candidate, so isComposing reads false by then.
+  // Mark a brief grace window to suppress that trailing Enter.
+  els.question.dataset.justComposed = "1";
+  setTimeout(() => {
+    delete els.question.dataset.justComposed;
+  }, 50);
+});
+
 els.question.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
+    // Skip when IME is composing or just finished composing.
+    if (e.isComposing || e.keyCode === 229) return;
+    if (els.question.dataset.composing || els.question.dataset.justComposed) return;
     e.preventDefault();
     els.composer.requestSubmit();
   }

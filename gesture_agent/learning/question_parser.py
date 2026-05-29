@@ -10,6 +10,15 @@ from gesture_agent.learning.output_frames import load_output_frames
 
 
 DESIGN_EVALUATION_RE = re.compile(r"(评估|评价|评审|设计方案|这个方案|方案合理|合理吗|有什么问题|哪里有问题|改进建议|优化建议|怎么优化|帮我看看.*设计|设计.*建议)")
+DICTIONARY_METHODOLOGY_RE = re.compile(
+    r"(这本书|这本词典|这部词典|这本字典|本词典|词典.*意义|词典.*目的|词典.*价值|词典.*为什么|词典.*为何|"
+    r"为什么.*这样.*(划分|分类|组织|整理|写|拆解)|为何.*这样.*(划分|分类|组织|整理|写|拆解)|"
+    r"为什么.*(划分|分类|组织|整理).*交互|为何.*(划分|分类|组织|整理).*交互|"
+    r"(分类|划分|组织|整理|拆解).*(逻辑|思路|方法|框架|体系|理由|动机|意义|出发点|切入点)|"
+    r"(立场|视角|思路|方法论|出发点|切入点).*(词典|本书|这本书|分类|划分)|"
+    r"为什么.*(写|做|整理).*(这本|本词典|这部)|"
+    r"作者.*(为什么|为何|动机|目的|想法|思路).*(写|做|整理|分类|划分))"
+)
 COMPARE_RE = re.compile(r"(对比|比较|区别|差异|不同|vs|VS|相比|哪个更|如何选择)")
 CASE_RE = re.compile(r"(案例|例子|图片|图中|截图|这个交互|这个设计|分析|拆解|应用)")
 PODCAST_RE = re.compile(r"(播客|podcast|口播|脚本|讲稿|音频节目|节目稿|访谈)")
@@ -35,6 +44,8 @@ INTENT_LABELS: dict[Intent, str] = {
     "background_knowledge": "背景知识",
     "case_analysis": "理解交互案例",
     "design_evaluation": "设计方案评估",
+    "dictionary_methodology": "词典方法论",
+    "open_ended": "开放问题",
 }
 
 # Intent classification thresholds — shared with llm_intent.py
@@ -53,6 +64,7 @@ class QuestionParser:
         query: str,
         image_paths: Optional[list[str]] = None,
         forced_intent: Optional[Intent] = None,
+        output_frame_override: Optional[list[str]] = None,
     ) -> QuestionStructure:
         image_paths = image_paths or []
         terms = self.kb.find_terms(query)
@@ -62,7 +74,13 @@ class QuestionParser:
         compare_targets = self._detect_compare_targets(query, terms) if intent == "interaction_compare" else []
         case_modality = self._detect_case_modality(query, image_paths)
         missing_info = self._missing_info(intent, query, image_paths)
-        output_frame = self._output_frame(intent)
+        output_frame = output_frame_override or self._output_frame(intent)
+        if output_frame_override:
+            output_frame_source = "cot"
+        elif intent == "open_ended":
+            output_frame_source = "cot"
+        else:
+            output_frame_source = "static"
         design_evaluation = (
             parse_design_evaluation(query, image_paths=image_paths, terms=terms)
             if intent == "design_evaluation"
@@ -79,6 +97,7 @@ class QuestionParser:
             case_modality=case_modality,
             missing_info=missing_info,
             output_frame=output_frame,
+            output_frame_source=output_frame_source,
             design_evaluation=design_evaluation,
         )
 
@@ -125,6 +144,8 @@ class QuestionParser:
 
         if DESIGN_EVALUATION_RE.search(query):
             add("design_evaluation", 0.99, "问题包含评估/评价/优化设计方案等设计评审信号。")
+        if DICTIONARY_METHODOLOGY_RE.search(query):
+            add("dictionary_methodology", 0.93, "问题涉及词典本身的分类逻辑、立场或编写动机。")
         if image_paths:
             add("case_analysis", 0.94, "用户提供了图片，需要理解交互案例。")
         if CASE_RE.search(query):
@@ -182,6 +203,8 @@ class QuestionParser:
             "podcast_content": "podcast_content",
             "background_knowledge": "background_knowledge",
             "interaction_compare": "interaction_mechanism",
+            "dictionary_methodology": "background_knowledge",
+            "open_ended": "unknown",
         }
         mapped_layer = intent_layer_map[intent]
         if mapped_layer not in layers:
@@ -233,12 +256,16 @@ class QuestionParser:
         return modality or ["text"]
 
     def _missing_info(self, intent: Intent, query: str, image_paths: list[str]) -> list[str]:
+        if intent == "open_ended":
+            return []
         if intent == "design_evaluation":
             terms = self.kb.find_terms(query)
             return parse_design_evaluation(query, image_paths=image_paths, terms=terms).missing_info
         return self._blocking_missing_info(intent, query, image_paths)
 
     def _blocking_missing_info(self, intent: Intent, query: str, image_paths: list[str]) -> list[str]:
+        if intent == "open_ended":
+            return []
         missing: list[str] = []
         if intent == "case_analysis" and not image_paths and len(query) < 30:
             missing.append("案例描述较短，可能需要补充界面/控件/用户动作/系统反馈。")
@@ -288,6 +315,8 @@ class QuestionParser:
         return f"这个问题可能有多种理解：{options}。你希望我按哪一种来回答？也可以补充具体对象、场景或输出形式。"
 
     def _output_frame(self, intent: Intent) -> list[str]:
+        if intent == "open_ended":
+            return []
         return self.output_frames.frame_for(intent)
 
     def _detect_mechanism_intent(self, query: str, terms: list[str]) -> Intent:

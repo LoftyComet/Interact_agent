@@ -28,7 +28,7 @@ from flask_cors import CORS
 from gesture_agent.core.models import QuestionStructure, SourceChunk
 from gesture_agent.knowledge import KnowledgeBase
 from gesture_agent.knowledge.image_index import ImageIndex
-from gesture_agent.learning import ClarificationIntentResolver, ConversationSession, QuestionParser
+from gesture_agent.learning import ClarificationIntentResolver, ConversationSession, LLMOutputFrameResolver, QuestionParser
 from gesture_agent.learning.output_frames import load_output_frames
 from gesture_agent.learning.prompt_builder import build_messages
 from gesture_agent.media import image_path_to_data_url
@@ -94,7 +94,9 @@ class AgentRuntime:
             session = self._sessions.get(session_id)
             if session is None:
                 session = ConversationSession(
-                    self.parser, intent_resolver=self._build_intent_resolver()
+                    self.parser,
+                    intent_resolver=self._build_intent_resolver(),
+                    output_frame_resolver=self._build_output_frame_resolver(),
                 )
                 self._sessions[session_id] = session
             return session
@@ -120,6 +122,25 @@ class AgentRuntime:
         except SiliconFlowError:
             return None
         return ClarificationIntentResolver(self.parser, client)
+
+    def _build_output_frame_resolver(self) -> Optional[LLMOutputFrameResolver]:
+        mode = self.config.llm_output_frame
+        if mode == "false":
+            return None
+        try:
+            client = SiliconFlowClient.from_env(
+                model=self.config.model,
+                base_url=self.config.base_url,
+                timeout=self.config.timeout,
+            )
+        except SiliconFlowError:
+            return None
+        return LLMOutputFrameResolver(
+            client,
+            self.output_frames,
+            mode=mode,
+            confidence_threshold=self.config.llm_output_frame_confidence_threshold,
+        )
 
     def make_chat_client(self, use_vision: bool) -> SiliconFlowClient:
         return SiliconFlowClient.from_env(

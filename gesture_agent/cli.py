@@ -9,7 +9,7 @@ from typing import Optional
 
 from .core.models import QuestionStructure
 from .knowledge import KnowledgeBase
-from .learning import ClarificationIntentResolver, ConversationSession, LLMIntentResolver, QuestionParser
+from .learning import ClarificationIntentResolver, ConversationSession, LLMIntentResolver, LLMOutputFrameResolver, QuestionParser
 from .learning.output_frames import load_output_frames
 from .learning.prompt_builder import build_messages
 from .media import image_path_to_data_url
@@ -58,6 +58,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--interactive", action="store_true", default=None, help="强制进入连续问答模式。")
     parser.add_argument("--llm-intent", action="store_true", default=None, help="每轮都使用硅基流动大模型辅助判断 intent；失败时回退到本地规则。")
     parser.add_argument("--no-llm-clarify", action="store_true", default=None, help="关闭“本地规则信息不足时用大模型二次判断”的默认行为。")
+    parser.add_argument("--llm-output-frame", choices=["false", "auto", "always"], default=None, help="CoT 动态输出框架模式：false 禁用，auto 低置信度时触发，always 每次触发。")
     return parser
 
 
@@ -137,6 +138,8 @@ def apply_agent_config(args: argparse.Namespace) -> argparse.Namespace:
     args.default_interactive = config.default_interactive
     args.llm_intent = _pick_bool(args.llm_intent, config.llm_intent)
     args.no_llm_clarify = _pick_bool(args.no_llm_clarify, not config.llm_clarify)
+    args.llm_output_frame = _pick(args.llm_output_frame, config.llm_output_frame)
+    args.llm_output_frame_confidence_threshold = config.llm_output_frame_confidence_threshold
     args.show_term_inventory = _pick_bool(args.show_term_inventory, False)
     args.show_output_frames = _pick_bool(args.show_output_frames, False)
     args.prompt_config = config.prompt
@@ -169,7 +172,11 @@ def _try_build_client(args: argparse.Namespace) -> Optional[SiliconFlowClient]:
 
 
 def interactive_loop(args: argparse.Namespace, kb: KnowledgeBase, parser: QuestionParser) -> int:
-    session = ConversationSession(parser, intent_resolver=build_intent_resolver(args, parser))
+    session = ConversationSession(
+        parser,
+        intent_resolver=build_intent_resolver(args, parser),
+        output_frame_resolver=build_output_frame_resolver(args, parser),
+    )
     print("Gesture Agent interactive mode. 输入 exit 退出，输入 reset 清空当前澄清会话。")
     while True:
         try:
@@ -368,6 +375,26 @@ def build_intent_resolver(args: argparse.Namespace, parser: QuestionParser) -> O
     if args.llm_intent:
         return LLMIntentResolver(parser, client)
     return ClarificationIntentResolver(parser, client)
+
+
+def build_output_frame_resolver(args: argparse.Namespace, parser: QuestionParser) -> Optional[LLMOutputFrameResolver]:
+    mode = getattr(args, "llm_output_frame", "auto")
+    if mode == "false" or args.dry_run:
+        return None
+    try:
+        client = SiliconFlowClient.from_env(
+            model=args.model,
+            base_url=args.base_url,
+            timeout=args.timeout,
+        )
+    except SiliconFlowError:
+        return None
+    return LLMOutputFrameResolver(
+        client,
+        parser.output_frames,
+        mode=mode,
+        confidence_threshold=getattr(args, "llm_output_frame_confidence_threshold", 0.80),
+    )
 
 
 def check_api(args: argparse.Namespace) -> int:

@@ -49,6 +49,8 @@ class AgentConfig:
     default_interactive: bool = True
     llm_intent: bool = False
     llm_clarify: bool = True
+    llm_output_frame: str = "auto"
+    llm_output_frame_confidence_threshold: float = 0.80
     prompt: PromptConfig = field(default_factory=PromptConfig)
     verification: VerificationConfig = field(default_factory=VerificationConfig)
 
@@ -98,6 +100,8 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
         default_interactive=bool(runtime.get("default_interactive", True)),
         llm_intent=bool(intent.get("llm_intent", False)),
         llm_clarify=bool(intent.get("llm_clarify", True)),
+        llm_output_frame=_llm_output_frame_value(intent.get("llm_output_frame", "auto")),
+        llm_output_frame_confidence_threshold=float(intent.get("llm_output_frame_confidence_threshold", 0.80)),
         prompt=PromptConfig(
             system_prompt=_optional_text(prompt.get("system_prompt")),
             extra_system_prompt=_text_value(prompt.get("extra_system_prompt", "")),
@@ -181,6 +185,16 @@ def _string_list(value: Any, field_name: str) -> list[str]:
     if not isinstance(value, list):
         raise ValueError(f"Agent config `{field_name}` must be an array.")
     return [str(item).strip() for item in value if str(item).strip()]
+
+
+_LLM_OUTPUT_FRAME_MODES = {"false", "auto", "always"}
+
+
+def _llm_output_frame_value(value: Any) -> str:
+    v = str(value).strip().lower() if value is not None else "auto"
+    if v not in _LLM_OUTPUT_FRAME_MODES:
+        raise ValueError(f"Agent config `intent.llm_output_frame` must be one of: {sorted(_LLM_OUTPUT_FRAME_MODES)}")
+    return v
 
 
 def _strip_json_comments(text: str) -> str:
