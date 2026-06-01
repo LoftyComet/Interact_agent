@@ -1,0 +1,24 @@
+[0;1;32m●[0m nginx.service - A high performance web server and a reverse proxy server
+     Loaded: loaded (]8;;file://iZwz90ixdfezkmy9xkd6f5Z/usr/lib/systemd/system/nginx.service/usr/lib/systemd/system/nginx.service]8;;; [0;1;32menabled[0m; preset: [0;1;32menabled[0m)
+     Active: [0;1;32mactive (running)[0m since Tue 2026-05-26 14:09:20 CST; 33min ago
+       Docs: ]8;;man:nginx(8)man:nginx(8)]8;;
+    Process: 4600 ExecReload=/usr/sbin/nginx -g daemon on; master_process on; -s reload (code=exited, status=0/SUCCESS)
+   Main PID: 857 (nginx)
+      Tasks: 3 (limit: 1853)
+     Memory: 3.6M (peak: 6.0M)
+        CPU: 68ms
+     CGroup: /system.slice/nginx.service
+             ├─[0;38;5;245m 857 "nginx: master process /usr/sbin/nginx -g daemon on; master_process on;"[0m
+             ├─[0;38;5;245m4602 "nginx: worker process"[0m
+             └─[0;38;5;245m4603 "nginx: worker process"[0m
+
+May 26 14:09:20 iZwz90ixdfezkmy9xkd6f5Z systemd[1]: Starting nginx.service - A high performance web server and a reverse proxy server...
+May 26 14:09:20 iZwz90ixdfezkmy9xkd6f5Z systemd[1]: Started nginx.service - A high performance web server and a reverse proxy server.
+May 26 14:31:29 iZwz90ixdfezkmy9xkd6f5Z systemd[1]: Reloading nginx.service - A high performance web server and a reverse proxy server...
+May 26 14:31:29 iZwz90ixdfezkmy9xkd6f5Z nginx[3824]: 2026/05/26 14:31:29 [warn] 3824#3824: conflicting server name "_" on 0.0.0.0:80, ignored
+May 26 14:31:29 iZwz90ixdfezkmy9xkd6f5Z nginx[3824]: 2026/05/26 14:31:29 [notice] 3824#3824: signal process started
+May 26 14:31:29 iZwz90ixdfezkmy9xkd6f5Z systemd[1]: Reloaded nginx.service - A high performance web server and a reverse proxy server.
+May 26 14:40:47 iZwz90ixdfezkmy9xkd6f5Z systemd[1]: Reloading nginx.service - A high performance web server and a reverse proxy server...
+May 26 14:40:47 iZwz90ixdfezkmy9xkd6f5Z nginx[4600]: 2026/05/26 14:40:47 [warn] 4600#4600: conflicting server name "_" on 0.0.0.0:80, ignored
+May 26 14:40:47 iZwz90ixdfezkmy9xkd6f5Z nginx[4600]: 2026/05/26 14:40:47 [notice] 4600#4600: signal process started
+May 26 14:40:47 iZwz90ixdfezkmy9xkd6f5Z systemd[1]: Reloaded nginx.service - A high performance web server and a reverse proxy server.

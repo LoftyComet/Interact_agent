@@ -66,7 +66,7 @@ sudo systemctl start gesture-agent
 ## 7. 设置文件权限
 
 ```bash
-sudo chown -R www-data:www-data /opt/gesture-agent
+sudo chown -R www-data:www-data /root/Interact_agent/
 ```
 
 ## 8. 验证
@@ -95,6 +95,6 @@ sudo systemctl restart gesture-agent
 sudo journalctl -u gesture-agent --since "10 min ago"
 
 # 更新代码后重启
-cd /opt/gesture-agent && git pull
+cd /root/Interact_agent/ && git pull
 sudo systemctl restart gesture-agent
 ```
