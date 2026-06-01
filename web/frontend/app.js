@@ -14,6 +14,7 @@ const els = {
   send: document.getElementById("send"),
   reset: document.getElementById("reset"),
   stream: document.getElementById("stream"),
+  style: document.getElementById("style"),
   images: document.getElementById("images"),
   health: document.getElementById("health"),
   structure: document.getElementById("structure"),
@@ -402,13 +403,13 @@ function abortInflight() {
   }
 }
 
-async function sendOnce(question, images) {
+async function sendOnce(question, images, style) {
   const sessionId = await ensureSession();
   state.abortController = new AbortController();
   const res = await api("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, session_id: sessionId, images }),
+    body: JSON.stringify({ question, session_id: sessionId, images, style }),
     signal: state.abortController.signal,
   });
   const data = await res.json();
@@ -426,13 +427,13 @@ async function sendOnce(question, images) {
   attachChunkRefs(row, state.lastChunks);
 }
 
-async function sendStream(question, images) {
+async function sendStream(question, images, style) {
   const sessionId = await ensureSession();
   state.abortController = new AbortController();
   const res = await fetch(`${API_BASE}/api/ask_stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, session_id: sessionId, images }),
+    body: JSON.stringify({ question, session_id: sessionId, images, style }),
     signal: state.abortController.signal,
   });
   if (!res.ok || !res.body) {
@@ -532,6 +533,7 @@ els.composer.addEventListener("submit", async (e) => {
   const question = els.question.value.trim();
   if (!question) return;
   const images = parseImages(els.images.value);
+  const style = els.style.value || "concise";
 
   appendMessage({ role: "user", text: question });
   els.question.value = "";
@@ -539,9 +541,9 @@ els.composer.addEventListener("submit", async (e) => {
   setBusy(true);
   try {
     if (els.stream.checked) {
-      await sendStream(question, images);
+      await sendStream(question, images, style);
     } else {
-      await sendOnce(question, images);
+      await sendOnce(question, images, style);
     }
   } catch (err) {
     if (err.name === "AbortError") {

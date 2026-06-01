@@ -616,7 +616,70 @@ def _jaccard_similarity(left: set[str], right: set[str]) -> float:
     return intersection / union if union else 0.0
 
 
+def _term_inventory_from_tree(raw: dict[str, Any], *, source: str) -> TermInventory:
+    """Flatten a nested outline tree into a TermInventory.
+
+    Each node may carry `layer` and `type`, inherited by descendants. Leaf nodes
+    (no `children`) contribute their `label` to `by_layer[layer]` and `by_type[type]`.
+    Node/leaf `aliases` map onto the canonical `label`.
+    """
+    structural_terms = _normalize_terms(raw.get("structural_terms", STRUCTURAL_TERMS))
+    valid_layers = set(Layer.__args__)  # type: ignore[attr-defined]
+    by_layer: dict[Layer, list[str]] = {}
+    by_type: dict[str, list[str]] = {}
+    aliases: dict[str, str] = {}
+
+    def _push(bucket: dict, key: Any, term: str) -> None:
+        if not key:
+            return
+        terms = bucket.setdefault(key, [])
+        if term not in terms:
+            terms.append(term)
+
+    def _walk(node: Any, layer: Optional[str], term_type: Optional[str]) -> None:
+        if not isinstance(node, dict):
+            return
+        layer = node.get("layer", layer)
+        if layer is not None and layer not in valid_layers:
+            raise ValueError(f"Unknown term inventory layer `{layer}` in tree.")
+        term_type = node.get("type", term_type)
+        for alias in node.get("aliases", []):
+            a = str(alias).strip()
+            label = str(node.get("label", "")).strip()
+            if a and label:
+                aliases[a] = label
+        children = node.get("children")
+        if isinstance(children, list) and children:
+            for child in children:
+                _walk(child, layer, term_type)
+            return
+        label = str(node.get("label", "")).strip()
+        if label:
+            _push(by_layer, layer, label)
+            _push(by_type, str(term_type).strip() if term_type else "", label)
+
+    _walk(raw.get("root", {}), None, None)
+    by_type.pop("", None)
+
+    aliases_raw = raw.get("aliases", {})
+    if isinstance(aliases_raw, dict):
+        for key, value in aliases_raw.items():
+            if isinstance(value, dict):
+                for alias, canonical in value.items():
+                    a, c = str(alias).strip(), str(canonical).strip()
+                    if a and c:
+                        aliases[a] = c
+            else:
+                a, c = str(key).strip(), str(value).strip()
+                if a and c:
+                    aliases[a] = c
+
+    return TermInventory(by_layer=by_layer, by_type=by_type, aliases=aliases, structural_terms=structural_terms, source=source)
+
+
 def _term_inventory_from_config(raw: dict[str, Any], *, source: str) -> TermInventory:
+    if str(raw.get("schema", "")).strip().lower() == "tree" or isinstance(raw.get("root"), dict):
+        return _term_inventory_from_tree(raw, source=source)
     structural_terms = _normalize_terms(raw.get("structural_terms", STRUCTURAL_TERMS))
     by_layer_raw = raw.get("by_layer", {})
     if not isinstance(by_layer_raw, dict):

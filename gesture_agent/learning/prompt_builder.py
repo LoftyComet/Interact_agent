@@ -52,6 +52,25 @@ DEFAULT_RESPONSE_INSTRUCTIONS = [
 ]
 
 
+ANSWER_STYLES = {
+    "concise": (
+        "回答风格：简洁。只给结论和关键要点，每节尽量用一两句话或短列表表达，"
+        "省略背景铺垫、举例和重复解释。仍按 output_frame 的章节顺序组织，但每节可以很短；"
+        "宁可少写也不要展开。"
+    ),
+    "detailed": (
+        "回答风格：详细。充分展开每一节，解释背景、推理过程、设计权衡和必要举例，"
+        "帮助学习者深入理解，但仍保持结构化、避免泛泛而谈。"
+    ),
+}
+DEFAULT_ANSWER_STYLE = "concise"
+
+
+def format_answer_style(style: Optional[str]) -> str:
+    key = (style or DEFAULT_ANSWER_STYLE).strip().lower()
+    return ANSWER_STYLES.get(key, ANSWER_STYLES[DEFAULT_ANSWER_STYLE])
+
+
 def build_user_prompt(
     question: QuestionStructure,
     chunks: list[SourceChunk],
@@ -59,6 +78,7 @@ def build_user_prompt(
     term_inventory: Optional[TermInventory] = None,
     prompt_config: Optional[PromptConfig] = None,
     available_images: Optional[list["ImageEntry"]] = None,
+    style: Optional[str] = None,
 ) -> str:
     context = "\n\n".join(format_chunk(idx + 1, chunk) for idx, chunk in enumerate(chunks))
     structure_json = json.dumps(question.to_dict(), ensure_ascii=False, indent=2)
@@ -70,6 +90,7 @@ def build_user_prompt(
     term_section = format_term_inventory(term_inventory, question, chunks)
     instruction_section = format_response_instructions(prompt_config)
     image_section = format_available_images(available_images)
+    style_section = format_answer_style(style)
     output_frame = question.output_frame or []
     output_skeleton = "\n".join(f"## {item}\n（这一节的内容）" for item in output_frame) if output_frame else "（按问题结构内的小节自由组织）"
     return f"""用户原问题：
@@ -91,6 +112,7 @@ def build_user_prompt(
 输出要求：
 - 必须返回 Markdown 正文，禁止把回答整体包成 JSON / YAML / 代码块。
 - 按问题结构中的 `output_frame` 顺序作为 Markdown 二级标题（`##`），每节下用段落、列表或 Markdown 表格展开。
+- {style_section}
 - 章节骨架（请严格按以下顺序产出，每节至少有一段内容）：
 
 {output_skeleton}
@@ -198,6 +220,7 @@ def build_messages(
     term_inventory: Optional[TermInventory] = None,
     prompt_config: Optional[PromptConfig] = None,
     available_images: Optional[list["ImageEntry"]] = None,
+    style: Optional[str] = None,
 ) -> list[dict]:
     user_prompt = build_user_prompt(
         question,
@@ -206,6 +229,7 @@ def build_messages(
         term_inventory=term_inventory,
         prompt_config=prompt_config,
         available_images=available_images,
+        style=style,
     )
     system_prompt = resolve_system_prompt(prompt_config)
     if not image_urls:
