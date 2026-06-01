@@ -165,3 +165,29 @@ def test_resolve_intent_is_ready_for_clear_query() -> None:
 
     assert resolution.needs_clarification is False
     assert resolution.intent == "basic_interaction_mechanism"
+
+
+def test_dictionary_methodology_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("为什么这本词典要这样划分交互")
+
+    assert structure.intent == "dictionary_methodology"
+    assert structure.output_frame == [
+        "提问切入点",
+        "词典立场",
+        "分类逻辑",
+        "与常见做法的差异",
+        "学习者收益",
+    ]
+
+
+def test_dictionary_methodology_does_not_steal_design_evaluation() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    # 同时含 “评估” 与 “这本”，仍应优先 design_evaluation（0.99 > 0.93）
+    structure = parser.parse("帮我评估这本词典里旋钮+长按的方案")
+
+    assert structure.intent == "design_evaluation"

@@ -7,6 +7,7 @@ from typing import Optional
 from gesture_agent.core.models import Intent, IntentCandidate, IntentResolution, QuestionStructure, SessionResult
 
 from .llm_intent import LLMIntentResolver
+from .llm_output_frame import OPEN_ENDED_FALLBACK_FRAME, LLMOutputFrameResolver
 from .question_parser import QuestionParser
 
 FOLLOW_UP_RE = re.compile(r"(它|这个|那个|上述|刚才|继续|那|再|还有|前面|上一|区别|相比|为什么|怎么用|如何|适用|应用)")
@@ -43,9 +44,15 @@ class ConversationTurn:
 
 
 class ConversationSession:
-    def __init__(self, parser: QuestionParser, intent_resolver: Optional[LLMIntentResolver] = None) -> None:
+    def __init__(
+        self,
+        parser: QuestionParser,
+        intent_resolver: Optional[LLMIntentResolver] = None,
+        output_frame_resolver: Optional[LLMOutputFrameResolver] = None,
+    ) -> None:
         self.parser = parser
         self.intent_resolver = intent_resolver
+        self.output_frame_resolver = output_frame_resolver
         self.pending: Optional[PendingClarification] = None
         self.turns: list[ConversationTurn] = []
 
@@ -174,7 +181,18 @@ class ConversationSession:
                 resolution=resolution,
             )
 
-        structure = self.parser.parse(query, image_paths=image_paths, forced_intent=resolution.intent)
+        output_frame_override = None
+        if self.output_frame_resolver and resolution.intent:
+            output_frame_override = self.output_frame_resolver.resolve(
+                query, resolution.intent, resolution.confidence, memory_context
+            )
+        if resolution.intent == "open_ended" and not output_frame_override:
+            output_frame_override = list(OPEN_ENDED_FALLBACK_FRAME)
+
+        structure = self.parser.parse(
+            query, image_paths=image_paths, forced_intent=resolution.intent,
+            output_frame_override=output_frame_override,
+        )
         structure.raw_query = user_query
         return SessionResult(
             status="ready",

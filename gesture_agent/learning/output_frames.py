@@ -22,6 +22,7 @@ DEFAULT_OUTPUT_FRAMES: dict[Intent, list[str]] = {
     "background_knowledge": ["背景问题", "核心观点", "词典中的位置", "为什么重要", "与后续知识的关系"],
     "case_analysis": ["案例描述", "控件形态", "基础属性", "交互机制", "响应逻辑", "设计判断", "追问"],
     "design_evaluation": ["方案复述", "结构拆解", "问题诊断", "修改建议", "规范术语版本", "需要补充的信息"],
+    "dictionary_methodology": ["提问切入点", "词典立场", "分类逻辑", "与常见做法的差异", "学习者收益"],
 }
 
 

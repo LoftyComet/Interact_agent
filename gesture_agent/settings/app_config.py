@@ -10,6 +10,15 @@ DEFAULT_AGENT_CONFIG_PATH = "agent_config.json"
 
 
 @dataclass
+class VerificationConfig:
+    verify_input: bool = True
+    verify_input_llm: bool = False
+    verify_output: bool = True
+    verify_output_llm: bool = False
+    output_max_retries: int = 1
+
+
+@dataclass
 class PromptConfig:
     system_prompt: Optional[str] = None
     extra_system_prompt: str = ""
@@ -40,7 +49,10 @@ class AgentConfig:
     default_interactive: bool = True
     llm_intent: bool = False
     llm_clarify: bool = True
+    llm_output_frame: str = "auto"
+    llm_output_frame_confidence_threshold: float = 0.80
     prompt: PromptConfig = field(default_factory=PromptConfig)
+    verification: VerificationConfig = field(default_factory=VerificationConfig)
 
 
 def load_agent_config(config_path: Optional[Union[str, Path]] = None) -> AgentConfig:
@@ -64,6 +76,7 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
     intent = _object_section(raw, "intent")
     media = _object_section(raw, "media")
     prompt = _object_section(raw, "prompt")
+    verification = _object_section(raw, "verification")
 
     return AgentConfig(
         source=source,
@@ -87,11 +100,20 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
         default_interactive=bool(runtime.get("default_interactive", True)),
         llm_intent=bool(intent.get("llm_intent", False)),
         llm_clarify=bool(intent.get("llm_clarify", True)),
+        llm_output_frame=_llm_output_frame_value(intent.get("llm_output_frame", "auto")),
+        llm_output_frame_confidence_threshold=float(intent.get("llm_output_frame_confidence_threshold", 0.80)),
         prompt=PromptConfig(
             system_prompt=_optional_text(prompt.get("system_prompt")),
             extra_system_prompt=_text_value(prompt.get("extra_system_prompt", "")),
             response_instructions=_optional_string_list(prompt.get("response_instructions"), "prompt.response_instructions"),
             extra_response_instructions=_string_list(prompt.get("extra_response_instructions", []), "prompt.extra_response_instructions"),
+        ),
+        verification=VerificationConfig(
+            verify_input=bool(verification.get("verify_input", True)),
+            verify_input_llm=bool(verification.get("verify_input_llm", False)),
+            verify_output=bool(verification.get("verify_output", True)),
+            verify_output_llm=bool(verification.get("verify_output_llm", False)),
+            output_max_retries=_int_value(verification.get("output_max_retries", 1), "verification.output_max_retries"),
         ),
     )
 
@@ -163,6 +185,16 @@ def _string_list(value: Any, field_name: str) -> list[str]:
     if not isinstance(value, list):
         raise ValueError(f"Agent config `{field_name}` must be an array.")
     return [str(item).strip() for item in value if str(item).strip()]
+
+
+_LLM_OUTPUT_FRAME_MODES = {"false", "auto", "always"}
+
+
+def _llm_output_frame_value(value: Any) -> str:
+    v = str(value).strip().lower() if value is not None else "auto"
+    if v not in _LLM_OUTPUT_FRAME_MODES:
+        raise ValueError(f"Agent config `intent.llm_output_frame` must be one of: {sorted(_LLM_OUTPUT_FRAME_MODES)}")
+    return v
 
 
 def _strip_json_comments(text: str) -> str:

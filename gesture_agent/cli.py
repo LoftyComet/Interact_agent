@@ -9,12 +9,14 @@ from typing import Optional
 
 from .core.models import QuestionStructure
 from .knowledge import KnowledgeBase
-from .learning import ClarificationIntentResolver, ConversationSession, LLMIntentResolver, QuestionParser
+from .learning import ClarificationIntentResolver, ConversationSession, LLMIntentResolver, LLMOutputFrameResolver, QuestionParser
 from .learning.output_frames import load_output_frames
 from .learning.prompt_builder import build_messages
 from .media import image_path_to_data_url
 from .providers import SiliconFlowClient, SiliconFlowError
 from .settings.app_config import DEFAULT_AGENT_CONFIG_PATH, load_agent_config
+from .verification import InputVerifier, OutputVerifier
+from .verification.prompts import OUTPUT_CORRECTION_PROMPT
 
 
 @dataclass
@@ -56,6 +58,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--interactive", action="store_true", default=None, help="强制进入连续问答模式。")
     parser.add_argument("--llm-intent", action="store_true", default=None, help="每轮都使用硅基流动大模型辅助判断 intent；失败时回退到本地规则。")
     parser.add_argument("--no-llm-clarify", action="store_true", default=None, help="关闭“本地规则信息不足时用大模型二次判断”的默认行为。")
+    parser.add_argument("--llm-output-frame", choices=["false", "auto", "always"], default=None, help="CoT 动态输出框架模式：false 禁用，auto 低置信度时触发，always 每次触发。")
     return parser
 
 
@@ -135,9 +138,16 @@ def apply_agent_config(args: argparse.Namespace) -> argparse.Namespace:
     args.default_interactive = config.default_interactive
     args.llm_intent = _pick_bool(args.llm_intent, config.llm_intent)
     args.no_llm_clarify = _pick_bool(args.no_llm_clarify, not config.llm_clarify)
+    args.llm_output_frame = _pick(args.llm_output_frame, config.llm_output_frame)
+    args.llm_output_frame_confidence_threshold = config.llm_output_frame_confidence_threshold
     args.show_term_inventory = _pick_bool(args.show_term_inventory, False)
     args.show_output_frames = _pick_bool(args.show_output_frames, False)
     args.prompt_config = config.prompt
+    args.verify_input = config.verification.verify_input
+    args.verify_input_llm = config.verification.verify_input_llm
+    args.verify_output = config.verification.verify_output
+    args.verify_output_llm = config.verification.verify_output_llm
+    args.output_max_retries = config.verification.output_max_retries
     return args
 
 
@@ -149,8 +159,24 @@ def _pick_bool(value: Optional[bool], fallback: bool) -> bool:
     return bool(fallback if value is None else value)
 
 
+def _try_build_client(args: argparse.Namespace) -> Optional[SiliconFlowClient]:
+    try:
+        return SiliconFlowClient.from_env(
+            model=args.model,
+            base_url=args.base_url,
+            timeout=args.timeout,
+            use_vision_model=bool(args.image),
+        )
+    except SiliconFlowError:
+        return None
+
+
 def interactive_loop(args: argparse.Namespace, kb: KnowledgeBase, parser: QuestionParser) -> int:
-    session = ConversationSession(parser, intent_resolver=build_intent_resolver(args, parser))
+    session = ConversationSession(
+        parser,
+        intent_resolver=build_intent_resolver(args, parser),
+        output_frame_resolver=build_output_frame_resolver(args, parser),
+    )
     print("Gesture Agent interactive mode. 输入 exit 退出，输入 reset 清空当前澄清会话。")
     while True:
         try:
@@ -200,6 +226,22 @@ def run_once(
     memory_context: str = "",
 ) -> RunResult:
     structure = structure or resolve_structure(args, parser, question)
+
+    # --- 输入验证 ---
+    if getattr(args, "verify_input", False) and not args.dry_run:
+        input_verifier = InputVerifier(
+            term_inventory=kb.term_inventory,
+            structured_items=kb.structured_items,
+            client=_try_build_client(args) if getattr(args, "verify_input_llm", False) else None,
+            use_llm=getattr(args, "verify_input_llm", False),
+        )
+        iv_result = input_verifier.verify(structure)
+        if iv_result.status == "corrected" and iv_result.corrected_structure:
+            print(f"[输入修正] {iv_result.correction_summary}", file=sys.stderr)
+            structure = iv_result.corrected_structure
+        elif iv_result.status == "needs_clarification":
+            print(f"[输入问题] {iv_result.correction_summary}", file=sys.stderr)
+
     chunks = kb.search(question, top_k=args.top_k, prefer_terms=structure.terms)
 
     if args.show_structure or args.dry_run:
@@ -269,6 +311,35 @@ def run_once(
         print(str(exc), file=sys.stderr)
         return RunResult(exit_code=1, structure=structure)
 
+    # --- 输出验证 ---
+    if answer and getattr(args, "verify_output", False):
+        output_verifier = OutputVerifier(
+            term_inventory=kb.term_inventory,
+            output_frames=parser.output_frames,
+            structured_items=kb.structured_items,
+            client=_try_build_client(args) if getattr(args, "verify_output_llm", False) else None,
+            use_llm=getattr(args, "verify_output_llm", False),
+        )
+        ov_result = output_verifier.verify(answer, structure)
+        if ov_result.should_retry:
+            max_retries = getattr(args, "output_max_retries", 1)
+            for _ in range(max_retries):
+                correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
+                retry_messages = messages + [
+                    {"role": "assistant", "content": answer},
+                    {"role": "user", "content": correction_prompt},
+                ]
+                try:
+                    print("[输出修正] 检测到问题，正在重试...", file=sys.stderr, flush=True)
+                    answer = client.chat(
+                        retry_messages,
+                        temperature=args.temperature,
+                        max_tokens=args.max_tokens,
+                        enable_thinking=args.enable_thinking,
+                    )
+                except SiliconFlowError:
+                    break
+
     if answer is not None:
         print(answer)
     return RunResult(exit_code=0, answer=answer or "", structure=structure)
@@ -304,6 +375,26 @@ def build_intent_resolver(args: argparse.Namespace, parser: QuestionParser) -> O
     if args.llm_intent:
         return LLMIntentResolver(parser, client)
     return ClarificationIntentResolver(parser, client)
+
+
+def build_output_frame_resolver(args: argparse.Namespace, parser: QuestionParser) -> Optional[LLMOutputFrameResolver]:
+    mode = getattr(args, "llm_output_frame", "auto")
+    if mode == "false" or args.dry_run:
+        return None
+    try:
+        client = SiliconFlowClient.from_env(
+            model=args.model,
+            base_url=args.base_url,
+            timeout=args.timeout,
+        )
+    except SiliconFlowError:
+        return None
+    return LLMOutputFrameResolver(
+        client,
+        parser.output_frames,
+        mode=mode,
+        confidence_threshold=getattr(args, "llm_output_frame_confidence_threshold", 0.80),
+    )
 
 
 def check_api(args: argparse.Namespace) -> int:

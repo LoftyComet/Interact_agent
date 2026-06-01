@@ -33,6 +33,9 @@ body {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -113,6 +116,17 @@ body {
 .btn.primary:hover {
   background: #3f5be0;
   border-color: #3f5be0;
+}
+
+.btn.stop {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+.btn.stop:hover {
+  background: #c12a1f;
+  border-color: #c12a1f;
 }
 
 .btn.ghost {
@@ -239,6 +253,14 @@ body {
 .bubble.markdown p {
   margin: 0 0 8px;
   line-height: 1.6;
+}
+
+.bubble.markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 8px 0;
+  display: block;
 }
 
 .bubble.markdown h1,
@@ -559,4 +581,85 @@ body {
   list-style: none;
   margin-left: -20px;
   font-size: 13px;
+}
+
+/* Inline citation ref chips */
+.ref-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.ref-chip {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  color: var(--primary);
+  cursor: pointer;
+  transition: background 0.15s;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ref-chip:hover {
+  background: var(--primary-soft);
+}
+
+/* Chunk popover */
+.chunk-popover {
+  z-index: 1000;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(20, 25, 60, 0.12);
+  padding: 14px 16px;
+  max-width: 420px;
+  max-height: 360px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.chunk-pop-header {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.chunk-pop-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.chunk-pop-tags {
+  color: var(--primary);
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.chunk-pop-body {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+/* Inline citation superscripts */
+.cite-ref {
+  color: var(--primary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 1px;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+
+.cite-ref:hover {
+  background: var(--primary-soft);
 }

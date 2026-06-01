@@ -16,6 +16,8 @@ Intent = Literal[
     "background_knowledge",
     "case_analysis",
     "design_evaluation",
+    "dictionary_methodology",
+    "open_ended",
 ]
 
 Layer = Literal[
@@ -100,6 +102,8 @@ class IntentOutputFrames:
     source: str = "defaults"
 
     def frame_for(self, intent: Intent) -> list[str]:
+        if intent == "open_ended":
+            return list(self.frames.get("open_ended", []))
         frame = self.frames.get(intent)
         if frame is None:
             raise KeyError(f"Missing output frame for intent `{intent}`.")
@@ -131,6 +135,7 @@ class QuestionStructure:
     case_modality: list[str] = field(default_factory=list)
     missing_info: list[str] = field(default_factory=list)
     output_frame: list[str] = field(default_factory=list)
+    output_frame_source: str = "static"
     design_evaluation: Optional[DesignEvaluationStructure] = None
 
     def to_dict(self) -> dict[str, Any]:
