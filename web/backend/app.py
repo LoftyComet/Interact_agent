@@ -236,6 +236,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         question = (payload.get("question") or "").strip()
         session_id = payload.get("session_id") or uuid.uuid4().hex
         image_paths = payload.get("images") or []
+        style = payload.get("style") or "concise"
         if not question:
             return jsonify({"error": "missing question"}), 400
 
@@ -287,6 +288,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 term_inventory=rt.kb.term_inventory,
                 prompt_config=rt.config.prompt,
                 available_images=available_images,
+                style=style,
             )
             client = rt.make_chat_client(use_vision=bool(image_paths))
             answer = client.chat(
@@ -350,6 +352,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         question = (payload.get("question") or "").strip()
         session_id = payload.get("session_id") or uuid.uuid4().hex
         image_paths = payload.get("images") or []
+        style = payload.get("style") or "concise"
         if not question:
             return jsonify({"error": "missing question"}), 400
 
@@ -411,6 +414,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     term_inventory=rt.kb.term_inventory,
                     prompt_config=rt.config.prompt,
                     available_images=available_images,
+                    style=style,
                 )
                 client = rt.make_chat_client(use_vision=bool(image_paths))
                 for delta in client.chat_stream(
