@@ -88,6 +88,7 @@ def build_user_prompt(
         else ""
     )
     term_section = format_term_inventory(term_inventory, question, chunks)
+    correction_section = format_term_corrections(question)
     instruction_section = format_response_instructions(prompt_config)
     image_section = format_available_images(available_images)
     style_section = format_answer_style(style)
@@ -107,7 +108,7 @@ def build_user_prompt(
 
 术语枚举约束：
 {term_section}
-{image_section}
+{correction_section}{image_section}
 
 输出要求：
 - 必须返回 Markdown 正文，禁止把回答整体包成 JSON / YAML / 代码块。
@@ -192,6 +193,24 @@ def format_response_instructions(prompt_config: Optional[PromptConfig] = None) -
     if prompt_config:
         instructions.extend(prompt_config.extra_response_instructions)
     return "\n".join(f"- {item}" for item in instructions)
+
+
+def format_term_corrections(question: QuestionStructure) -> str:
+    corrections = getattr(question, "term_corrections", None) or []
+    if not corrections:
+        return ""
+    lines = ["\n术语纠正（已把用户的口语/近义/误写词对齐到枚举，请用纠正后的标准术语作答）："]
+    for item in corrections:
+        original = item.get("original", "")
+        canonical = item.get("canonical", "")
+        explanation = item.get("explanation", "")
+        suffix = f"（{explanation}）" if explanation else ""
+        lines.append(f"- 用户说「{original}」→ 按「{canonical}」理解{suffix}")
+    lines.append(
+        "请在回答开头用一句话向用户点明这一映射（如「这里按词典术语，"
+        "你说的X对应Y」），再继续基于标准术语回答。"
+    )
+    return "\n".join(lines)
 
 
 def format_available_images(images: Optional[list["ImageEntry"]]) -> str:

@@ -75,9 +75,21 @@ class AgentRuntime:
         self.parser = QuestionParser(self.kb, output_frames=self.output_frames)
         self._sessions: dict[str, ConversationSession] = {}
         self._sessions_lock = threading.Lock()
+        # LLM 语义兜底需要 client；开启 verify_input_llm 时才构造，失败则回退到纯规则。
+        input_verifier_client = None
+        if self.config.verification.verify_input_llm:
+            try:
+                input_verifier_client = SiliconFlowClient.from_env(
+                    model=self.config.model,
+                    base_url=self.config.base_url,
+                    timeout=self.config.timeout,
+                )
+            except SiliconFlowError:
+                input_verifier_client = None
         self.input_verifier = InputVerifier(
             term_inventory=self.kb.term_inventory,
             structured_items=self.kb.structured_items,
+            client=input_verifier_client,
             use_llm=self.config.verification.verify_input_llm,
         )
         self.output_verifier = OutputVerifier(

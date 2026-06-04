@@ -105,6 +105,58 @@ class TestInputVerifier:
         result = verifier.verify(structure)
         assert result.status == "pass"
 
+    def test_fuzzy_scan_corrects_typo_in_raw_query(self, term_inventory, structured_items):
+        # 用户把「触控面」写成「触控免」，find_terms 完全漏掉，靠原文模糊扫描补齐。
+        verifier = InputVerifier(term_inventory, structured_items)
+        structure = QuestionStructure(
+            raw_query="触控免怎么用", intent="control_form",
+            layers=["control_form"], terms=[], focus=["定义"],
+        )
+        result = verifier.verify(structure)
+        assert result.status == "corrected"
+        assert "触控面" in result.corrected_structure.terms
+        assert any(c["canonical"] == "触控面" for c in result.corrected_structure.term_corrections)
+
+    def test_fuzzy_scan_no_false_positive_on_known_term(self, term_inventory, structured_items):
+        # 「位置属性」是已识别术语，其子串「置属性」不应被误纠成别的属性。
+        verifier = InputVerifier(term_inventory, structured_items)
+        structure = QuestionStructure(
+            raw_query="力属性和位置属性矛盾吗", intent="basic_property",
+            layers=["basic_property"], terms=["力属性", "位置属性"], focus=["定义"],
+        )
+        result = verifier.verify(structure)
+        # 仅有矛盾检测（离散 vs 连续）不应被触发，因为两者都是连续属性；
+        # 关键是不能出现任何 wrong_term 误纠。
+        assert not any(i.issue_type == "wrong_term" for i in result.issues)
+
+    def test_unmappable_word_passes_without_clarification(self, term_inventory, structured_items):
+        # 无法映射到任一枚举的输入照常放行，不再返回 needs_clarification。
+        verifier = InputVerifier(term_inventory, structured_items)
+        structure = QuestionStructure(
+            raw_query="今天天气怎么样", intent="background_knowledge",
+            layers=["background_knowledge"], terms=[], focus=["定义"],
+        )
+        result = verifier.verify(structure)
+        assert result.status == "pass"
+
+    def test_llm_fallback_maps_synonym(self, term_inventory, structured_items):
+        # 编辑距离抓不到的语义近义词（转盘→旋钮）由 LLM 兜底映射。
+        class FakeClient:
+            def chat(self, messages, **kwargs):
+                return '{"issues": [{"original": "转盘", "canonical": "旋钮", "issue_type": "wrong_term", "explanation": "转盘指旋钮"}]}'
+
+        verifier = InputVerifier(
+            term_inventory, structured_items, client=FakeClient(), use_llm=True
+        )
+        structure = QuestionStructure(
+            raw_query="这个转盘怎么操作", intent="control_form",
+            layers=["control_form"], terms=[], focus=["定义"],
+        )
+        result = verifier.verify(structure)
+        assert result.status == "corrected"
+        assert "旋钮" in result.corrected_structure.terms
+        assert any(c["original"] == "转盘" for c in result.corrected_structure.term_corrections)
+
 
 class TestOutputVerifier:
     def test_pass_complete_output(self, term_inventory, output_frames, structured_items):

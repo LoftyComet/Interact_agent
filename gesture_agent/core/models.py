@@ -134,6 +134,7 @@ class QuestionStructure:
     compare_targets: list[str] = field(default_factory=list)
     case_modality: list[str] = field(default_factory=list)
     missing_info: list[str] = field(default_factory=list)
+    term_corrections: list[dict[str, str]] = field(default_factory=list)
     output_frame: list[str] = field(default_factory=list)
     output_frame_source: str = "static"
     design_evaluation: Optional[DesignEvaluationStructure] = None
