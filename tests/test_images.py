@@ -51,3 +51,21 @@ def test_custom_max_bytes_allows_small_file(tmp_path: Path) -> None:
     _write_png(img)
     url = image_path_to_data_url(img, max_bytes=MAX_IMAGE_BYTES)
     assert url.startswith("data:image/png;base64,")
+
+
+def test_data_url_passthrough() -> None:
+    encoded = base64.b64encode(b"fake-image-bytes").decode("ascii")
+    data_url = f"data:image/png;base64,{encoded}"
+    assert image_path_to_data_url(data_url) == data_url
+
+
+def test_data_url_oversized_raises_value_error() -> None:
+    encoded = base64.b64encode(b"x" * 4096).decode("ascii")
+    data_url = f"data:image/png;base64,{encoded}"
+    with pytest.raises(ValueError, match="Image too large"):
+        image_path_to_data_url(data_url, max_bytes=1024)
+
+
+def test_data_url_without_base64_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="Unsupported image data URL"):
+        image_path_to_data_url("data:image/png,not-base64-data")

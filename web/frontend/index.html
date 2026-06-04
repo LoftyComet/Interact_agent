@@ -48,10 +48,15 @@
           </div>
           <div class="composer-row optional">
             <input
-              type="text"
-              id="images"
-              placeholder="图片路径（可选，多个用英文逗号分隔；服务器本地路径）"
+              type="file"
+              id="image-files"
+              accept="image/*"
+              multiple
+              hidden
             />
+            <label for="image-files" class="btn ghost upload-btn">＋ 添加图片</label>
+            <span class="upload-hint">可选，支持多张；单张上限 10MB</span>
+            <div id="image-preview" class="image-preview"></div>
           </div>
         </form>
       </section>
