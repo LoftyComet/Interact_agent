@@ -196,8 +196,62 @@ LLM 调用（`_resolve_with_rule` / `_build_prompt`）把可选意图、对话�
 - `case_modality`：text / image
 - `output_frame` + `output_frame_source`：输出框架及其来源（static / cot）
 - `design_evaluation`：设计评估意图下的结构化拆解
+- `term_corrections`：术语纠正记录（见第 9 节），每项含 `original` /
+  `canonical` / `explanation`；无纠正时为空
 
 这个 `QuestionStructure` 随后进入下游的知识检索、Prompt 构建与 API 调用，确保
 模型在词典框架内作答。
+
+## 9. 输入术语纠正（InputVerifier）
+
+`QuestionStructure` 产出后、检索与 Prompt 构建之前，会经过一道**输入纠正**，把
+用户的口语、近义、错写词对齐到「36+1 控件形态 / 12 基础属性 / 交互机制」等枚举术语，
+再照常回答。涉及代码：
+
+| 文件 | 职责 |
+|------|------|
+| `gesture_agent/verification/input_verifier.py` | 三层纠正内核 |
+| `data/term_inventory.json` 的 `aliases` 段 | 口语/近义同义词别名表 |
+| `gesture_agent/verification/prompts.py` | LLM 映射提示词 |
+
+### 9.1 为什么需要这一步
+
+`kb.find_terms` 只返回**已精确命中枚举或别名**的词，因此用户发明的非标准词
+（如「转盘」指旋钮、「触控免」误写触控面）根本进不了 `structure.terms`，
+下游检索与回答都会漏掉。InputVerifier 在**原始问题**上补齐这层缺口。
+
+### 9.2 三层纠正（规则优先，LLM 兜底）
+
+1. **别名表**（零成本，静默）：`normalize_query` / `find_terms`
+   （`knowledge/base.py:351-388`）在解析阶段就把别名替换成枚举正式名，
+   例如「转盘→旋钮」「触摸板→触控面」。这层纠正不写入 `term_corrections`。
+2. **错别字模糊扫描**（零成本）：`_fuzzy_scan_query` 掩盖掉已识别术语后，对剩余
+   片段做**等长、仅替换、仅差 1 字**的紧匹配（仅针对长度 ≥3 的枚举正式名，并过滤
+   跨词边界的虚词），把「触控免→触控面」「指摇感→指摇杆」这类漏网错别字补齐。
+3. **LLM 语义兜底**（每问多一次 API 调用）：仅当 `verify_input_llm` 开启且 intent 属
+   术语相关类（`TERM_SENSITIVE_INTENTS`：控件形态 / 基础属性 / 基础·高级机制 /
+   对比 / 案例 / 设计评估）时触发。把原始问题 + 相关枚举清单交给模型，覆盖编辑距离
+   抓不到的近义词（如「转盘→旋钮」）。失败时静默回退到规则层。
+
+### 9.3 返回语义
+
+`verify` 合并去重所有 `TermIssue` 后：
+
+- 有可映射的 canonical → `status="corrected"`：把 canonical 并入
+  `structure.terms`，记录到 `term_corrections`，并产出纠正说明
+  （`correction_summary`）。
+- 无可映射项 → `status="pass"`：**不反问、不阻断**，原样照常回答。
+
+纠正后的 `structure.terms` 同时作为检索的 `prefer_terms`；`term_corrections`
+经 `to_dict()` 进入 Prompt（`prompt_builder.py` 的 `format_term_corrections`），
+要求模型用标准术语作答并向用户点明映射。
+
+### 9.4 接入点与配置
+
+- CLI：`run_once`（`cli.py:231-243`）在非 `--dry-run` 时调用。
+- Web：`AgentRuntime`（`web/backend/app.py`）按 `verify_input_llm` 构造带 client 的
+  verifier；纠正说明经响应 `input_corrections` 字段回传前端。
+- 配置：`verify_input` 默认开（规则层常驻）；`verify_input_llm` 控制 LLM 兜底。
+
 
 

@@ -44,6 +44,45 @@ def test_compare_without_targets_keeps_clarifying() -> None:
     assert session.pending is not None
 
 
+def test_topic_switch_during_clarification_drops_pending() -> None:
+    """澄清状态下换无关新问题：丢弃旧 pending，不再当作补充信息粘合。"""
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+    session = ConversationSession(parser)
+
+    first = session.receive("这个怎么用？")
+    assert first.status == "clarify"
+    assert session.pending is not None
+    assert session.pending.original_intent is None
+
+    # 自带“语音”术语、与原模糊问题无术语重合、无指代词 → 判为话题切换。
+    second = session.receive("语音交互为什么需要唤醒词？")
+
+    # 旧问题不应被粘进新输入。
+    assert "这个怎么用" not in (second.resolved_query or "")
+    assert "补充信息" not in (second.resolved_query or "")
+
+
+def test_clarification_answer_with_shared_intent_still_combines() -> None:
+    """原问题意图已知（仅缺对象）时，后续输入仍按澄清粘合，不误判为切换。"""
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+    session = ConversationSession(parser)
+
+    first = session.receive("帮我对比一下")
+    assert first.status == "clarify"
+    assert session.pending is not None
+    # “帮我对比一下”意图明确为 interaction_compare，只是缺对比对象。
+    assert session.pending.original_intent == "interaction_compare"
+
+    second = session.receive("单击和长按")
+
+    assert second.status == "ready"
+    assert second.structure is not None
+    assert second.structure.intent == "interaction_compare"
+    assert session.pending is None
+
+
 def test_follow_up_uses_previous_turn_memory() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)
@@ -118,6 +157,51 @@ def test_design_evaluation_case_word_follow_up_does_not_fall_back_to_case_analys
     assert second.structure is not None
     assert second.structure.intent == "design_evaluation"
     assert session.pending is None
+
+
+def test_unrelated_topic_switch_does_not_attach_memory() -> None:
+    """切换到无关话题时，即便带泛化词（为什么/如何），也不应拼接上一话题记忆。"""
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+    session = ConversationSession(parser)
+
+    first = session.receive("什么是单击？")
+    assert first.status == "ready"
+    assert first.structure is not None
+    session.record_turn(
+        user_query=first.user_query,
+        resolved_query=first.resolved_query,
+        structure=first.structure,
+        answer="单击是在短时间内完成按下和抬起的基础交互机制。",
+    )
+
+    # 新问题命中“语音”术语，与上一轮“单击”无交集 → 不算追问。
+    second = session.receive("语音交互为什么需要唤醒词？")
+
+    # 无论意图是否需要澄清，resolved_query 都不应带上一话题记忆。
+    assert "对话记忆" not in second.resolved_query
+
+
+def test_generic_cue_with_shared_term_is_follow_up() -> None:
+    """泛化词 + 与上一话题共享术语 → 仍判为追问并拼接记忆。"""
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+    session = ConversationSession(parser)
+
+    first = session.receive("什么是单击？")
+    assert first.status == "ready"
+    assert first.structure is not None
+    session.record_turn(
+        user_query=first.user_query,
+        resolved_query=first.resolved_query,
+        structure=first.structure,
+        answer="单击是在短时间内完成按下和抬起的基础交互机制。",
+    )
+
+    second = session.receive("单击为什么这么常用？")
+
+    # 与上一话题共享“单击”术语 → resolved_query 应带上记忆。
+    assert "对话记忆" in second.resolved_query
 
 
 def test_session_can_use_llm_intent_resolver() -> None:

@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="1180" viewBox="0 0 960 1180" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#555"/>
+    </marker>
+    <style>
+      .box{rx:8;ry:8;stroke-width:1.5;}
+      .t{font-size:14px;fill:#1a1a1a;}
+      .tb{font-size:14px;fill:#1a1a1a;font-weight:600;}
+      .ts{font-size:11.5px;fill:#555;}
+      .tw{font-size:13px;fill:#fff;font-weight:600;}
+      .lbl{font-size:12px;fill:#666;}
+      .edge{stroke:#555;stroke-width:1.5;fill:none;marker-end:url(#arrow);}
+      .sec{font-size:12px;fill:#999;font-weight:600;}
+    </style>
+  </defs>
+
+  <rect x="0" y="0" width="960" height="1180" fill="#fafafa"/>
+  <text x="40" y="44" font-size="22" font-weight="700" fill="#1a1a1a">意图识别 + 输入术语纠正流程</text>
+  <text x="40" y="66" class="ts">手势词典 Agent：从用户输入到下游检索 / Prompt 构建</text>
+
+  <!-- 用户输入 -->
+  <rect class="box" x="380" y="92" width="200" height="46" fill="#e8f0fe" stroke="#4285f4"/>
+  <text x="480" y="120" text-anchor="middle" class="tb">用户输入</text>
+
+  <!-- 两条入口 -->
+  <line class="edge" x1="440" y1="138" x2="250" y2="180"/>
+  <line class="edge" x1="520" y1="138" x2="710" y2="180"/>
+  <text x="300" y="162" class="lbl">交互式</text>
+  <text x="610" y="162" class="lbl">单次提问</text>
+
+  <!-- ConversationSession -->
+  <rect class="box" x="60" y="182" width="370" height="118" fill="#fff" stroke="#bbb"/>
+  <text x="76" y="204" class="tb">ConversationSession.receive()</text>
+  <text x="76" y="226" class="ts">· memory_summary 汇总最近 4 轮记忆</text>
+  <text x="76" y="246" class="ts">· _contextualize_query 追问指代补全</text>
+  <text x="76" y="266" class="ts">· _carried_intent 延续 design_evaluation</text>
+  <text x="76" y="286" class="ts">· 澄清状态机（最多 3 轮）</text>
+
+  <!-- resolve_structure -->
+  <rect class="box" x="560" y="182" width="340" height="118" fill="#fff" stroke="#bbb"/>
+  <text x="576" y="204" class="tb">resolve_structure() （cli.py）</text>
+  <text x="576" y="226" class="ts">· --dry-run / 未开 --llm-intent：纯规则</text>
+  <text x="576" y="246" class="ts">· --llm-intent：构造 Resolver 复核</text>
+  <text x="576" y="266" class="ts">· needs_clarification 仅 stderr 提示</text>
+  <text x="576" y="286" class="ts">· 单次模式不进入澄清循环</text>
+
+  <!-- 收敛到 IntentResolver -->
+  <line class="edge" x1="245" y1="300" x2="430" y2="338"/>
+  <line class="edge" x1="730" y1="300" x2="540" y2="338"/>
+
+  <!-- IntentResolver -->
+  <rect class="box" x="300" y="340" width="360" height="120" fill="#fff" stroke="#bbb"/>
+  <text x="316" y="362" class="tb">IntentResolver.resolve() → IntentResolution</text>
+  <text x="316" y="384" class="ts">规则层 QuestionParser._intent_candidates：</text>
+  <text x="316" y="403" class="ts">  正则信号(0.84-0.99) + 检索信号(≥3.0 → 0.74)</text>
+  <text x="316" y="423" class="ts">LLM 辅助层（llm_intent.py）：</text>
+  <text x="316" y="442" class="ts">  Clarification（默认，按需调）/ LLMIntent（每轮调）</text>
+
+  <!-- 判定澄清 -->
+  <polygon points="480,478 640,528 480,578 320,528" fill="#fff3e0" stroke="#fb8c00" stroke-width="1.5"/>
+  <text x="480" y="524" text-anchor="middle" class="tb">needs_clarification?</text>
+  <text x="480" y="543" text-anchor="middle" class="ts">低置信 / 胶着 / 关键信息缺失</text>
+  <line class="edge" x1="480" y1="460" x2="480" y2="478"/>
+
+  <!-- 澄清分支 -->
+  <line class="edge" x1="640" y1="528" x2="770" y2="528"/>
+  <text x="660" y="518" class="lbl">是</text>
+  <rect class="box" x="772" y="500" width="160" height="56" fill="#fff3e0" stroke="#fb8c00"/>
+  <text x="852" y="524" text-anchor="middle" class="tb">反问澄清</text>
+  <text x="852" y="543" text-anchor="middle" class="ts">_build_clarification</text>
+
+  <!-- 否 -->
+  <line class="edge" x1="480" y1="578" x2="480" y2="612"/>
+  <text x="492" y="600" class="lbl">否（forced_intent）</text>
+
+  <!-- QuestionParser.parse -->
+  <rect class="box" x="300" y="614" width="360" height="58" fill="#e6f4ea" stroke="#34a853"/>
+  <text x="480" y="638" text-anchor="middle" class="tb">QuestionParser.parse(forced_intent)</text>
+  <text x="480" y="658" text-anchor="middle" class="ts">→ QuestionStructure（层级/术语/焦点/输出框架）</text>
+
+  <line class="edge" x1="480" y1="672" x2="480" y2="706"/>
+
+  <!-- ============ 输入术语纠正 ============ -->
+  <text x="40" y="700" class="sec">第 9 节 · 输入术语纠正（InputVerifier）</text>
+  <rect x="40" y="710" width="880" height="300" rx="10" fill="#f3f0fb" stroke="#9b6dde" stroke-width="1.5" stroke-dasharray="4 4"/>
+
+  <rect class="box" x="300" y="724" width="360" height="46" fill="#ede4fb" stroke="#7e3ff2"/>
+  <text x="480" y="752" text-anchor="middle" class="tb">InputVerifier.verify(structure)</text>
+  <text x="480" y="784" text-anchor="middle" class="ts">三层纠正：规则优先，LLM 兜底（作用于原始问题）</text>
+
+  <!-- 三层 -->
+  <line class="edge" x1="480" y1="770" x2="180" y2="800"/>
+  <line class="edge" x1="480" y1="770" x2="480" y2="800"/>
+  <line class="edge" x1="480" y1="770" x2="780" y2="800"/>
+
+  <rect class="box" x="64" y="802" width="252" height="118" fill="#fff" stroke="#bbb"/>
+  <text x="80" y="824" class="tb">① 别名表（静默）</text>
+  <text x="80" y="845" class="ts">normalize_query / find_terms</text>
+  <text x="80" y="864" class="ts">口语·近义同义词替换</text>
+  <text x="80" y="883" class="ts">如 转盘→旋钮 触摸板→触控面</text>
+  <text x="80" y="906" class="ts">零成本，不写 term_corrections</text>
+
+  <rect class="box" x="354" y="802" width="252" height="118" fill="#fff" stroke="#bbb"/>
+  <text x="370" y="824" class="tb">② 错别字模糊扫描</text>
+  <text x="370" y="845" class="ts">_fuzzy_scan_query</text>
+  <text x="370" y="864" class="ts">掩盖已识别词后</text>
+  <text x="370" y="883" class="ts">等长·仅替换·差 1 字紧匹配</text>
+  <text x="370" y="906" class="ts">如 触控免→触控面 指摇感→指摇杆</text>
+
+  <rect class="box" x="644" y="802" width="252" height="118" fill="#fff" stroke="#bbb"/>
+  <text x="660" y="824" class="tb">③ LLM 语义兜底</text>
+  <text x="660" y="845" class="ts">verify_input_llm 开 + 术语相关 intent</text>
+  <text x="660" y="864" class="ts">原始问题 + 枚举清单 → 模型映射</text>
+  <text x="660" y="883" class="ts">覆盖编辑距离抓不到的近义词</text>
+  <text x="660" y="906" class="ts">失败静默回退规则层</text>
+
+  <!-- 返回语义 -->
+  <line class="edge" x1="180" y1="920" x2="380" y2="952"/>
+  <line class="edge" x1="480" y1="920" x2="480" y2="952"/>
+  <line class="edge" x1="780" y1="920" x2="580" y2="952"/>
+
+  <rect class="box" x="300" y="954" width="360" height="44" fill="#fff" stroke="#7e3ff2"/>
+  <text x="480" y="975" text-anchor="middle" class="tb">合并去重 TermIssue → 返回语义</text>
+  <text x="480" y="991" text-anchor="middle" class="ts">corrected：并入 terms / 记 term_corrections ｜ pass：原样放行</text>
+
+  <line class="edge" x1="480" y1="1010" x2="480" y2="1044"/>
+
+  <!-- 下游 -->
+  <rect class="box" x="280" y="1046" width="400" height="58" fill="#e8f0fe" stroke="#4285f4"/>
+  <text x="480" y="1070" text-anchor="middle" class="tb">下游检索 + Prompt 构建 + API 调用</text>
+  <text x="480" y="1090" text-anchor="middle" class="ts">terms 作为 prefer_terms；term_corrections 进 Prompt</text>
+
+  <text x="40" y="1140" class="ts">数据流：IntentResolution（意图+置信度+候选+是否澄清）→ QuestionStructure（完整结构）→ InputVerifier 纠正 → 下游。</text>
+  <text x="40" y="1160" class="ts">回退原则：LLM API/解析失败均静默回退规则层，不中断流程。</text>
+</svg>

@@ -15,7 +15,8 @@ const els = {
   reset: document.getElementById("reset"),
   stream: document.getElementById("stream"),
   style: document.getElementById("style"),
-  images: document.getElementById("images"),
+  imageFiles: document.getElementById("image-files"),
+  imagePreview: document.getElementById("image-preview"),
   health: document.getElementById("health"),
   structure: document.getElementById("structure"),
 };
@@ -25,7 +26,10 @@ const state = {
   busy: false,
   abortController: null,
   lastChunks: [],
+  pendingImages: [], // [{ name, dataUrl }]
 };
+
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors backend limit
 
 async function api(path, options = {}) {
   const url = `${API_BASE}${path}`;
@@ -371,12 +375,69 @@ function closeChunkPopover() {
   if (existing) existing.remove();
 }
 
-function parseImages(text) {
-  if (!text) return [];
-  return text
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("读取文件失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleImageFiles(fileList) {
+  const files = Array.from(fileList || []);
+  for (const file of files) {
+    if (!file.type.startsWith("image/")) {
+      appendMessage({ role: "system", text: `已跳过非图片文件：${file.name}` });
+      continue;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      appendMessage({
+        role: "system",
+        text: `图片过大已跳过：${file.name}（${(file.size / 1024 / 1024).toFixed(1)}MB，上限 10MB）`,
+      });
+      continue;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      state.pendingImages.push({ name: file.name, dataUrl });
+    } catch (err) {
+      appendMessage({ role: "system", text: `读取失败：${file.name}（${err.message}）` });
+    }
+  }
+  renderImagePreview();
+}
+
+function renderImagePreview() {
+  els.imagePreview.innerHTML = "";
+  state.pendingImages.forEach((img, idx) => {
+    const item = document.createElement("div");
+    item.className = "image-thumb";
+
+    const picture = document.createElement("img");
+    picture.src = img.dataUrl;
+    picture.alt = img.name;
+    item.appendChild(picture);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "image-remove";
+    remove.textContent = "×";
+    remove.title = `移除 ${img.name}`;
+    remove.addEventListener("click", () => {
+      state.pendingImages.splice(idx, 1);
+      renderImagePreview();
+    });
+    item.appendChild(remove);
+
+    els.imagePreview.appendChild(item);
+  });
+}
+
+function clearPendingImages() {
+  state.pendingImages = [];
+  els.imageFiles.value = "";
+  renderImagePreview();
 }
 
 function setBusy(busy) {
@@ -520,6 +581,10 @@ async function sendStream(question, images, style) {
   }
 }
 
+els.imageFiles.addEventListener("change", (e) => {
+  handleImageFiles(e.target.files);
+});
+
 els.send.addEventListener("click", (e) => {
   if (state.busy) {
     e.preventDefault();
@@ -532,11 +597,12 @@ els.composer.addEventListener("submit", async (e) => {
   if (state.busy) return;
   const question = els.question.value.trim();
   if (!question) return;
-  const images = parseImages(els.images.value);
+  const images = state.pendingImages.map((img) => img.dataUrl);
   const style = els.style.value || "concise";
 
   appendMessage({ role: "user", text: question });
   els.question.value = "";
+  clearPendingImages();
 
   setBusy(true);
   try {

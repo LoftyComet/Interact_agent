@@ -14,6 +14,7 @@ import sys
 import threading
 import uuid
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -42,6 +43,36 @@ FRONTEND_DIR = (Path(__file__).resolve().parent.parent / "frontend").resolve()
 EXTRACTED_IMAGES_DIR = (PROJECT_ROOT / "data" / "pictures" / "extracted").resolve()
 
 IMAGE_REF_RE = re.compile(r"!\[([^\]]*)\]\(image:([^)]+)\)")
+
+QUESTION_LOG_PATH = (PROJECT_ROOT / "data" / "logs" / "web_questions.jsonl").resolve()
+_question_log_lock = threading.Lock()
+
+
+def log_user_question(
+    session_id: str,
+    question: str,
+    *,
+    endpoint: str,
+    image_count: int = 0,
+    style: str = "",
+) -> None:
+    """Append one user question per line to a JSONL log (thread-safe)."""
+    record = {
+        "timestamp": datetime.now().astimezone().isoformat(),
+        "session_id": session_id,
+        "endpoint": endpoint,
+        "question": question,
+        "image_count": image_count,
+        "style": style,
+    }
+    try:
+        with _question_log_lock:
+            QUESTION_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with QUESTION_LOG_PATH.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError:
+        # Logging must never break a request.
+        pass
 
 
 def resolve_image_refs(text: str, image_index: Optional[ImageIndex], base_url: str = "/api/images") -> str:
@@ -75,9 +106,21 @@ class AgentRuntime:
         self.parser = QuestionParser(self.kb, output_frames=self.output_frames)
         self._sessions: dict[str, ConversationSession] = {}
         self._sessions_lock = threading.Lock()
+        # LLM 语义兜底需要 client；开启 verify_input_llm 时才构造，失败则回退到纯规则。
+        input_verifier_client = None
+        if self.config.verification.verify_input_llm:
+            try:
+                input_verifier_client = SiliconFlowClient.from_env(
+                    model=self.config.model,
+                    base_url=self.config.base_url,
+                    timeout=self.config.timeout,
+                )
+            except SiliconFlowError:
+                input_verifier_client = None
         self.input_verifier = InputVerifier(
             term_inventory=self.kb.term_inventory,
             structured_items=self.kb.structured_items,
+            client=input_verifier_client,
             use_llm=self.config.verification.verify_input_llm,
         )
         self.output_verifier = OutputVerifier(
@@ -240,6 +283,14 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         if not question:
             return jsonify({"error": "missing question"}), 400
 
+        log_user_question(
+            session_id,
+            question,
+            endpoint="/api/ask",
+            image_count=len(image_paths),
+            style=style,
+        )
+
         session = rt.get_session(session_id)
         session_result = session.receive(question, image_paths=image_paths)
 
@@ -355,6 +406,14 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         style = payload.get("style") or "concise"
         if not question:
             return jsonify({"error": "missing question"}), 400
+
+        log_user_question(
+            session_id,
+            question,
+            endpoint="/api/ask_stream",
+            image_count=len(image_paths),
+            style=style,
+        )
 
         session = rt.get_session(session_id)
         session_result = session.receive(question, image_paths=image_paths)

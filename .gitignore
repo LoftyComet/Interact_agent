@@ -6,3 +6,4 @@ agent_config.json
 __pycache__/
 *.py[cod]
 gesture_dictionary_agent.egg-info/
+data/logs
