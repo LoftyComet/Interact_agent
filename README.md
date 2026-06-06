@@ -194,6 +194,47 @@ uv run python -m gesture_agent.cli \
 
 评估模式会先把方案拆成“控件形态、基础属性、交互机制、响应逻辑、系统反馈”，再按手势词典术语输出问题诊断和修改建议。
 
+## Web 界面
+
+除了 CLI，项目还提供一个 Flask 后端 + 纯静态前端的 Web 界面，复用与 CLI 完全相同的 `KnowledgeBase` / `QuestionParser` / `ConversationSession` / `SiliconFlowClient` 接口。
+
+```bash
+# 推荐：用 uv 启动，自动注入 flask、flask-cors
+./web/run.sh
+
+# 或用本机 python
+pip install -r web/requirements.txt
+PYTHONPATH=. python web/backend/app.py
+```
+
+默认监听 `http://127.0.0.1:5050`，前端由 Flask 同源托管，浏览器打开即可使用。常用环境变量：
+
+- `WEB_HOST`：监听地址，默认 `127.0.0.1`。
+- `WEB_PORT`：监听端口，默认 `5050`。
+- `WEB_DEBUG`：设为 `1` 启用 Flask 调试。
+- `AGENT_CONFIG_PATH`：复用与 CLI 相同的 agent 配置，默认 `agent_config.json`。
+- `SILICONFLOW_API_KEY` 仍从项目根的 `.env` 读取。
+
+后端 API（详见 [web/README.md](web/README.md)）：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| `GET`  | `/api/health` | 后端、模型、知识库状态 |
+| `GET`  | `/api/intents` | 当前生效的 intent 输出框架 |
+| `POST` | `/api/session` | 创建新的 `session_id` |
+| `POST` | `/api/reset` | 清空指定会话的多轮记忆 |
+| `POST` | `/api/ask` | `{question, session_id, images?}` 一次性回答 |
+| `POST` | `/api/ask_stream` | 同上，返回 SSE 流式输出 |
+
+前端会把 `session_id` 写入 `localStorage`，刷新页面复用同一会话，支持图片上传、流式输出、中断回答和清空会话；模糊问题会先反问澄清。
+
+## 服务器部署
+
+`deploy/` 提供了基于 Nginx + systemd 的生产部署模板，完整步骤见 [deploy/README.md](deploy/README.md)：
+
+- `deploy/systemd/gesture-agent.service`：systemd 服务单元。
+- `deploy/nginx/gesture-agent.conf`：Nginx 反向代理配置。
+
 ## 配置
 
 运行配置优先从 `agent_config.json` 读取，适合放模型参数、检索参数、是否流式输出、是否显示结构、Prompt 文案等。命令行参数仍然保留，用于临时覆盖配置文件。
