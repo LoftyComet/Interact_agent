@@ -106,17 +106,13 @@ class AgentRuntime:
         self.parser = QuestionParser(self.kb, output_frames=self.output_frames)
         self._sessions: dict[str, ConversationSession] = {}
         self._sessions_lock = threading.Lock()
-        # LLM 语义兜底需要 client；开启 verify_input_llm 时才构造，失败则回退到纯规则。
-        input_verifier_client = None
-        if self.config.verification.verify_input_llm:
-            try:
-                input_verifier_client = SiliconFlowClient.from_env(
-                    model=self.config.model,
-                    base_url=self.config.base_url,
-                    timeout=self.config.timeout,
-                )
-            except SiliconFlowError:
-                input_verifier_client = None
+        # LLM 语义兜底需要 client；开启对应开关时才构造，失败则回退到纯规则。
+        input_verifier_client = self._maybe_build_verifier_client(
+            self.config.verification.verify_input_llm
+        )
+        output_verifier_client = self._maybe_build_verifier_client(
+            self.config.verification.verify_output_llm
+        )
         self.input_verifier = InputVerifier(
             term_inventory=self.kb.term_inventory,
             structured_items=self.kb.structured_items,
@@ -127,6 +123,7 @@ class AgentRuntime:
             term_inventory=self.kb.term_inventory,
             output_frames=self.output_frames,
             structured_items=self.kb.structured_items,
+            client=output_verifier_client,
             use_llm=self.config.verification.verify_output_llm,
         )
         index_path = Path(self.config.data_dir) / "pictures" / "extracted" / "image_index.json"
@@ -152,6 +149,19 @@ class AgentRuntime:
     def drop_session(self, session_id: str) -> None:
         with self._sessions_lock:
             self._sessions.pop(session_id, None)
+
+    def _maybe_build_verifier_client(self, enabled: bool) -> Optional[SiliconFlowClient]:
+        """Build a client for LLM-backed verification; None if disabled or unavailable."""
+        if not enabled:
+            return None
+        try:
+            return SiliconFlowClient.from_env(
+                model=self.config.model,
+                base_url=self.config.base_url,
+                timeout=self.config.timeout,
+            )
+        except SiliconFlowError:
+            return None
 
     def _build_intent_resolver(self):
         if not self.config.llm_clarify and not self.config.llm_intent:
@@ -355,7 +365,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         output_issues: list[str] = []
         if answer and not error_text and rt.config.verification.verify_output and structure:
             ov_result = rt.output_verifier.verify(answer, structure)
-            if ov_result.should_retry:
+            max_retries = rt.config.verification.output_max_retries
+            for _ in range(max_retries):
+                if not ov_result.should_retry:
+                    break
                 correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
                 retry_messages = messages + [
                     {"role": "assistant", "content": answer},
@@ -369,7 +382,8 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         enable_thinking=rt.config.enable_thinking,
                     )
                 except SiliconFlowError:
-                    pass
+                    break
+                ov_result = rt.output_verifier.verify(answer, structure)
             output_issues = [i.description for i in ov_result.issues]
 
         if structure is not None and not error_text:
@@ -499,7 +513,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             output_issues: list[str] = []
             if full_answer and rt.config.verification.verify_output and structure:
                 ov_result = rt.output_verifier.verify(full_answer, structure)
-                if ov_result.should_retry:
+                max_retries = rt.config.verification.output_max_retries
+                for _ in range(max_retries):
+                    if not ov_result.should_retry:
+                        break
                     correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
                     retry_messages = messages + [
                         {"role": "assistant", "content": full_answer},
@@ -513,10 +530,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                             max_tokens=rt.config.max_tokens,
                             enable_thinking=rt.config.enable_thinking,
                         )
-                        full_answer = resolve_image_refs(full_answer, rt.image_index)
-                        yield sse("replace", {"text": full_answer})
+                        yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
                     except SiliconFlowError:
-                        pass
+                        break
+                    ov_result = rt.output_verifier.verify(full_answer, structure)
                 output_issues = [i.description for i in ov_result.issues]
 
             if structure is not None:
