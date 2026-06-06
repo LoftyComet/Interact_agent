@@ -27,6 +27,7 @@ const state = {
   abortController: null,
   lastChunks: [],
   pendingImages: [], // [{ name, dataUrl }]
+  thinkingRow: null, // transient "正在思考" indicator
 };
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors backend limit
@@ -480,6 +481,29 @@ function abortInflight() {
   }
 }
 
+function showThinking() {
+  if (state.thinkingRow) return;
+  const row = document.createElement("div");
+  row.className = "message assistant thinking";
+  row.dataset.transient = "1";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble thinking-bubble";
+  bubble.innerHTML =
+    '<span class="thinking-dots"><span></span><span></span><span></span></span>' +
+    '<span class="thinking-label">正在思考…</span>';
+  row.appendChild(bubble);
+  els.messages.appendChild(row);
+  els.messages.scrollTop = els.messages.scrollHeight;
+  state.thinkingRow = row;
+}
+
+function hideThinking() {
+  if (state.thinkingRow) {
+    state.thinkingRow.remove();
+    state.thinkingRow = null;
+  }
+}
+
 async function sendOnce(question, images, style) {
   const sessionId = await ensureSession();
   state.abortController = new AbortController();
@@ -490,6 +514,7 @@ async function sendOnce(question, images, style) {
     signal: state.abortController.signal,
   });
   const data = await res.json();
+  hideThinking();
   if (data.status === "clarify") {
     appendMessage({ role: "system", text: data.message || "需要澄清。" });
     return;
@@ -534,6 +559,7 @@ async function sendStream(question, images, style) {
   }
 
   function handleEvent(event, data) {
+    hideThinking();
     let payload = {};
     try {
       payload = data ? JSON.parse(data) : {};
@@ -621,6 +647,7 @@ els.composer.addEventListener("submit", async (e) => {
   clearPendingImages();
 
   setBusy(true);
+  showThinking();
   try {
     if (els.stream.checked) {
       await sendStream(question, images, style);
@@ -635,6 +662,7 @@ els.composer.addEventListener("submit", async (e) => {
     }
   } finally {
     state.abortController = null;
+    hideThinking();
     setBusy(false);
   }
 });
