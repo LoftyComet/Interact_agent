@@ -267,9 +267,25 @@ function linkifyCitations(container) {
   }
 }
 
-function appendMessage({ role, text, kind, persist = true, markdown }) {
+function buildMessageImages(images) {
+  const gallery = document.createElement("div");
+  gallery.className = "message-images";
+  for (const src of images) {
+    const picture = document.createElement("img");
+    picture.src = src;
+    picture.loading = "lazy";
+    picture.alt = "用户上传的图片";
+    gallery.appendChild(picture);
+  }
+  return gallery;
+}
+
+function appendMessage({ role, text, kind, persist = true, markdown, images }) {
   const row = document.createElement("div");
   row.className = `message ${role}${kind ? " " + kind : ""}`;
+  if (Array.isArray(images) && images.length) {
+    row.appendChild(buildMessageImages(images));
+  }
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   // Default: render markdown only for assistant messages without an error kind.
@@ -600,7 +616,7 @@ els.composer.addEventListener("submit", async (e) => {
   const images = state.pendingImages.map((img) => img.dataUrl);
   const style = els.style.value || "concise";
 
-  appendMessage({ role: "user", text: question });
+  appendMessage({ role: "user", text: question, images });
   els.question.value = "";
   clearPendingImages();
 

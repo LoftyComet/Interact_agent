@@ -232,6 +232,26 @@ body {
   color: var(--muted);
 }
 
+.message-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.message.user .message-images {
+  justify-content: flex-end;
+}
+
+.message-images img {
+  max-width: 160px;
+  max-height: 160px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  display: block;
+}
+
 .message .typing::after {
   content: "▍";
   margin-left: 2px;
