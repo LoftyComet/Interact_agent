@@ -15,6 +15,7 @@ const els = {
   reset: document.getElementById("reset"),
   stream: document.getElementById("stream"),
   style: document.getElementById("style"),
+  provider: document.getElementById("provider"),
   imageFiles: document.getElementById("image-files"),
   imagePreview: document.getElementById("image-preview"),
   health: document.getElementById("health"),
@@ -27,6 +28,7 @@ const state = {
   abortController: null,
   lastChunks: [],
   pendingImages: [], // [{ name, dataUrl }]
+  thinkingRow: null, // transient "正在思考" indicator
 };
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors backend limit
@@ -63,6 +65,38 @@ async function refreshHealth() {
     els.health.classList.remove("ok");
   }
 }
+
+async function loadProviders() {
+  const saved = localStorage.getItem("gesture_agent_provider") || "";
+  try {
+    const res = await api("/api/providers");
+    const data = await res.json();
+    const providers = data.providers || [];
+    els.provider.innerHTML = "";
+    for (const p of providers) {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.configured ? p.label : `${p.label}（未配置）`;
+      opt.disabled = !p.configured;
+      els.provider.appendChild(opt);
+    }
+    // Restore the saved choice if it's still available and configured.
+    const match = providers.find((p) => p.id === saved && p.configured);
+    if (match) {
+      els.provider.value = saved;
+    } else {
+      const firstConfigured = providers.find((p) => p.configured);
+      if (firstConfigured) els.provider.value = firstConfigured.id;
+    }
+  } catch (err) {
+    // Leave the dropdown empty; backend default provider will be used.
+  }
+}
+
+els.provider &&
+  els.provider.addEventListener("change", () => {
+    localStorage.setItem("gesture_agent_provider", els.provider.value);
+  });
 
 function renderMarkdown(text) {
   if (!text) return "";
@@ -267,9 +301,25 @@ function linkifyCitations(container) {
   }
 }
 
-function appendMessage({ role, text, kind, persist = true, markdown }) {
+function buildMessageImages(images) {
+  const gallery = document.createElement("div");
+  gallery.className = "message-images";
+  for (const src of images) {
+    const picture = document.createElement("img");
+    picture.src = src;
+    picture.loading = "lazy";
+    picture.alt = "用户上传的图片";
+    gallery.appendChild(picture);
+  }
+  return gallery;
+}
+
+function appendMessage({ role, text, kind, persist = true, markdown, images }) {
   const row = document.createElement("div");
   row.className = `message ${role}${kind ? " " + kind : ""}`;
+  if (Array.isArray(images) && images.length) {
+    row.appendChild(buildMessageImages(images));
+  }
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   // Default: render markdown only for assistant messages without an error kind.
@@ -464,16 +514,40 @@ function abortInflight() {
   }
 }
 
+function showThinking() {
+  if (state.thinkingRow) return;
+  const row = document.createElement("div");
+  row.className = "message assistant thinking";
+  row.dataset.transient = "1";
+  const bubble = document.createElement("div");
+  bubble.className = "bubble thinking-bubble";
+  bubble.innerHTML =
+    '<span class="thinking-dots"><span></span><span></span><span></span></span>' +
+    '<span class="thinking-label">正在思考…</span>';
+  row.appendChild(bubble);
+  els.messages.appendChild(row);
+  els.messages.scrollTop = els.messages.scrollHeight;
+  state.thinkingRow = row;
+}
+
+function hideThinking() {
+  if (state.thinkingRow) {
+    state.thinkingRow.remove();
+    state.thinkingRow = null;
+  }
+}
+
 async function sendOnce(question, images, style) {
   const sessionId = await ensureSession();
   state.abortController = new AbortController();
   const res = await api("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, session_id: sessionId, images, style }),
+    body: JSON.stringify({ question, session_id: sessionId, images, style, provider: els.provider.value }),
     signal: state.abortController.signal,
   });
   const data = await res.json();
+  hideThinking();
   if (data.status === "clarify") {
     appendMessage({ role: "system", text: data.message || "需要澄清。" });
     return;
@@ -494,7 +568,7 @@ async function sendStream(question, images, style) {
   const res = await fetch(`${API_BASE}/api/ask_stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, session_id: sessionId, images, style }),
+    body: JSON.stringify({ question, session_id: sessionId, images, style, provider: els.provider.value }),
     signal: state.abortController.signal,
   });
   if (!res.ok || !res.body) {
@@ -518,6 +592,7 @@ async function sendStream(question, images, style) {
   }
 
   function handleEvent(event, data) {
+    hideThinking();
     let payload = {};
     try {
       payload = data ? JSON.parse(data) : {};
@@ -600,11 +675,12 @@ els.composer.addEventListener("submit", async (e) => {
   const images = state.pendingImages.map((img) => img.dataUrl);
   const style = els.style.value || "concise";
 
-  appendMessage({ role: "user", text: question });
+  appendMessage({ role: "user", text: question, images });
   els.question.value = "";
   clearPendingImages();
 
   setBusy(true);
+  showThinking();
   try {
     if (els.stream.checked) {
       await sendStream(question, images, style);
@@ -619,6 +695,7 @@ els.composer.addEventListener("submit", async (e) => {
     }
   } finally {
     state.abortController = null;
+    hideThinking();
     setBusy(false);
   }
 });
@@ -664,6 +741,7 @@ els.reset.addEventListener("click", async () => {
 });
 
 refreshHealth();
+loadProviders();
 ensureSession().catch((err) => {
   appendMessage({ role: "assistant", kind: "error", text: `初始化会话失败：${err.message}` });
 });

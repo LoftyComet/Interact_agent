@@ -84,11 +84,12 @@ class LLMIntentResolver:
             {"intent": item.intent, "score": item.score, "reason": item.reason}
             for item in rule_resolution.candidates
         ]
+        reference_block = self._build_reference_block(query)
         return f"""你是手势词典 Agent 的 Intent 判定器。请根据用户当前输入、对话记忆和规则候选，判断最合适的 intent。
 
 可选 intent：
 {valid_intents}
-
+{reference_block}
 对话记忆：
 {memory_context or "无"}
 
@@ -103,10 +104,11 @@ class LLMIntentResolver:
 判定要求：
 1. 如果当前输入是追问，例如“它”“这个”“那它和长按有什么区别”，必须结合对话记忆补全指代。
 2. 如果上一轮是 design_evaluation，当前输入说“这个案例/这个方案/如何应用/主要风险/怎么改/微变”，通常应继续判为 design_evaluation，而不是机械判为 case_analysis。
-3. 如果用户问题与手势词典/交互设计的前 11 个类别都不沾边（例如闲聊、问编程语言、问天气、问与交互设计无关的常识等），返回 `intent="open_ended"`，并把 `needs_clarification` 设为 false。注意：只要问题与手势、控件、交互机制、设计评估、播客、多模态/语音、词典背景知识等任何一项相关，就应优先匹配对应的预定义 intent，不要轻易判为 open_ended。
+3. 如果用户问题与手势词典/交互设计的其他预定义类别都不沾边（例如闲聊、问编程语言、问天气、问与交互设计无关的常识等），返回 `intent="open_ended"`，并把 `needs_clarification` 设为 false。注意：只要问题与手势、控件、交互机制、设计评估、多模态/语音、词典背景知识等任何一项相关，就应优先匹配对应的预定义 intent，不要轻易判为 open_ended。
 4. 如果能明确判断 intent，输出 needs_clarification=false。
 5. 如果仍缺少关键对象或场景，输出 needs_clarification=true，并给出一个简短反问。
-6. 只输出 JSON，不要输出解释文本。
+6. 上方“参考样例”是人工标注的优质问题及其正确 intent，请将其作为重要参考；当用户输入与某条样例高度相似时，应倾向采用该样例的 intent。
+7. 只输出 JSON，不要输出解释文本。
 
 JSON 格式：
 {{
@@ -116,6 +118,18 @@ JSON 格式：
   "clarification_question": "需要反问时的问题，否则为空字符串",
   "reason": "一句话说明判断依据"
 }}"""
+
+    def _build_reference_block(self, query: str) -> str:
+        matches = self.parser.relevant_examples(query)
+        if not matches:
+            return ""
+        lines = [
+            f"- 「{match.example.question}」→ {match.example.intent}"
+            f"（{INTENT_LABELS.get(match.example.intent, match.example.intent)}）"
+            for match in matches
+        ]
+        body = "\n".join(lines)
+        return f"\n参考样例（人工标注的优质问题及正确 intent）：\n{body}\n"
 
     def _parse_json(self, text: str) -> dict[str, Any]:
         start = text.find("{")

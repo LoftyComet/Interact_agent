@@ -6,17 +6,14 @@ from typing import Any, Literal, Optional
 
 Intent = Literal[
     "basic_interaction_mechanism",
-    "advanced_interaction_mechanism",
     "control_form",
     "basic_property",
     "multimodal_interaction",
     "voice_interaction",
-    "podcast_content",
     "interaction_compare",
     "background_knowledge",
     "case_analysis",
     "design_evaluation",
-    "dictionary_methodology",
     "open_ended",
 ]
 
@@ -27,7 +24,6 @@ Layer = Literal[
     "interaction_case",
     "multimodal_interaction",
     "voice_interaction",
-    "podcast_content",
     "background_knowledge",
     "design_evaluation",
     "unknown",

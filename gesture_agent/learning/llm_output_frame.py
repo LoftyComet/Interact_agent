@@ -88,7 +88,7 @@ class LLMOutputFrameResolver:
         )
 
         if intent == "open_ended":
-            return f"""你是手势词典 Agent 的输出框架生成器。当前用户问题不属于词典内置的 11 个固定意图（开放问题），需要根据问题本身定义合适的章节结构。
+            return f"""你是手势词典 Agent 的输出框架生成器。当前用户问题不属于词典内置的固定意图（开放问题），需要根据问题本身定义合适的章节结构。
 
 参考：现有内置 intent 的输出框架风格（仅供风格参考，不要求复用）：
 {all_frames}

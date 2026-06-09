@@ -15,8 +15,10 @@ from docx import Document
 from docx.oxml.ns import qn
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PICTURES_DIR = PROJECT_ROOT / "data" / "pictures"
-OUTPUT_DIR = PICTURES_DIR / "extracted"
+DATA_DIR = PROJECT_ROOT / "data"
+# Source manuscripts live directly in data/; extracted images go under pictures/.
+SOURCE_DIR = DATA_DIR
+OUTPUT_DIR = DATA_DIR / "pictures" / "extracted"
 SUPPORTED_MIMES = {"image/png", "image/jpeg", "image/gif", "image/svg+xml"}
 HEADING_STYLES = re.compile(r"^Heading|^标题|^heading", re.IGNORECASE)
 
@@ -74,18 +76,26 @@ def process_docx(docx_path: Path, seen_hashes: set[str]) -> list[dict]:
         if not images:
             continue
 
+        # In the final manuscripts the figure caption is the paragraph that
+        # immediately follows the image, written as "（图…）" / "(图…)". Prefer
+        # it; it describes the image far better than surrounding body text.
+        caption_text = ""
+        after_text = ""
+        for j in range(i + 1, min(i + 4, len(paragraphs))):
+            t = paragraphs[j].text.strip()
+            if not t:
+                continue
+            if not after_text:
+                after_text = t[:200]
+            if re.match(r"^[（(]\s*图", t):
+                caption_text = t[:300]
+            break
+
         before_text = ""
         for j in range(i - 1, max(i - 4, -1), -1):
             t = paragraphs[j].text.strip()
             if t and not is_heading(paragraphs[j]):
                 before_text = t[:200]
-                break
-
-        after_text = ""
-        for j in range(i + 1, min(i + 4, len(paragraphs))):
-            t = paragraphs[j].text.strip()
-            if t:
-                after_text = t[:200]
                 break
 
         for blob, content_type in images:
@@ -101,7 +111,7 @@ def process_docx(docx_path: Path, seen_hashes: set[str]) -> list[dict]:
             filename = f"{stem}_{counter:03d}.{ext}"
             image_id = f"{stem}_{counter:03d}"
 
-            annotation = text if text else (before_text or after_text or current_heading)
+            annotation = caption_text or text or before_text or after_text or current_heading
             if not annotation:
                 annotation = f"{stem} 图{counter}"
 
@@ -142,9 +152,9 @@ def extract_terms(heading: str, annotation: str) -> list[str]:
 
 def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    docx_files = sorted(PICTURES_DIR.glob("*.docx"))
+    docx_files = sorted(SOURCE_DIR.glob("*.docx"))
     if not docx_files:
-        print("No .docx files found in", PICTURES_DIR)
+        print("No .docx files found in", SOURCE_DIR)
         return
 
     all_entries = []

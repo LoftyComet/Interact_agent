@@ -6,45 +6,36 @@ from typing import Optional
 from gesture_agent.core.models import Intent, IntentCandidate, IntentOutputFrames, IntentResolution, Layer, QuestionStructure
 from gesture_agent.evaluation import parse_design_evaluation
 from gesture_agent.knowledge.base import KnowledgeBase
+from gesture_agent.learning.intent_examples import (
+    NEAR_MATCH_SCORE,
+    NEAR_MATCH_THRESHOLD,
+    IntentExampleBank,
+    IntentExampleMatch,
+    load_intent_examples,
+)
 from gesture_agent.learning.output_frames import load_output_frames
 
 
 DESIGN_EVALUATION_RE = re.compile(r"(评估|评价|评审|设计方案|这个方案|方案合理|合理吗|有什么问题|哪里有问题|改进建议|优化建议|怎么优化|帮我看看.*设计|设计.*建议)")
-DICTIONARY_METHODOLOGY_RE = re.compile(
-    r"(这本书|这本词典|这部词典|这本字典|本词典|词典.*意义|词典.*目的|词典.*价值|词典.*为什么|词典.*为何|"
-    r"为什么.*这样.*(划分|分类|组织|整理|写|拆解)|为何.*这样.*(划分|分类|组织|整理|写|拆解)|"
-    r"为什么.*(划分|分类|组织|整理).*交互|为何.*(划分|分类|组织|整理).*交互|"
-    r"(分类|划分|组织|整理|拆解).*(逻辑|思路|方法|框架|体系|理由|动机|意义|出发点|切入点)|"
-    r"(立场|视角|思路|方法论|出发点|切入点).*(词典|本书|这本书|分类|划分)|"
-    r"为什么.*(写|做|整理).*(这本|本词典|这部)|"
-    r"作者.*(为什么|为何|动机|目的|想法|思路).*(写|做|整理|分类|划分))"
-)
 COMPARE_RE = re.compile(r"(对比|比较|区别|差异|不同|vs|VS|相比|哪个更|如何选择)")
 CASE_RE = re.compile(r"(案例|例子|图片|图中|截图|这个交互|这个设计|分析|拆解|应用)")
-PODCAST_RE = re.compile(r"(播客|podcast|口播|脚本|讲稿|音频节目|节目稿|访谈)")
 VOICE_RE = re.compile(r"(语音交互|语音|声控|口令|唤醒词|对话式|说话|语速|声纹)")
 MULTIMODAL_RE = re.compile(r"(多模态|multimodal|跨模态|模态|视觉.*语音|语音.*手势|图像.*语音|触觉.*视觉)")
 BACKGROUND_RE = re.compile(r"(背景|交互的本质|操控力|虚拟操控力|IxDL|声明式|AI时代|适用人群|为什么)")
 PROPERTY_RE = re.compile(r"(基础属性|属性|二元|多级|位置|角度|力属性|声音属性|光属性|温度|形变|时间属性|生理信号|阶次控制)")
 CONTROL_FORM_RE = re.compile(r"(控件形态|控件|按钮|拨钮|滚轮|摇杆|轨迹球|指点杆|触控面|旋钮|手柄|踏板|眼睛|嘴巴|手势)")
-ADVANCED_MECHANISM_RE = re.compile(
-    r"(高级|组合|拓展|多维协同|冲突|调和|限位|长按拖拽|双按拖拽|轻扫|速率式|域控|异位|向量菜单|动势|快击|缓冲|解耦|互斥|轻拨)"
-)
-MECHANISM_RE = re.compile(r"(交互机制|交互方式|点击|单击|双击|长按|按下|开关|拖拽|甩动|滑动|翻动|捏合|旋转)")
+MECHANISM_RE = re.compile(r"(交互机制|交互方式|点击|单击|双击|长按|按下|开关|拖拽|甩动|滑动|翻动|捏合|旋转|高级|组合|拓展|多维协同|冲突|调和|限位|长按拖拽|双按拖拽|轻扫|速率式|域控|异位|向量菜单|动势|快击|缓冲|解耦|互斥|轻拨)")
 
 INTENT_LABELS: dict[Intent, str] = {
-    "basic_interaction_mechanism": "基础交互机制",
-    "advanced_interaction_mechanism": "高级交互机制",
+    "basic_interaction_mechanism": "交互机制",
     "control_form": "控件形态",
     "basic_property": "基础属性",
     "multimodal_interaction": "多模态交互",
     "voice_interaction": "语音交互",
-    "podcast_content": "播客内容",
     "interaction_compare": "交互机制对比",
     "background_knowledge": "背景知识",
     "case_analysis": "理解交互案例",
     "design_evaluation": "设计方案评估",
-    "dictionary_methodology": "词典方法论",
     "open_ended": "开放问题",
 }
 
@@ -55,9 +46,15 @@ HIGH_CONFIDENCE_THRESHOLD = 0.9
 
 
 class QuestionParser:
-    def __init__(self, kb: KnowledgeBase, output_frames: Optional[IntentOutputFrames] = None) -> None:
+    def __init__(
+        self,
+        kb: KnowledgeBase,
+        output_frames: Optional[IntentOutputFrames] = None,
+        example_bank: Optional[IntentExampleBank] = None,
+    ) -> None:
         self.kb = kb
         self.output_frames = output_frames or load_output_frames(kb.data_dir)
+        self.example_bank = example_bank or load_intent_examples(kb.data_dir)
 
     def parse(
         self,
@@ -130,6 +127,12 @@ class QuestionParser:
             missing_info=missing_info,
         )
 
+    def relevant_examples(self, query: str) -> list[IntentExampleMatch]:
+        """返回与 query 相关的已标注样例，供大模型意图判定参考。"""
+        if self.example_bank.is_empty:
+            return []
+        return self.example_bank.relevant(query)
+
     def _detect_intent(self, query: str, image_paths: list[str], terms: list[str]) -> Intent:
         candidates = self._intent_candidates(query, image_paths, terms)
         return candidates[0].intent if candidates else "background_knowledge"
@@ -144,16 +147,12 @@ class QuestionParser:
 
         if DESIGN_EVALUATION_RE.search(query):
             add("design_evaluation", 0.99, "问题包含评估/评价/优化设计方案等设计评审信号。")
-        if DICTIONARY_METHODOLOGY_RE.search(query):
-            add("dictionary_methodology", 0.93, "问题涉及词典本身的分类逻辑、立场或编写动机。")
         if image_paths:
             add("case_analysis", 0.94, "用户提供了图片，需要理解交互案例。")
         if CASE_RE.search(query):
             add("case_analysis", 0.92, "问题包含案例/图片/分析/拆解等案例理解信号。")
         if COMPARE_RE.search(query):
             add("interaction_compare", 0.98, "问题包含对比/区别/差异等比较信号。")
-        if PODCAST_RE.search(query):
-            add("podcast_content", 0.95, "问题包含播客/脚本/口播等内容生成信号。")
         if MULTIMODAL_RE.search(query):
             add("multimodal_interaction", 0.95, "问题包含多模态或跨模态分工信号。")
         if CONTROL_FORM_RE.search(query):
@@ -164,10 +163,17 @@ class QuestionParser:
             add("voice_interaction", 0.86, "问题包含语音交互、声控或口令等信号。")
         if BACKGROUND_RE.search(query):
             add("background_knowledge", 0.86, "问题包含背景知识、操控力、IxDL 或声明式等信号。")
-        if ADVANCED_MECHANISM_RE.search(query):
-            add("advanced_interaction_mechanism", 0.9, "问题包含高级机制、组合或冲突调和信号。")
         if MECHANISM_RE.search(query) or self._has_interaction_mechanism_match(query, terms, query_text=query):
-            add(self._detect_mechanism_intent(query, terms), 0.86, "问题命中交互机制术语或机制章节。")
+            add("basic_interaction_mechanism", 0.86, "问题命中交互机制术语或机制章节。")
+
+        if not self.example_bank.is_empty:
+            best = self.example_bank.best_match(query)
+            if best and best.similarity >= NEAR_MATCH_THRESHOLD:
+                add(
+                    best.example.intent,
+                    NEAR_MATCH_SCORE,
+                    f"与已标注样例高度相似（{best.similarity:.0%}）：{best.example.question}",
+                )
 
         for chunk in self.kb.search(query, top_k=5, prefer_terms=terms):
             if chunk.score < 3.0:
@@ -181,7 +187,7 @@ class QuestionParser:
             elif chunk.layer == "voice_interaction":
                 add("voice_interaction", 0.74, f"检索命中语音交互章节：{chunk.title}")
             elif chunk.layer == "interaction_mechanism":
-                add(self._detect_mechanism_intent(query, terms), 0.74, f"检索命中交互机制章节：{chunk.title}")
+                add("basic_interaction_mechanism", 0.74, f"检索命中交互机制章节：{chunk.title}")
 
         return sorted(candidates.values(), key=lambda item: item.score, reverse=True)
 
@@ -194,16 +200,13 @@ class QuestionParser:
         intent_layer_map: dict[Intent, Layer] = {
             "basic_property": "basic_property",
             "basic_interaction_mechanism": "interaction_mechanism",
-            "advanced_interaction_mechanism": "interaction_mechanism",
             "control_form": "control_form",
             "case_analysis": "interaction_case",
             "design_evaluation": "design_evaluation",
             "multimodal_interaction": "multimodal_interaction",
             "voice_interaction": "voice_interaction",
-            "podcast_content": "podcast_content",
             "background_knowledge": "background_knowledge",
             "interaction_compare": "interaction_mechanism",
-            "dictionary_methodology": "background_knowledge",
             "open_ended": "unknown",
         }
         mapped_layer = intent_layer_map[intent]
@@ -271,8 +274,6 @@ class QuestionParser:
             missing.append("案例描述较短，可能需要补充界面/控件/用户动作/系统反馈。")
         if intent == "interaction_compare" and len(self.kb.find_terms(query)) < 2:
             missing.append("对比对象不够明确，建议至少给出两个交互方式或控件形态。")
-        if intent == "podcast_content" and len(query) < 20:
-            missing.append("播客主题较短，建议补充听众对象、时长、栏目风格或希望讲解的知识点。")
         if intent == "design_evaluation":
             terms = self.kb.find_terms(query)
             evaluation = parse_design_evaluation(query, image_paths=image_paths, terms=terms)
@@ -300,15 +301,13 @@ class QuestionParser:
                 return "你想对比哪两个或哪几个对象？请补充具体交互机制、控件形态或属性名称。"
             if candidates and candidates[0].intent == "case_analysis":
                 return "这个案例信息还不够。请补充：界面/产品是什么、用户做了什么动作、系统有什么反馈；或者直接提供图片。"
-            if candidates and candidates[0].intent == "podcast_content":
-                return "播客方向可以确定，但还缺少制作参数。请补充听众对象、预计时长、风格，以及想重点讲哪个知识点。"
             if candidates and candidates[0].intent == "design_evaluation":
                 return "要评估设计方案，还需要补充：产品/界面场景、用户目标、用户动作、控件形态、系统反馈或状态变化。"
 
         if not candidates:
             return (
-                "这个问题目前无法确定要按哪类任务处理。你是想问：基础交互机制、控件形态、基础属性、"
-                "交互机制对比、背景知识、案例分析、设计方案评估，还是播客/语音/多模态内容？请补充一个具体对象或场景。"
+                "这个问题目前无法确定要按哪类任务处理。你是想问：交互机制、控件形态、基础属性、"
+                "交互机制对比、背景知识、案例分析、设计方案评估，还是语音/多模态内容？请补充一个具体对象或场景。"
             )
 
         options = "、".join(f"{INTENT_LABELS[item.intent]}({item.reason})" for item in candidates[:3])
@@ -318,19 +317,6 @@ class QuestionParser:
         if intent == "open_ended":
             return []
         return self.output_frames.frame_for(intent)
-
-    def _detect_mechanism_intent(self, query: str, terms: list[str]) -> Intent:
-        if ADVANCED_MECHANISM_RE.search(query):
-            return "advanced_interaction_mechanism"
-
-        for chunk in self.kb.search(query, top_k=5, prefer_terms=terms):
-            if chunk.layer != "interaction_mechanism":
-                continue
-            if re.match(r"^[34]-[a-z]", chunk.title, flags=re.IGNORECASE):
-                return "advanced_interaction_mechanism"
-            if re.match(r"^[12]-[a-z]", chunk.title, flags=re.IGNORECASE):
-                return "basic_interaction_mechanism"
-        return "basic_interaction_mechanism"
 
     def _has_interaction_mechanism_match(self, query: str, terms: list[str], *, query_text: Optional[str] = None) -> bool:
         if not terms:

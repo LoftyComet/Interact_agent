@@ -17,6 +17,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
 # Make the project root importable so `gesture_agent` resolves regardless of cwd.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -33,7 +34,14 @@ from gesture_agent.learning import ClarificationIntentResolver, ConversationSess
 from gesture_agent.learning.output_frames import load_output_frames
 from gesture_agent.learning.prompt_builder import build_messages
 from gesture_agent.media import image_path_to_data_url
-from gesture_agent.providers import SiliconFlowClient, SiliconFlowError
+from gesture_agent.providers import (
+    ProviderError,
+    SiliconFlowClient,
+    SiliconFlowError,
+    build_chat_client,
+    list_providers,
+    resolve_provider_id,
+)
 from gesture_agent.settings.app_config import load_agent_config
 from gesture_agent.verification import InputVerifier, OutputVerifier
 from gesture_agent.verification.prompts import OUTPUT_CORRECTION_PROMPT
@@ -84,7 +92,8 @@ def resolve_image_refs(text: str, image_index: Optional[ImageIndex], base_url: s
         image_id = match.group(2)
         filename = image_index.get_filename(image_id)
         if filename:
-            return f"![{alt_text}]({base_url}/{filename})"
+            # 文件名含空格/中文/冒号，必须 URL 编码，否则浏览器会在空格处截断 URL。
+            return f"![{alt_text}]({base_url}/{quote(filename)})"
         return match.group(0)
 
     return IMAGE_REF_RE.sub(_replacer, text)
@@ -106,17 +115,13 @@ class AgentRuntime:
         self.parser = QuestionParser(self.kb, output_frames=self.output_frames)
         self._sessions: dict[str, ConversationSession] = {}
         self._sessions_lock = threading.Lock()
-        # LLM 语义兜底需要 client；开启 verify_input_llm 时才构造，失败则回退到纯规则。
-        input_verifier_client = None
-        if self.config.verification.verify_input_llm:
-            try:
-                input_verifier_client = SiliconFlowClient.from_env(
-                    model=self.config.model,
-                    base_url=self.config.base_url,
-                    timeout=self.config.timeout,
-                )
-            except SiliconFlowError:
-                input_verifier_client = None
+        # LLM 语义兜底需要 client；开启对应开关时才构造，失败则回退到纯规则。
+        input_verifier_client = self._maybe_build_verifier_client(
+            self.config.verification.verify_input_llm
+        )
+        output_verifier_client = self._maybe_build_verifier_client(
+            self.config.verification.verify_output_llm
+        )
         self.input_verifier = InputVerifier(
             term_inventory=self.kb.term_inventory,
             structured_items=self.kb.structured_items,
@@ -127,6 +132,7 @@ class AgentRuntime:
             term_inventory=self.kb.term_inventory,
             output_frames=self.output_frames,
             structured_items=self.kb.structured_items,
+            client=output_verifier_client,
             use_llm=self.config.verification.verify_output_llm,
         )
         index_path = Path(self.config.data_dir) / "pictures" / "extracted" / "image_index.json"
@@ -152,6 +158,19 @@ class AgentRuntime:
     def drop_session(self, session_id: str) -> None:
         with self._sessions_lock:
             self._sessions.pop(session_id, None)
+
+    def _maybe_build_verifier_client(self, enabled: bool) -> Optional[SiliconFlowClient]:
+        """Build a client for LLM-backed verification; None if disabled or unavailable."""
+        if not enabled:
+            return None
+        try:
+            return SiliconFlowClient.from_env(
+                model=self.config.model,
+                base_url=self.config.base_url,
+                timeout=self.config.timeout,
+            )
+        except SiliconFlowError:
+            return None
 
     def _build_intent_resolver(self):
         if not self.config.llm_clarify and not self.config.llm_intent:
@@ -185,8 +204,9 @@ class AgentRuntime:
             confidence_threshold=self.config.llm_output_frame_confidence_threshold,
         )
 
-    def make_chat_client(self, use_vision: bool) -> SiliconFlowClient:
-        return SiliconFlowClient.from_env(
+    def make_chat_client(self, use_vision: bool, provider_id: Optional[str] = None) -> Any:
+        return build_chat_client(
+            provider_id,
             model=self.config.model,
             base_url=self.config.base_url,
             timeout=self.config.timeout,
@@ -258,6 +278,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         rt: AgentRuntime = app.config["AGENT_RUNTIME"]
         return jsonify({"frames": {k: list(v) for k, v in rt.output_frames.frames.items()}})
 
+    @app.get("/api/providers")
+    def providers() -> Response:
+        return jsonify({"providers": list_providers()})
+
     @app.post("/api/reset")
     def reset() -> Response:
         payload = request.get_json(silent=True) or {}
@@ -280,6 +304,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         session_id = payload.get("session_id") or uuid.uuid4().hex
         image_paths = payload.get("images") or []
         style = payload.get("style") or "concise"
+        provider_id = resolve_provider_id(payload.get("provider"))
         if not question:
             return jsonify({"error": "missing question"}), 400
 
@@ -341,21 +366,24 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 available_images=available_images,
                 style=style,
             )
-            client = rt.make_chat_client(use_vision=bool(image_paths))
+            client = rt.make_chat_client(use_vision=bool(image_paths), provider_id=provider_id)
             answer = client.chat(
                 messages,
                 temperature=rt.config.temperature,
                 max_tokens=rt.config.max_tokens,
                 enable_thinking=rt.config.enable_thinking,
             )
-        except SiliconFlowError as exc:
+        except ProviderError as exc:
             error_text = str(exc)
 
         # --- 输出验证 ---
         output_issues: list[str] = []
         if answer and not error_text and rt.config.verification.verify_output and structure:
             ov_result = rt.output_verifier.verify(answer, structure)
-            if ov_result.should_retry:
+            max_retries = rt.config.verification.output_max_retries
+            for _ in range(max_retries):
+                if not ov_result.should_retry:
+                    break
                 correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
                 retry_messages = messages + [
                     {"role": "assistant", "content": answer},
@@ -368,8 +396,9 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         max_tokens=rt.config.max_tokens,
                         enable_thinking=rt.config.enable_thinking,
                     )
-                except SiliconFlowError:
-                    pass
+                except ProviderError:
+                    break
+                ov_result = rt.output_verifier.verify(answer, structure)
             output_issues = [i.description for i in ov_result.issues]
 
         if structure is not None and not error_text:
@@ -404,6 +433,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         session_id = payload.get("session_id") or uuid.uuid4().hex
         image_paths = payload.get("images") or []
         style = payload.get("style") or "concise"
+        provider_id = resolve_provider_id(payload.get("provider"))
         if not question:
             return jsonify({"error": "missing question"}), 400
 
@@ -475,7 +505,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     available_images=available_images,
                     style=style,
                 )
-                client = rt.make_chat_client(use_vision=bool(image_paths))
+                client = rt.make_chat_client(use_vision=bool(image_paths), provider_id=provider_id)
                 for delta in client.chat_stream(
                     messages,
                     temperature=rt.config.temperature,
@@ -484,7 +514,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 ):
                     answer_parts.append(delta)
                     yield sse("delta", {"text": delta})
-            except SiliconFlowError as exc:
+            except ProviderError as exc:
                 yield sse("error", {"message": str(exc)})
                 yield sse("done", {"session_id": session_id})
                 return
@@ -499,7 +529,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             output_issues: list[str] = []
             if full_answer and rt.config.verification.verify_output and structure:
                 ov_result = rt.output_verifier.verify(full_answer, structure)
-                if ov_result.should_retry:
+                max_retries = rt.config.verification.output_max_retries
+                for _ in range(max_retries):
+                    if not ov_result.should_retry:
+                        break
                     correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
                     retry_messages = messages + [
                         {"role": "assistant", "content": full_answer},
@@ -513,10 +546,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                             max_tokens=rt.config.max_tokens,
                             enable_thinking=rt.config.enable_thinking,
                         )
-                        full_answer = resolve_image_refs(full_answer, rt.image_index)
-                        yield sse("replace", {"text": full_answer})
-                    except SiliconFlowError:
-                        pass
+                        yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
+                    except ProviderError:
+                        break
+                    ov_result = rt.output_verifier.verify(full_answer, structure)
                 output_issues = [i.description for i in ov_result.issues]
 
             if structure is not None:
