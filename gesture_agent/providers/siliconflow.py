@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Iterator, Optional
 
+from gesture_agent.providers.base import ProviderError
 from gesture_agent.settings.env import get_env, load_env_file
 
 
@@ -12,7 +13,7 @@ DEFAULT_MODEL = "Qwen/Qwen3-32B"
 VISION_MODEL_ENV = "SILICONFLOW_VISION_MODEL"
 
 
-class SiliconFlowError(RuntimeError):
+class SiliconFlowError(ProviderError):
     pass
 
 

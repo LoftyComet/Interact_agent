@@ -15,6 +15,7 @@ const els = {
   reset: document.getElementById("reset"),
   stream: document.getElementById("stream"),
   style: document.getElementById("style"),
+  provider: document.getElementById("provider"),
   imageFiles: document.getElementById("image-files"),
   imagePreview: document.getElementById("image-preview"),
   health: document.getElementById("health"),
@@ -64,6 +65,38 @@ async function refreshHealth() {
     els.health.classList.remove("ok");
   }
 }
+
+async function loadProviders() {
+  const saved = localStorage.getItem("gesture_agent_provider") || "";
+  try {
+    const res = await api("/api/providers");
+    const data = await res.json();
+    const providers = data.providers || [];
+    els.provider.innerHTML = "";
+    for (const p of providers) {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.configured ? p.label : `${p.label}（未配置）`;
+      opt.disabled = !p.configured;
+      els.provider.appendChild(opt);
+    }
+    // Restore the saved choice if it's still available and configured.
+    const match = providers.find((p) => p.id === saved && p.configured);
+    if (match) {
+      els.provider.value = saved;
+    } else {
+      const firstConfigured = providers.find((p) => p.configured);
+      if (firstConfigured) els.provider.value = firstConfigured.id;
+    }
+  } catch (err) {
+    // Leave the dropdown empty; backend default provider will be used.
+  }
+}
+
+els.provider &&
+  els.provider.addEventListener("change", () => {
+    localStorage.setItem("gesture_agent_provider", els.provider.value);
+  });
 
 function renderMarkdown(text) {
   if (!text) return "";
@@ -510,7 +543,7 @@ async function sendOnce(question, images, style) {
   const res = await api("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, session_id: sessionId, images, style }),
+    body: JSON.stringify({ question, session_id: sessionId, images, style, provider: els.provider.value }),
     signal: state.abortController.signal,
   });
   const data = await res.json();
@@ -535,7 +568,7 @@ async function sendStream(question, images, style) {
   const res = await fetch(`${API_BASE}/api/ask_stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, session_id: sessionId, images, style }),
+    body: JSON.stringify({ question, session_id: sessionId, images, style, provider: els.provider.value }),
     signal: state.abortController.signal,
   });
   if (!res.ok || !res.body) {
@@ -708,6 +741,7 @@ els.reset.addEventListener("click", async () => {
 });
 
 refreshHealth();
+loadProviders();
 ensureSession().catch((err) => {
   appendMessage({ role: "assistant", kind: "error", text: `初始化会话失败：${err.message}` });
 });
