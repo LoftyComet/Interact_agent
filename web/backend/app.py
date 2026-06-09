@@ -17,6 +17,7 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import quote
 
 # Make the project root importable so `gesture_agent` resolves regardless of cwd.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -91,7 +92,8 @@ def resolve_image_refs(text: str, image_index: Optional[ImageIndex], base_url: s
         image_id = match.group(2)
         filename = image_index.get_filename(image_id)
         if filename:
-            return f"![{alt_text}]({base_url}/{filename})"
+            # 文件名含空格/中文/冒号，必须 URL 编码，否则浏览器会在空格处截断 URL。
+            return f"![{alt_text}]({base_url}/{quote(filename)})"
         return match.group(0)
 
     return IMAGE_REF_RE.sub(_replacer, text)

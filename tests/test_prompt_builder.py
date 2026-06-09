@@ -40,7 +40,7 @@ def test_prompt_config_can_override_system_and_append_instructions() -> None:
 
     assert messages[0]["content"] == "自定义系统提示词"
     assert "自定义回答规则" in prompt
-    assert "基础交互机制：强调基础属性" in prompt
+    assert "交互机制：在“核心定义”一节里必须点明该机制属于哪一类" in prompt
 
 
 def test_truncate_at_sentence_respects_boundary() -> None:

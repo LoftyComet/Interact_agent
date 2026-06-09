@@ -21,17 +21,17 @@ def test_basic_interaction_mechanism_intent() -> None:
     structure = parser.parse("什么是单击？")
 
     assert structure.intent == "basic_interaction_mechanism"
-    assert structure.output_frame == ["核心定义", "基础属性", "状态/变化序列", "响应逻辑", "适用与不适用", "关联机制"]
+    assert structure.output_frame == ["核心定义", "基础属性", "响应逻辑", "收益与代价", "典型案例", "适用与不适用", "关联机制"]
 
 
-def test_advanced_interaction_mechanism_intent() -> None:
+def test_advanced_mechanism_folds_into_basic_intent() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)
 
     structure = parser.parse("快击如何解决单击和长按的冲突？")
 
-    assert structure.intent == "advanced_interaction_mechanism"
-    assert "要解决的问题" in structure.output_frame
+    assert structure.intent == "basic_interaction_mechanism"
+    assert "核心定义" in structure.output_frame
 
 
 def test_control_form_intent() -> None:
@@ -51,7 +51,7 @@ def test_basic_property_intent() -> None:
     structure = parser.parse("二元属性的关键性质是什么？")
 
     assert structure.intent == "basic_property"
-    assert "连续性/维度/感知灵敏度" in structure.output_frame
+    assert "基本性质" in structure.output_frame
 
 
 def test_multimodal_intent() -> None:
@@ -71,7 +71,7 @@ def test_voice_interaction_intent() -> None:
     structure = parser.parse("语音交互需要怎样设计反馈闭环？")
 
     assert structure.intent == "voice_interaction"
-    assert "反馈闭环" in structure.output_frame
+    assert "识别/触发逻辑" in structure.output_frame
 
 
 def test_podcast_content_intent() -> None:
@@ -80,8 +80,9 @@ def test_podcast_content_intent() -> None:
 
     structure = parser.parse("帮我写一期关于长按的播客脚本")
 
-    assert structure.intent == "podcast_content"
-    assert "示例口播" in structure.output_frame
+    # podcast intent 已移除，机制类问题统一归入 basic_interaction_mechanism；
+    # 「播客」不再触发独立 intent。
+    assert structure.intent in {"basic_interaction_mechanism", "open_ended", "background_knowledge"}
 
 
 def test_background_knowledge_intent() -> None:
@@ -91,7 +92,7 @@ def test_background_knowledge_intent() -> None:
     structure = parser.parse("交互的本质和操控力视角是什么？")
 
     assert structure.intent == "background_knowledge"
-    assert "核心观点" in structure.output_frame
+    assert "背景回答" in structure.output_frame
 
 
 def test_case_question_detects_case_intent() -> None:
@@ -167,27 +168,11 @@ def test_resolve_intent_is_ready_for_clear_query() -> None:
     assert resolution.intent == "basic_interaction_mechanism"
 
 
-def test_dictionary_methodology_intent() -> None:
+def test_design_evaluation_wins_over_dictionary_phrasing() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)
 
-    structure = parser.parse("为什么这本词典要这样划分交互")
-
-    assert structure.intent == "dictionary_methodology"
-    assert structure.output_frame == [
-        "提问切入点",
-        "词典立场",
-        "分类逻辑",
-        "与常见做法的差异",
-        "学习者收益",
-    ]
-
-
-def test_dictionary_methodology_does_not_steal_design_evaluation() -> None:
-    kb = KnowledgeBase.load("data")
-    parser = QuestionParser(kb)
-
-    # 同时含 “评估” 与 “这本”，仍应优先 design_evaluation（0.99 > 0.93）
+    # 含“评估”的方案评审，即便提到“这本词典”也应判为 design_evaluation
     structure = parser.parse("帮我评估这本词典里旋钮+长按的方案")
 
     assert structure.intent == "design_evaluation"

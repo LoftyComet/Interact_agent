@@ -8,18 +8,25 @@ from gesture_agent.learning import QuestionParser
 from gesture_agent.learning.output_frames import load_output_frames
 
 
-def test_output_frames_config_can_merge_custom_frame(tmp_path) -> None:
+REPLACE_FRAMES = {
+    "basic_interaction_mechanism": ["核心定义", "基础属性", "响应逻辑", "收益与代价", "典型案例", "适用与不适用", "关联机制"],
+    "control_form": ["控件定义", "图", "可用属性", "典型案例"],
+    "basic_property": ["核心含义", "图", "相关案例", "基本性质"],
+    "multimodal_interaction": ["模态组成", "交互逻辑", "融合/切换逻辑", "适用场景", "案例或启发"],
+    "voice_interaction": ["声音交互类型", "识别/触发逻辑", "适用场景"],
+    "interaction_compare": ["对比对象", "共同基础", "核心差异", "选择建议"],
+    "background_knowledge": ["背景回答"],
+    "case_analysis": ["案例描述", "控件形态", "基础属性", "交互机制", "优劣势"],
+    "design_evaluation": ["方案复述", "结构拆解", "问题诊断", "修改建议", "需要补充的信息"],
+}
+
+
+def test_output_frames_replace_mode_applies_custom_frame(tmp_path) -> None:
     config = tmp_path / "output_frames.json"
+    frames = dict(REPLACE_FRAMES)
+    frames["design_evaluation"] = ["专家复述", "专家诊断", "专家建议"]
     config.write_text(
-        json.dumps(
-            {
-                "mode": "merge",
-                "frames": {
-                    "design_evaluation": ["专家复述", "专家诊断", "专家建议"],
-                },
-            },
-            ensure_ascii=False,
-        ),
+        json.dumps({"mode": "replace", "frames": frames}, ensure_ascii=False),
         encoding="utf-8",
     )
 
@@ -29,7 +36,7 @@ def test_output_frames_config_can_merge_custom_frame(tmp_path) -> None:
     structure = parser.parse("请评估这个设计方案：用户长按音量旋钮后拖动来调节音量。")
 
     assert structure.output_frame == ["专家复述", "专家诊断", "专家建议"]
-    assert parser.output_frames.frames["interaction_compare"] == ["对比对象", "共同基础", "核心差异", "适用边界", "选择建议"]
+    assert parser.output_frames.frames["interaction_compare"] == ["对比对象", "共同基础", "核心差异", "选择建议"]
 
 
 def test_output_frames_config_rejects_unknown_intent(tmp_path) -> None:
@@ -70,16 +77,10 @@ def test_output_frames_replace_mode_requires_all_intents(tmp_path) -> None:
 
 def test_cli_can_load_custom_output_frames(tmp_path, capsys) -> None:
     config = tmp_path / "output_frames.json"
+    frames = dict(REPLACE_FRAMES)
+    frames["interaction_compare"] = ["专家对比对象", "专家核心差异"]
     config.write_text(
-        json.dumps(
-            {
-                "mode": "merge",
-                "frames": {
-                    "interaction_compare": ["专家对比对象", "专家核心差异"],
-                },
-            },
-            ensure_ascii=False,
-        ),
+        json.dumps({"mode": "replace", "frames": frames}, ensure_ascii=False),
         encoding="utf-8",
     )
 

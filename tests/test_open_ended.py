@@ -103,4 +103,4 @@ def test_predefined_intent_keeps_static_frame() -> None:
     assert result.structure is not None
     assert result.structure.intent == "interaction_compare"
     assert result.structure.output_frame_source == "static"
-    assert result.structure.output_frame == ["对比对象", "共同基础", "核心差异", "适用边界", "选择建议"]
+    assert result.structure.output_frame == ["对比对象", "共同基础", "核心差异", "选择建议"]

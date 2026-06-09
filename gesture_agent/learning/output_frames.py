@@ -10,20 +10,11 @@ from gesture_agent.core.models import Intent, IntentOutputFrames
 DEFAULT_OUTPUT_FRAMES_FILENAME = "output_frames.json"
 OUTPUT_FRAME_MODES = {"merge", "replace"}
 
-DEFAULT_OUTPUT_FRAMES: dict[Intent, list[str]] = {
-    "basic_interaction_mechanism": ["核心定义", "基础属性", "状态/变化序列", "响应逻辑", "适用与不适用", "关联机制"],
-    "advanced_interaction_mechanism": ["要解决的问题", "构成机制", "判定条件", "响应逻辑", "设计收益与代价", "关联基础机制"],
-    "control_form": ["控件定义", "可用属性", "可承载的交互机制", "典型案例", "设计注意点"],
-    "basic_property": ["核心含义", "连续性/维度/感知灵敏度", "相关案例", "适用与不适用", "可组合方向"],
-    "multimodal_interaction": ["模态组成", "信息分工", "融合/切换逻辑", "适用场景", "风险与校准", "案例或启发"],
-    "voice_interaction": ["输入内容与声学属性", "识别/触发逻辑", "反馈闭环", "适用场景", "限制与替代入口"],
-    "podcast_content": ["主题定位", "听众对象", "内容大纲", "关键讲述点", "示例口播", "延伸问题"],
-    "interaction_compare": ["对比对象", "共同基础", "核心差异", "适用边界", "选择建议"],
-    "background_knowledge": ["背景问题", "核心观点", "词典中的位置", "为什么重要", "与后续知识的关系"],
-    "case_analysis": ["案例描述", "控件形态", "基础属性", "交互机制", "响应逻辑", "设计判断", "追问"],
-    "design_evaluation": ["方案复述", "结构拆解", "问题诊断", "修改建议", "规范术语版本", "需要补充的信息"],
-    "dictionary_methodology": ["提问切入点", "词典立场", "分类逻辑", "与常见做法的差异", "学习者收益"],
-}
+# open_ended 没有静态框架（由大模型动态生成），不在配置中要求。
+INTENTS_WITHOUT_STATIC_FRAME = {"open_ended"}
+
+# 输出框架不再内置默认值，全部以 data/output_frames.json 为准。
+DEFAULT_OUTPUT_FRAMES: dict[Intent, list[str]] = {}
 
 
 def load_output_frames(
@@ -61,7 +52,8 @@ def output_frames_from_config(
 
     custom_frames = _normalize_frames(frames_raw)
     if mode == "replace":
-        missing = sorted(_valid_intents() - set(custom_frames))
+        required = _valid_intents() - INTENTS_WITHOUT_STATIC_FRAME
+        missing = sorted(required - set(custom_frames))
         if missing:
             raise ValueError(f"Output frames replace mode is missing intents: {', '.join(missing)}")
         return IntentOutputFrames(frames=custom_frames, source=source)
