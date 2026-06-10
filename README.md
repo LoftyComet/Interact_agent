@@ -196,7 +196,7 @@ uv run python -m gesture_agent.cli \
 
 ## Web 界面
 
-除了 CLI，项目还提供一个 Flask 后端 + 纯静态前端的 Web 界面，复用与 CLI 完全相同的 `KnowledgeBase` / `QuestionParser` / `ConversationSession` / `SiliconFlowClient` 接口。
+除了 CLI，项目还提供一个 Flask 后端 + 纯静态前端的 Web 界面，复用与 CLI 完全相同的核心管线（`KnowledgeBase` / `QuestionParser` / `ConversationSession` / `InputVerifier` / `OutputVerifier` / 多 Provider 客户端）。前端是无构建依赖的 HTML/CSS/JS，由 Flask 同源托管，打开浏览器即可使用。
 
 ```bash
 # 推荐：用 uv 启动，自动注入 flask、flask-cors
@@ -207,26 +207,44 @@ pip install -r web/requirements.txt
 PYTHONPATH=. python web/backend/app.py
 ```
 
-默认监听 `http://127.0.0.1:5050`，前端由 Flask 同源托管，浏览器打开即可使用。常用环境变量：
+默认监听 `http://127.0.0.1:5050`，常用环境变量：
 
 - `WEB_HOST`：监听地址，默认 `127.0.0.1`。
-- `WEB_PORT`：监听端口，默认 `5050`。
+- `WEB_PORT`：监听端口，默认 `5050`（`web/run.sh` 设定，`app.py` 直接运行时默认 `5000`）。
 - `WEB_DEBUG`：设为 `1` 启用 Flask 调试。
 - `AGENT_CONFIG_PATH`：复用与 CLI 相同的 agent 配置，默认 `agent_config.json`。
-- `SILICONFLOW_API_KEY` 仍从项目根的 `.env` 读取。
+- API Key 仍从项目根的 `.env` 读取：`SILICONFLOW_API_KEY`（DeepSeek V3.2）、`KIMI_API_KEY`（Kimi）。
 
-后端 API（详见 [web/README.md](web/README.md)）：
+### 前端功能
+
+- 多轮会话：`session_id` 写入 `localStorage`，刷新页面复用同一会话；「清空会话」调用 `/api/reset` 清掉多轮记忆。
+- 模型切换：顶部下拉框列出已配置的 Provider（DeepSeek V3.2 / Kimi），未配置 API Key 的会标注「未配置」并禁用；选择会记到 `localStorage`。
+- 回答风格：`简洁` / `详细` 两档，影响回答篇幅。
+- 流式输出：默认开启，逐段渲染；可随时点「停止」中断当前回答并保留已生成内容。
+- 图片案例：支持多张上传（单张上限 10MB），走视觉模型分析。
+- Markdown 渲染：用 marked + DOMPurify 渲染回答；模型若把整段答案包进 ```json``` / ```markdown``` 代码块，会自动展开成正文。
+- 引用溯源：回答里的 `[1]`、`[2]` 角标和底部来源 chip 可点击，弹出对应知识库片段（标题、出处、命中术语、原文）。
+- 思考指示：请求发出后先显示「正在思考…」，首段返回后消失。
+- 问题结构面板：右侧实时显示本轮解析出的 `QuestionStructure`。
+
+### 后端 API
+
+详见 [web/README.md](web/README.md)。
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| `GET`  | `/api/health` | 后端、模型、知识库状态 |
+| `GET`  | `/api/health` | 后端、模型、知识库状态（含术语数、文档数） |
 | `GET`  | `/api/intents` | 当前生效的 intent 输出框架 |
+| `GET`  | `/api/providers` | 可选模型列表及是否已配置 API Key |
+| `GET`  | `/api/images/<filename>` | 知识库抽取出的配图静态托管 |
 | `POST` | `/api/session` | 创建新的 `session_id` |
 | `POST` | `/api/reset` | 清空指定会话的多轮记忆 |
-| `POST` | `/api/ask` | `{question, session_id, images?}` 一次性回答 |
+| `POST` | `/api/ask` | `{question, session_id, images?, style?, provider?}` 一次性回答 |
 | `POST` | `/api/ask_stream` | 同上，返回 SSE 流式输出 |
 
-前端会把 `session_id` 写入 `localStorage`，刷新页面复用同一会话，支持图片上传、流式输出、中断回答和清空会话；模糊问题会先反问澄清。
+`/api/ask` 与 `/api/ask_stream` 在回答前会按 `agent_config.json` 的 `verification` 配置做输入对齐（把口语/近义/错写术语对齐到规范枚举）和输出校验（章节完整性、术语合规，必要时让模型重写一次）；对齐与校验结果通过 `input_corrections` / `output_issues` 返回。SSE 在重写时会额外发 `retry`（开始重写）和 `replace`（用重写结果整体替换）两类事件。
+
+所有 Web 端收到的用户问题会按行追加到 `data/logs/web_questions.jsonl`，用于后续标注和分析。
 
 ## 服务器部署
 

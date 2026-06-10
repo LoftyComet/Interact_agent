@@ -40,13 +40,13 @@ def _build_kimi(model=None, base_url=None, timeout=None, use_vision_model=False)
 PROVIDERS: dict[str, ProviderSpec] = {
     "siliconflow": ProviderSpec(
         id="siliconflow",
-        label="SiliconFlow",
+        label="DeepSeek V3.2",
         api_key_env="SILICONFLOW_API_KEY",
         build=_build_siliconflow,
     ),
     "kimi": ProviderSpec(
         id="kimi",
-        label="Kimi (coding plan)",
+        label="Kimi",
         api_key_env="KIMI_API_KEY",
         build=_build_kimi,
     ),
