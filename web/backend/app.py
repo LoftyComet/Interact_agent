@@ -325,6 +325,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     "session_id": session_id,
                     "status": "clarify",
                     "message": session_result.message,
+                    "options": session_result.options,
                 }
             )
 
@@ -453,7 +454,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
 
         if session_result.status == "clarify":
             def clarify_only():
-                yield sse("clarify", {"message": session_result.message, "session_id": session_id})
+                yield sse("clarify", {"message": session_result.message, "options": session_result.options, "session_id": session_id})
                 yield sse("done", {"session_id": session_id})
             return Response(stream_with_context(clarify_only()), mimetype="text/event-stream")
 

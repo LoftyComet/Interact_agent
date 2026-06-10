@@ -744,6 +744,58 @@ body {
   background: var(--primary-soft);
 }
 
+/* Clarify option buttons (subtype follow-up) */
+.clarify-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.clarify-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  max-width: 320px;
+}
+
+.clarify-option:hover:not(:disabled) {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+
+.clarify-option:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.clarify-option.selected {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  opacity: 1;
+}
+
+.clarify-option-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.clarify-option-desc {
+  font-size: 12px;
+  color: var(--text-soft);
+  line-height: 1.4;
+  white-space: normal;
+}
+
 /* Chunk popover */
 .chunk-popover {
   z-index: 1000;
