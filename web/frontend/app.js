@@ -336,6 +336,41 @@ function appendMessage({ role, text, kind, persist = true, markdown, images }) {
   return { row, bubble };
 }
 
+// 渲染一条带可点击选项按钮的追问。点击某个按钮即把它的 value 作为下一轮输入发送。
+function appendClarifyOptions(message, options) {
+  const { row } = appendMessage({ role: "system", text: message || "需要澄清。" });
+
+  const bar = document.createElement("div");
+  bar.className = "clarify-options";
+  options.forEach((opt) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "clarify-option";
+    const label = document.createElement("span");
+    label.className = "clarify-option-label";
+    label.textContent = opt.label || opt.value || "选项";
+    btn.appendChild(label);
+    if (opt.desc) {
+      const desc = document.createElement("span");
+      desc.className = "clarify-option-desc";
+      desc.textContent = opt.desc;
+      btn.appendChild(desc);
+    }
+    btn.addEventListener("click", async () => {
+      if (state.busy) return;
+      // 点选后禁用整组按钮，避免重复触发。
+      bar.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      btn.classList.add("selected");
+      const value = opt.value || opt.label;
+      appendMessage({ role: "user", text: opt.label || value });
+      await runQuestion(value, [], els.style.value || "concise");
+    });
+    bar.appendChild(btn);
+  });
+  row.appendChild(bar);
+  els.messages.scrollTop = els.messages.scrollHeight;
+}
+
 function renderStructure(structure) {
   if (!structure) {
     els.structure.textContent = "—";
@@ -549,7 +584,11 @@ async function sendOnce(question, images, style) {
   const data = await res.json();
   hideThinking();
   if (data.status === "clarify") {
-    appendMessage({ role: "system", text: data.message || "需要澄清。" });
+    if (Array.isArray(data.options) && data.options.length) {
+      appendClarifyOptions(data.message, data.options);
+    } else {
+      appendMessage({ role: "system", text: data.message || "需要澄清。" });
+    }
     return;
   }
   renderStructure(data.structure);
@@ -611,7 +650,11 @@ async function sendStream(question, images, style) {
         els.messages.scrollTop = els.messages.scrollHeight;
         break;
       case "clarify":
-        appendMessage({ role: "system", text: payload.message || "需要澄清。" });
+        if (Array.isArray(payload.options) && payload.options.length) {
+          appendClarifyOptions(payload.message, payload.options);
+        } else {
+          appendMessage({ role: "system", text: payload.message || "需要澄清。" });
+        }
         break;
       case "error":
         appendMessage({ role: "assistant", kind: "error", text: payload.message || "请求失败" });
@@ -679,6 +722,12 @@ els.composer.addEventListener("submit", async (e) => {
   els.question.value = "";
   clearPendingImages();
 
+  await runQuestion(question, images, style);
+});
+
+// 把一次提问跑完整条链路（被表单提交和追问选项按钮共用）。
+// 调用方负责先把用户气泡渲染出来。
+async function runQuestion(question, images, style) {
   setBusy(true);
   showThinking();
   try {
@@ -698,7 +747,7 @@ els.composer.addEventListener("submit", async (e) => {
     hideThinking();
     setBusy(false);
   }
-});
+}
 
 els.question.addEventListener("compositionstart", () => {
   els.question.dataset.composing = "1";

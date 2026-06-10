@@ -6,6 +6,7 @@ from typing import Optional
 
 from gesture_agent.core.models import Intent, IntentCandidate, IntentResolution, QuestionStructure, SessionResult
 
+from .clarify_options import get_clarify_spec
 from .llm_intent import LLMIntentResolver
 from .llm_output_frame import OPEN_ENDED_FALLBACK_FRAME, LLMOutputFrameResolver
 from .question_parser import QuestionParser
@@ -186,7 +187,23 @@ class ConversationSession:
             resolution = self.intent_resolver.resolve(query, image_paths=image_paths, memory_context=memory_context)
         else:
             resolution = self.parser.resolve_intent(query, image_paths=image_paths)
-        if resolution.needs_clarification or resolution.intent is None:
+        # 部分意图在作答前需要先让用户选定子类型（如语音交互的「含义识别类 / 声学控制类」）。
+        # 这类意图一旦被判定为 top intent，就用选项式追问代替通用澄清：
+        # - 用户已点明子类型 -> 视为意图明确，直接进入作答（忽略 needs_clarification）；
+        # - 未点明 -> 返回带选项的追问，由前端渲染成可点击按钮。
+        clarify_spec = get_clarify_spec(resolution.intent)
+        if clarify_spec is not None:
+            if clarify_spec.matched_subtype(user_query) is None:
+                return SessionResult(
+                    status="clarify",
+                    message=clarify_spec.message,
+                    user_query=user_query,
+                    resolved_query=query,
+                    memory_context=memory_context,
+                    resolution=resolution,
+                    options=[opt.to_dict() for opt in clarify_spec.options],
+                )
+        elif resolution.needs_clarification or resolution.intent is None:
             return SessionResult(
                 status="clarify",
                 message=resolution.clarification_question or "还不能确定 intent，请补充具体对象、场景或希望的输出形式。",

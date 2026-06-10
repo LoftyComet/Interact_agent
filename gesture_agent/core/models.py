@@ -165,3 +165,5 @@ class SessionResult:
     memory_context: str = ""
     structure: Optional[QuestionStructure] = None
     resolution: Optional[IntentResolution] = None
+    # 结构化追问选项：非空时，前端把它们渲染成可点击按钮（点击即回填 value 作为下一轮输入）。
+    options: list[dict[str, str]] = field(default_factory=list)
