@@ -235,6 +235,16 @@ function fallbackMarkdown(text) {
   // very small subset: code fences, inline code, bold, italics, headings, lists, links
   let html = escaped.replace(/```([\s\S]*?)```/g, (_, body) => `<pre><code>${body}</code></pre>`);
   html = html.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // 图片必须在链接之前处理，否则 ![alt](src) 会被链接规则截获。src 已是后端
+  // 编码过的 /api/images/... 路径，HTML 转义只动了 &，不影响 URL。
+  html = html.replace(
+    /!\[([^\]]*)\]\(([^)]+)\)/g,
+    (_, alt, src) => `<img src="${src}" alt="${alt}" loading="lazy">`,
+  );
+  html = html.replace(
+    /\[([^\]]+)\]\(([^)]+)\)/g,
+    (_, label, href) => `<a href="${href}">${label}</a>`,
+  );
   html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
   html = html.replace(/^###### (.+)$/gm, "<h6>$1</h6>")
