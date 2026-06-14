@@ -9,7 +9,7 @@ from typing import Optional
 
 from .core.models import QuestionStructure
 from .knowledge import KnowledgeBase
-from .learning import ClarificationIntentResolver, ConversationSession, LLMIntentResolver, LLMOutputFrameResolver, QuestionParser
+from .learning import ClarificationIntentResolver, ConversationSession, LLMIntentResolver, LLMOutputFrameResolver, LLMTurnRelationResolver, QuestionParser, TurnClassifier
 from .learning.output_frames import load_output_frames
 from .learning.prompt_builder import build_messages
 from .media import image_path_to_data_url
@@ -176,6 +176,7 @@ def interactive_loop(args: argparse.Namespace, kb: KnowledgeBase, parser: Questi
         parser,
         intent_resolver=build_intent_resolver(args, parser),
         output_frame_resolver=build_output_frame_resolver(args, parser),
+        turn_classifier=build_turn_classifier(args, parser),
     )
     print("Gesture Agent interactive mode. 输入 exit 退出，输入 reset 清空当前澄清会话。")
     while True:
@@ -375,6 +376,22 @@ def build_intent_resolver(args: argparse.Namespace, parser: QuestionParser) -> O
     if args.llm_intent:
         return LLMIntentResolver(parser, client)
     return ClarificationIntentResolver(parser, client)
+
+
+def build_turn_classifier(args: argparse.Namespace, parser: QuestionParser) -> TurnClassifier:
+    """构建话题关系判定器；与 intent resolver 同样的开关下，接入 LLM 兜底判定。"""
+    if args.dry_run or (args.no_llm_clarify and not args.llm_intent):
+        return TurnClassifier(parser)
+    try:
+        client = SiliconFlowClient.from_env(
+            model=args.model,
+            base_url=args.base_url,
+            timeout=args.timeout,
+            use_vision_model=bool(args.image),
+        )
+    except SiliconFlowError:
+        return TurnClassifier(parser)
+    return TurnClassifier(parser, relation_resolver=LLMTurnRelationResolver(client))
 
 
 def build_output_frame_resolver(args: argparse.Namespace, parser: QuestionParser) -> Optional[LLMOutputFrameResolver]:

@@ -11,6 +11,8 @@ from gesture_agent.settings.env import get_env, load_env_file
 DEFAULT_BASE_URL = "https://api.siliconflow.cn/v1"
 DEFAULT_MODEL = "Qwen/Qwen3-32B"
 VISION_MODEL_ENV = "SILICONFLOW_VISION_MODEL"
+DEFAULT_EMBEDDING_MODEL = "Pro/BAAI/bge-m3"
+EMBEDDING_MODEL_ENV = "SILICONFLOW_EMBEDDING_MODEL"
 
 
 class SiliconFlowError(ProviderError):
@@ -24,6 +26,7 @@ class SiliconFlowClient:
     base_url: str = DEFAULT_BASE_URL
     timeout: int = 120
     max_retries: int = 0
+    embedding_model: str = DEFAULT_EMBEDDING_MODEL
 
     @classmethod
     def from_env(
@@ -46,6 +49,7 @@ class SiliconFlowClient:
             base_url=(base_url or get_env("SILICONFLOW_BASE_URL", DEFAULT_BASE_URL) or DEFAULT_BASE_URL).rstrip("/"),
             timeout=timeout or int(get_env("SILICONFLOW_TIMEOUT", "60") or "60"),
             max_retries=int(get_env("SILICONFLOW_MAX_RETRIES", "0") or "0"),
+            embedding_model=get_env(EMBEDDING_MODEL_ENV, DEFAULT_EMBEDDING_MODEL) or DEFAULT_EMBEDDING_MODEL,
         )
 
     def chat(
@@ -145,6 +149,32 @@ class SiliconFlowClient:
                 )
         except Exception as exc:
             raise self._wrap_error(exc) from exc
+
+    def embed(
+        self,
+        texts: list[str],
+        *,
+        model: Optional[str] = None,
+        batch_size: int = 32,
+    ) -> list[list[float]]:
+        """对一批文本求 embedding 向量,按输入顺序返回。
+
+        默认使用 self.embedding_model(SILICONFLOW_EMBEDDING_MODEL,默认
+        Pro/BAAI/bge-m3,1024 维)。分批发送以控制单次请求体积。
+        """
+        if not texts:
+            return []
+        client = self._openai_client()
+        use_model = model or self.embedding_model
+        out: list[list[float]] = []
+        try:
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i:i + batch_size]
+                resp = client.embeddings.create(model=use_model, input=batch)
+                out.extend(item.embedding for item in resp.data)
+        except Exception as exc:
+            raise self._wrap_error(exc) from exc
+        return out
 
     def list_models(self, limit: int = 20) -> list[str]:
         client = self._openai_client()

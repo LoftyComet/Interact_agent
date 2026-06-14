@@ -20,6 +20,18 @@ const els = {
   imagePreview: document.getElementById("image-preview"),
   health: document.getElementById("health"),
   structure: document.getElementById("structure"),
+  modeSwitch: document.getElementById("mode-switch"),
+  panelStructure: document.getElementById("panel-structure"),
+  panelPapers: document.getElementById("panel-papers"),
+  papersStatus: document.getElementById("papers-status"),
+  papersAdmin: document.getElementById("papers-admin"),
+  papersToken: document.getElementById("papers-token"),
+  papersVenues: document.getElementById("papers-venues"),
+  papersFrom: document.getElementById("papers-from"),
+  papersTo: document.getElementById("papers-to"),
+  papersFetch: document.getElementById("papers-fetch"),
+  papersBuild: document.getElementById("papers-build"),
+  papersLog: document.getElementById("papers-log"),
 };
 
 const state = {
@@ -29,6 +41,7 @@ const state = {
   lastChunks: [],
   pendingImages: [], // [{ name, dataUrl }]
   thinkingRow: null, // transient "正在思考" indicator
+  mode: "dict", // "dict" | "papers"
 };
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors backend limit
@@ -741,7 +754,9 @@ async function runQuestion(question, images, style) {
   setBusy(true);
   showThinking();
   try {
-    if (els.stream.checked) {
+    if (state.mode === "papers") {
+      await sendPapers(question);
+    } else if (els.stream.checked) {
       await sendStream(question, images, style);
     } else {
       await sendOnce(question, images, style);
@@ -798,6 +813,202 @@ els.reset.addEventListener("click", async () => {
     appendMessage({ role: "assistant", kind: "error", text: err.message || String(err) });
   }
 });
+
+// ===== 论文检索模式 =====
+
+// 论文模式:调用 /api/papers/ask_stream(SSE),复用 markdown 渲染与引用气泡。
+async function sendPapers(question) {
+  state.abortController = new AbortController();
+  const res = await fetch(`${API_BASE}/api/papers/ask_stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question }),
+    signal: state.abortController.signal,
+  });
+  if (!res.ok || !res.body) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}: ${text || res.statusText}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let answerEl = null;
+  let answerText = "";
+  let references = "";
+
+  function ensureAnswerEl() {
+    if (!answerEl) {
+      answerEl = appendMessage({ role: "assistant", text: "" }).bubble;
+      answerEl.classList.add("typing");
+    }
+    return answerEl;
+  }
+
+  function handleEvent(event, data) {
+    hideThinking();
+    let payload = {};
+    try {
+      payload = data ? JSON.parse(data) : {};
+    } catch (_) {
+      payload = {};
+    }
+    switch (event) {
+      case "meta":
+        // 把命中论文映射成 chunk 形态,复用 [n] 引用气泡与下方来源条。
+        state.lastChunks = (payload.papers || []).map(paperToChunk);
+        break;
+      case "delta":
+        ensureAnswerEl();
+        answerText += payload.text || "";
+        setBubbleContent(answerEl, answerText, { markdown: true });
+        els.messages.scrollTop = els.messages.scrollHeight;
+        break;
+      case "error":
+        appendMessage({ role: "assistant", kind: "error", text: payload.message || "请求失败" });
+        break;
+      case "done":
+        references = payload.references || "";
+        break;
+      default:
+        break;
+    }
+  }
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let sepIdx;
+      while ((sepIdx = buffer.indexOf("\n\n")) !== -1) {
+        const block = buffer.slice(0, sepIdx);
+        buffer = buffer.slice(sepIdx + 2);
+        if (!block.trim()) continue;
+        let event = "message";
+        const dataLines = [];
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+        }
+        handleEvent(event, dataLines.join("\n"));
+      }
+    }
+  } finally {
+    if (answerEl) {
+      if (references) {
+        answerText += "\n" + references;
+        setBubbleContent(answerEl, answerText, { markdown: true });
+      }
+      answerEl.classList.remove("typing");
+      const msgRow = answerEl.closest(".message");
+      if (msgRow) attachChunkRefs(msgRow, state.lastChunks);
+    }
+  }
+}
+
+// 把论文记录转成 chunk 形态,以复用 showChunkPopover / attachChunkRefs。
+function paperToChunk(p) {
+  const authors = (p.authors || []).slice(0, 4).join(", ") + ((p.authors || []).length > 4 ? " et al." : "");
+  return {
+    title: p.title,
+    citation: p.citation,
+    layer: `${p.venue} ${p.year || ""}`.trim(),
+    score: p.score,
+    terms: authors ? [authors] : [],
+    text: (p.abstract || "(no abstract)") + (p.url ? `\n\n[原文链接](${p.url})` : ""),
+  };
+}
+
+async function refreshPapersStatus() {
+  try {
+    const res = await api("/api/papers/status");
+    const data = await res.json();
+    const job = data.job || {};
+    let line = `语料 ${data.corpus_count} 篇 · 索引 ${data.index_count} 向量`;
+    if (data.index_model) line += ` · ${data.index_model}`;
+    if (job.running) line += ` · ⏳ ${job.kind} 进行中`;
+    els.papersStatus.textContent = line;
+    // 仅当后端配置了管理员令牌时,才显示抓取/构建控件。
+    if (els.papersAdmin) els.papersAdmin.hidden = !data.admin_enabled;
+    if (job.logs && job.logs.length) {
+      els.papersLog.hidden = false;
+      els.papersLog.textContent = job.logs.join("\n");
+    }
+    return job.running;
+  } catch (err) {
+    els.papersStatus.textContent = `状态获取失败：${err.message}`;
+    return false;
+  }
+}
+
+// 轮询后台任务进度,直到任务结束。
+function pollPapersJob() {
+  const timer = setInterval(async () => {
+    const running = await refreshPapersStatus();
+    if (!running) clearInterval(timer);
+  }, 2000);
+}
+
+async function startPapersJob(kind, body) {
+  const token = (els.papersToken && els.papersToken.value.trim()) || "";
+  if (!token) {
+    els.papersStatus.textContent = "请先输入管理员令牌";
+    return;
+  }
+  localStorage.setItem("papers_admin_token", token);
+  try {
+    const res = await api(`/api/papers/${kind}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      body: JSON.stringify(body || {}),
+    });
+    await res.json();
+    els.papersLog.hidden = false;
+    els.papersLog.textContent = `${kind} 任务已启动…`;
+    pollPapersJob();
+  } catch (err) {
+    els.papersStatus.textContent = `启动失败：${err.message}`;
+  }
+}
+
+function setMode(mode) {
+  state.mode = mode;
+  els.modeSwitch.querySelectorAll(".mode-btn").forEach((b) => {
+    b.classList.toggle("active", b.dataset.mode === mode);
+  });
+  const papers = mode === "papers";
+  els.panelStructure.hidden = papers;
+  els.panelPapers.hidden = !papers;
+  els.question.placeholder = papers
+    ? "用一句话描述想了解的 HCI 研究主题,如：novel haptic feedback in VR"
+    : "问点什么 — 比如：拖拽和滑动有什么区别？";
+  if (papers) {
+    if (els.papersToken && !els.papersToken.value) {
+      els.papersToken.value = localStorage.getItem("papers_admin_token") || "";
+    }
+    refreshPapersStatus();
+  }
+}
+
+els.modeSwitch &&
+  els.modeSwitch.addEventListener("click", (e) => {
+    const btn = e.target.closest(".mode-btn");
+    if (btn && !state.busy) setMode(btn.dataset.mode);
+  });
+
+els.papersFetch &&
+  els.papersFetch.addEventListener("click", () => {
+    const venues = els.papersVenues.value.split(",").map((s) => s.trim()).filter(Boolean);
+    startPapersJob("fetch", {
+      venues,
+      from_year: Number(els.papersFrom.value),
+      to_year: Number(els.papersTo.value),
+    });
+  });
+
+els.papersBuild &&
+  els.papersBuild.addEventListener("click", () => startPapersJob("build", {}));
 
 refreshHealth();
 loadProviders();

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from enum import Enum
 from typing import Any, Literal, Optional
 
 
@@ -167,3 +168,58 @@ class SessionResult:
     resolution: Optional[IntentResolution] = None
     # 结构化追问选项：非空时，前端把它们渲染成可点击按钮（点击即回填 value 作为下一轮输入）。
     options: list[dict[str, str]] = field(default_factory=list)
+
+
+class TopicRelation(str, Enum):
+    """当前输入与历史对话的话题关系（维度 A：输入侧）。
+
+    与「可答性」（维度 B：信息是否充分）正交——本枚举只回答“这句话和上文什么关系”，
+    不回答“能不能直接作答”。
+    """
+
+    FOLLOW_UP = "follow_up"  # 延续上一个已答完的话题，应注入对话记忆
+    NEW_TOPIC = "new_topic"  # 全新话题，不注入记忆；若处于澄清态则放弃 pending
+    CLARIFY_REPLY = "clarify_reply"  # 对当前澄清问题的回答（仅在 pending 时可能）
+
+
+@dataclass
+class TurnDecision:
+    """TurnClassifier 对一轮输入的话题关系判定结果。"""
+
+    relation: TopicRelation
+    confidence: float
+    reason: str
+    # 命中了哪些信号，便于调试与测试。
+    signals: list[str] = field(default_factory=list)
+    # 追问需沿用的上一轮意图（如 design_evaluation 延续）；无则 None。
+    carried_intent: Optional[Intent] = None
+
+
+@dataclass
+class ConversationTurn:
+    """一轮已完成的问答，构成会话短期记忆。"""
+
+    user_query: str
+    resolved_query: str
+    structure: QuestionStructure
+    answer_summary: str = ""
+
+
+@dataclass
+class PendingClarification:
+    """一次尚未解决的澄清状态。"""
+
+    original_query: str
+    candidates: list[IntentCandidate] = field(default_factory=list)
+    collected_details: list[str] = field(default_factory=list)
+    attempts: int = 0
+    last_question: str = ""
+    memory_context: str = ""
+    original_intent: Optional[Intent] = None
+    original_terms: list[str] = field(default_factory=list)
+
+    def combined_query(self) -> str:
+        if not self.collected_details:
+            return self.original_query
+        details = "；".join(self.collected_details)
+        return f"{self.original_query}\n补充信息：{details}"
