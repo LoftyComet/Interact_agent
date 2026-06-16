@@ -7,3 +7,7 @@ __pycache__/
 *.py[cod]
 gesture_dictionary_agent.egg-info/
 data/logs
+data/papers/*.npy
+data/papers/*.jsonl
+data/papers/*.meta.json
+paper_agent_config.json

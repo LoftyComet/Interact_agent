@@ -96,5 +96,24 @@ sudo journalctl -u gesture-agent --since "10 min ago"
 
 # 更新代码后重启
 cd /root/Interact_agent/ && git pull
-sudo systemctl restart gesture-agent
+sudo systemctl restart gesture-agent   # 重启后端，否则 Flask 仍跑旧代码
+# 前端是 Nginx 直接托管的静态文件，git pull 后磁盘文件已更新，
+# 但浏览器会强缓存旧的 app.js / styles.css。改动前端后务必同时：
+#   1) 更新 web/frontend/index.html 里 app.js?v=、styles.css?v= 的版本号（见下方“前端缓存”）；
+#   2) 通知用户硬刷新（Windows/Linux: Ctrl+Shift+R，macOS: Cmd+Shift+R）。
 ```
+
+## 前端缓存（按钮/样式改了却不生效时看这里）
+
+前端由 Nginx 直接托管（`root /root/Interact_agent/web/frontend`），浏览器默认会强缓存
+`app.js` 和 `styles.css`。如果改了前端却发现线上没变化（例如新加的追问选项按钮不显示），
+几乎都是浏览器加载了旧的 JS。
+
+定位方法：线上页面按 F12 → Network → 触发一次请求，查看 `/api/ask` 响应。
+
+- 响应里**有** `"options": [...]` 但页面没按钮 → 前端 JS 旧，是浏览器缓存问题。
+- 响应里**没有** options → 后端没重启，执行 `sudo systemctl restart gesture-agent`。
+
+根治办法：`index.html` 已给静态资源加了版本号查询串（`app.js?v=YYYYMMDD`、
+`styles.css?v=YYYYMMDD`）。**每次改动前端后，把这两个 `v=` 改成新日期**，浏览器即会强制拉取新文件，
+无需用户手动清缓存。

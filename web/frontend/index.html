@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Gesture Agent · 交互手势词典</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260610" />
   </head>
   <body>
     <header class="topbar">
@@ -14,6 +14,10 @@
         <span class="subtitle">交互手势词典 · 学习与设计评估</span>
       </div>
       <div class="topbar-actions">
+        <div class="mode-switch" id="mode-switch">
+          <button type="button" class="mode-btn active" data-mode="dict">词典问答</button>
+          <button type="button" class="mode-btn" data-mode="papers">论文检索</button>
+        </div>
         <span id="health" class="health">connecting…</span>
         <button id="reset" class="btn ghost" title="清空当前会话记忆">清空会话</button>
       </div>
@@ -66,15 +70,47 @@
       </section>
 
       <aside class="inspector">
-        <div class="panel">
+        <div class="panel" id="panel-structure">
           <h3>问题结构</h3>
           <pre id="structure" class="codeblock">—</pre>
+        </div>
+        <div class="panel" id="panel-papers" hidden>
+          <h3>论文库</h3>
+          <div id="papers-status" class="papers-status">加载中…</div>
+          <div class="papers-admin" id="papers-admin" hidden>
+            <div class="papers-admin-head">
+              <span class="papers-admin-title">管理员操作</span>
+              <label class="select-field">
+                <span>管理员令牌</span>
+                <input type="password" id="papers-token" placeholder="输入令牌以解锁" autocomplete="off" />
+              </label>
+            </div>
+            <label class="select-field">
+              <span>会议</span>
+              <input type="text" id="papers-venues" value="CHI,UIST,DIS,MobileHCI,IUI" />
+            </label>
+            <div class="papers-years">
+              <label class="select-field">
+                <span>起始年</span>
+                <input type="number" id="papers-from" value="2016" min="2000" max="2030" />
+              </label>
+              <label class="select-field">
+                <span>结束年</span>
+                <input type="number" id="papers-to" value="2025" min="2000" max="2030" />
+              </label>
+            </div>
+            <div class="papers-actions">
+              <button type="button" id="papers-fetch" class="btn ghost">抓取语料</button>
+              <button type="button" id="papers-build" class="btn ghost">构建索引</button>
+            </div>
+            <pre id="papers-log" class="codeblock papers-log" hidden></pre>
+          </div>
         </div>
       </aside>
     </main>
 
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+    <script src="./vendor/marked.min.js"></script>
+    <script src="./vendor/purify.min.js"></script>
     <script src="./app.js" defer></script>
   </body>
 </html>

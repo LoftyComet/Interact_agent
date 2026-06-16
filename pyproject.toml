@@ -9,15 +9,17 @@ dependencies = [
     "flask>=3.0.0",
     "flask-cors>=4.0.0",
     "python-docx>=1.1.0",
+    "numpy>=1.24",
 ]
 
 [dependency-groups]
 dev = [
+    "openpyxl>=3.1.5",
     "pytest>=8.0.0",
 ]
 
 [tool.setuptools.packages.find]
-include = ["gesture_agent*", "web*"]
+include = ["gesture_agent*", "paper_agent*", "web*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

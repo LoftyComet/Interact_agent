@@ -30,7 +30,7 @@ from flask_cors import CORS
 from gesture_agent.core.models import QuestionStructure, SourceChunk
 from gesture_agent.knowledge import KnowledgeBase
 from gesture_agent.knowledge.image_index import ImageIndex
-from gesture_agent.learning import ClarificationIntentResolver, ConversationSession, LLMOutputFrameResolver, QuestionParser
+from gesture_agent.learning import ClarificationIntentResolver, ConversationSession, LLMOutputFrameResolver, LLMTurnRelationResolver, QuestionParser, TurnClassifier
 from gesture_agent.learning.output_frames import load_output_frames
 from gesture_agent.learning.prompt_builder import build_messages
 from gesture_agent.media import image_path_to_data_url
@@ -146,6 +146,7 @@ class AgentRuntime:
                     self.parser,
                     intent_resolver=self._build_intent_resolver(),
                     output_frame_resolver=self._build_output_frame_resolver(),
+                    turn_classifier=self._build_turn_classifier(),
                 )
                 self._sessions[session_id] = session
             return session
@@ -184,6 +185,19 @@ class AgentRuntime:
         except SiliconFlowError:
             return None
         return ClarificationIntentResolver(self.parser, client)
+
+    def _build_turn_classifier(self) -> TurnClassifier:
+        if not self.config.llm_clarify and not self.config.llm_intent:
+            return TurnClassifier(self.parser)
+        try:
+            client = SiliconFlowClient.from_env(
+                model=self.config.model,
+                base_url=self.config.base_url,
+                timeout=self.config.timeout,
+            )
+        except SiliconFlowError:
+            return TurnClassifier(self.parser)
+        return TurnClassifier(self.parser, relation_resolver=LLMTurnRelationResolver(client))
 
     def _build_output_frame_resolver(self) -> Optional[LLMOutputFrameResolver]:
         mode = self.config.llm_output_frame
@@ -245,6 +259,15 @@ def create_app(config_path: Optional[str] = None) -> Flask:
     CORS(app)
 
     app.config["AGENT_RUNTIME"] = runtime
+
+    # 论文 RAG 子系统(独立 Blueprint,挂在 /api/papers 下)。
+    # 延迟到运行时按需加载,语料/索引缺失不影响词典功能。
+    try:
+        from papers_api import create_paper_blueprint
+
+        app.register_blueprint(create_paper_blueprint())
+    except Exception as exc:  # noqa: BLE001 - 论文子系统不可用时不应阻断词典服务
+        print(f"[papers] 论文 RAG 子系统未加载:{exc}", file=sys.stderr)
 
     @app.get("/")
     def index() -> Response:
