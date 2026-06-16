@@ -176,3 +176,55 @@ def test_design_evaluation_wins_over_dictionary_phrasing() -> None:
     structure = parser.parse("帮我评估这本词典里旋钮+长按的方案")
 
     assert structure.intent == "design_evaluation"
+
+
+def test_mechanism_identification_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("按住按钮释放火柱、移动方向杆改变方向、松开结束，这属于什么交互机制？")
+
+    assert structure.intent == "mechanism_identification"
+    assert "候选交互机制" in structure.output_frame
+    # 关键约束：模版不引导直接给出表达式
+    assert "表达式" not in "".join(structure.output_frame)
+
+
+def test_control_form_compare_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("手表和手套在交互上有啥区别")
+
+    assert structure.intent == "control_form_compare"
+    assert "包含属性" in structure.output_frame
+
+
+def test_function_interaction_breakdown_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("英雄联盟中涉及英雄控制的交互都涉及了哪些手势？")
+
+    assert structure.intent == "function_interaction_breakdown"
+    assert "情况与对应交互" in structure.output_frame
+
+
+def test_mechanism_parameter_compare_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("拖拽短距离和拖拽长距离有什么不同的应用场景")
+
+    assert structure.intent == "mechanism_parameter_compare"
+    assert "资料依据" in structure.output_frame
+
+
+def test_plain_mechanism_compare_stays_interaction_compare() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    # 纯机制对比（无控件载体、无参数维度）仍应判 interaction_compare
+    structure = parser.parse("拖拽和滑动有什么区别")
+
+    assert structure.intent == "interaction_compare"

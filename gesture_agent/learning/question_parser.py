@@ -7,6 +7,8 @@ from gesture_agent.core.models import Intent, IntentCandidate, IntentOutputFrame
 from gesture_agent.evaluation import parse_design_evaluation
 from gesture_agent.knowledge.base import KnowledgeBase
 from gesture_agent.learning.intent_examples import (
+    EXACT_MATCH_SCORE,
+    EXACT_MATCH_THRESHOLD,
     NEAR_MATCH_SCORE,
     NEAR_MATCH_THRESHOLD,
     IntentExampleBank,
@@ -25,6 +27,12 @@ BACKGROUND_RE = re.compile(r"(背景|交互的本质|操控力|虚拟操控力|I
 PROPERTY_RE = re.compile(r"(基础属性|属性|二元|多级|位置|角度|力属性|声音属性|光属性|温度|形变|时间属性|生理信号|阶次控制)")
 CONTROL_FORM_RE = re.compile(r"(控件形态|控件|按钮|拨钮|滚轮|摇杆|轨迹球|指点杆|触控面|旋钮|手柄|踏板|眼睛|嘴巴|手势)")
 MECHANISM_RE = re.compile(r"(交互机制|交互方式|点击|单击|双击|长按|按下|开关|拖拽|甩动|滑动|翻动|捏合|旋转|高级|组合|拓展|多维协同|冲突|调和|限位|长按拖拽|双按拖拽|轻扫|速率式|域控|异位|向量菜单|动势|快击|缓冲|解耦|互斥|轻拨)")
+# 反推信号：给一段操作描述，问"属于什么机制/这是什么交互/能不能生成表达式"。
+MECHANISM_IDENTIFY_RE = re.compile(r"(属于什么交互机制|属于什么机制|是什么交互机制|这是什么交互|算什么交互|属于哪一?类|属于哪种|是哪种机制|对应.*交互机制|对应.*机制|生成.*交互表达式|生成.*表达式|表达式图)")
+# 枚举信号：拆解"一类功能"在多种情况下的交互，而非单个案例。
+BREAKDOWN_RE = re.compile(r"(涉及哪些|有哪些手势|有哪些交互|各种情况|每种情况|哪些情况|不同情况|涉及.*哪些|都涉及了哪些|拆解.*各种|各种.*交互逻辑|交互逻辑系统)")
+# 同机制不同参数对比：长/短距离、不同力度/速度/时长等参数维度。
+PARAM_RE = re.compile(r"(长距离|短距离|远距离|近距离|不同参数|参数不同|不同力度|不同速度|不同距离|不同时长|大幅.*小幅)")
 
 INTENT_LABELS: dict[Intent, str] = {
     "basic_interaction_mechanism": "交互机制",
@@ -37,6 +45,10 @@ INTENT_LABELS: dict[Intent, str] = {
     "case_analysis": "理解交互案例",
     "design_evaluation": "设计方案评估",
     "open_ended": "开放问题",
+    "mechanism_identification": "机制识别",
+    "control_form_compare": "控件形态对比",
+    "function_interaction_breakdown": "功能交互拆解",
+    "mechanism_parameter_compare": "同机制参数对比",
 }
 
 # Intent classification thresholds — shared with llm_intent.py
@@ -151,6 +163,20 @@ class QuestionParser:
             add("case_analysis", 0.94, "用户提供了图片，需要理解交互案例。")
         if CASE_RE.search(query):
             add("case_analysis", 0.92, "问题包含案例/图片/分析/拆解等案例理解信号。")
+        # 机制识别：反推操作描述对应哪些机制（与 basic_interaction_mechanism 方向相反）。
+        # 0.93 压过 case_analysis(0.92, 如"这个交互…生成表达式")与 basic_interaction_mechanism(0.86)。
+        if MECHANISM_IDENTIFY_RE.search(query):
+            add("mechanism_identification", 0.93, "问题在反推操作描述对应哪些交互机制（先给候选、暂不附表达式）。")
+        # 功能交互拆解：拆解一类功能在多种情况下的交互枚举（与单案例 case_analysis 区分）。
+        if BREAKDOWN_RE.search(query):
+            add("function_interaction_breakdown", 0.93, "拆解一类功能在多种情况下的交互枚举，而非单个案例。")
+        # 控件形态对比：硬件/控件载体之间的对比，须放在 interaction_compare 之前并给 0.99。
+        # 命中条件更严格（同时命中控件且不命中机制），不会误伤纯机制对比。
+        if COMPARE_RE.search(query) and CONTROL_FORM_RE.search(query) and not MECHANISM_RE.search(query):
+            add("control_form_compare", 0.99, "对比对象是控件/硬件载体而非交互机制。")
+        # 同机制参数对比：同一机制不同参数（如拖拽长/短距离）的取舍，也放在 interaction_compare 之前。
+        if COMPARE_RE.search(query) and PARAM_RE.search(query) and MECHANISM_RE.search(query):
+            add("mechanism_parameter_compare", 0.99, "对比同一交互机制在不同参数下的取舍（书中可能无系统研究）。")
         if COMPARE_RE.search(query):
             add("interaction_compare", 0.98, "问题包含对比/区别/差异等比较信号。")
         if MULTIMODAL_RE.search(query):
@@ -169,9 +195,10 @@ class QuestionParser:
         if not self.example_bank.is_empty:
             best = self.example_bank.best_match(query)
             if best and best.similarity >= NEAR_MATCH_THRESHOLD:
+                score = EXACT_MATCH_SCORE if best.similarity >= EXACT_MATCH_THRESHOLD else NEAR_MATCH_SCORE
                 add(
                     best.example.intent,
-                    NEAR_MATCH_SCORE,
+                    score,
                     f"与已标注样例高度相似（{best.similarity:.0%}）：{best.example.question}",
                 )
 
@@ -208,6 +235,10 @@ class QuestionParser:
             "background_knowledge": "background_knowledge",
             "interaction_compare": "interaction_mechanism",
             "open_ended": "unknown",
+            "mechanism_identification": "interaction_mechanism",
+            "control_form_compare": "control_form",
+            "function_interaction_breakdown": "interaction_case",
+            "mechanism_parameter_compare": "interaction_mechanism",
         }
         mapped_layer = intent_layer_map[intent]
         if mapped_layer not in layers:

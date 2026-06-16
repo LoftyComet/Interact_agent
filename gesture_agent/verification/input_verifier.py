@@ -21,6 +21,10 @@ TERM_SENSITIVE_INTENTS = {
     "interaction_compare",
     "case_analysis",
     "design_evaluation",
+    "mechanism_identification",
+    "control_form_compare",
+    "function_interaction_breakdown",
+    "mechanism_parameter_compare",
 }
 
 # 这些虚词/高频字若出现在错别字窗口的差异位，说明窗口跨了词边界，
@@ -322,6 +326,10 @@ class InputVerifier:
             "interaction_compare": ["interaction_mechanism", "control_form"],
             "case_analysis": ["control_form", "basic_property", "interaction_mechanism"],
             "design_evaluation": ["control_form", "basic_property", "interaction_mechanism"],
+            "mechanism_identification": ["interaction_mechanism"],
+            "control_form_compare": ["control_form", "interaction_mechanism"],
+            "function_interaction_breakdown": ["control_form", "basic_property", "interaction_mechanism"],
+            "mechanism_parameter_compare": ["interaction_mechanism"],
         }
         for layer in intent_layers.get(structure.intent, ["control_form", "basic_property", "interaction_mechanism"]):
             _add(layer)

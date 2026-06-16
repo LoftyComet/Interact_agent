@@ -56,6 +56,32 @@
       "问题诊断",
       "修改建议",
       "需要补充的信息"
+    ],
+    "mechanism_identification": [
+      "操作描述复述",
+      "候选交互机制",
+      "判断逻辑",
+      "下一步追问"
+    ],
+    "control_form_compare": [
+      "对比对象",
+      "形态描述",
+      "包含属性",
+      "常用交互机制",
+      "适用场景",
+      "选择建议"
+    ],
+    "function_interaction_breakdown": [
+      "功能概述",
+      "情况与对应交互",
+      "共性与差异",
+      "小结"
+    ],
+    "mechanism_parameter_compare": [
+      "参数维度",
+      "资料依据",
+      "各参数取舍",
+      "选择建议与探索提示"
     ]
   },
   "source": "output_frames.md"
