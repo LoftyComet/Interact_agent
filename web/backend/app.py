@@ -262,12 +262,21 @@ def create_app(config_path: Optional[str] = None) -> Flask:
 
     # 论文 RAG 子系统(独立 Blueprint,挂在 /api/papers 下)。
     # 延迟到运行时按需加载,语料/索引缺失不影响词典功能。
+    # 用绝对导入以兼容不同启动方式(python web/backend/app.py、gunicorn
+    # web.backend.app:app 等);裸模块名仅在前者下可解析,故先确保
+    # web/backend/ 在 sys.path 中。
     try:
+        backend_dir = str(Path(__file__).resolve().parent)
+        if backend_dir not in sys.path:
+            sys.path.insert(0, backend_dir)
         from papers_api import create_paper_blueprint
 
-        app.register_blueprint(create_paper_blueprint())
-    except Exception as exc:  # noqa: BLE001 - 论文子系统不可用时不应阻断词典服务
-        print(f"[papers] 论文 RAG 子系统未加载:{exc}", file=sys.stderr)
+        app.register_blueprint(create_paper_blueprint(config_path=config_path))
+    except Exception:  # noqa: BLE001 - 论文子系统不可用时不应阻断词典服务
+        import traceback
+
+        print("[papers] 论文 RAG 子系统未加载:", file=sys.stderr)
+        traceback.print_exc()
 
     @app.get("/")
     def index() -> Response:
