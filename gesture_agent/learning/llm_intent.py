@@ -108,7 +108,11 @@ class LLMIntentResolver:
 4. 如果能明确判断 intent，输出 needs_clarification=false。
 5. 如果仍缺少关键对象或场景，输出 needs_clarification=true，并给出一个简短反问。
 6. 上方“参考样例”是人工标注的优质问题及其正确 intent，请将其作为重要参考；当用户输入与某条样例高度相似时，应倾向采用该样例的 intent。
-7. 只输出 JSON，不要输出解释文本。
+7. 区分 control_form_compare 与 interaction_compare：若对比对象是硬件/控件载体（手表 vs 手套、头部 vs 腿部控制），判 control_form_compare；若对比的是交互机制本身（拖拽 vs 滑动），判 interaction_compare。
+8. 区分 mechanism_identification 与 basic_interaction_mechanism：若用户给一段操作描述、问“这属于什么交互机制/能不能生成表达式”（反推），判 mechanism_identification；若用户已点名某个已知机制要讲解，判 basic_interaction_mechanism。
+9. 区分 function_interaction_breakdown 与 case_analysis：若拆解“一类功能/多种情况”的交互枚举（涉及哪些手势、各种情况下的交互逻辑系统），判 function_interaction_breakdown；若拆解单个具体案例，判 case_analysis。
+10. 区分 mechanism_parameter_compare 与 interaction_compare：若对比的是同一机制的不同参数（拖拽长距离 vs 短距离），判 mechanism_parameter_compare。
+11. 只输出 JSON，不要输出解释文本。
 
 JSON 格式：
 {{

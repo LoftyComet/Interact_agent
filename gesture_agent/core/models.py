@@ -16,6 +16,10 @@ Intent = Literal[
     "case_analysis",
     "design_evaluation",
     "open_ended",
+    "mechanism_identification",
+    "control_form_compare",
+    "function_interaction_breakdown",
+    "mechanism_parameter_compare",
 ]
 
 Layer = Literal[

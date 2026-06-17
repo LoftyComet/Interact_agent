@@ -16,6 +16,10 @@ DEFAULT_INTENT_EXAMPLES_FILENAME = "intent_examples.json"
 # 近似命中阈值：超过则把样例 intent 作为一个强规则候选。
 NEAR_MATCH_THRESHOLD = 0.86
 NEAR_MATCH_SCORE = 0.95
+# 近乎完全一致（标注样例本身就是这条问题）时给更高分，
+# 让人工标注的权威标签能压过纯 regex 的对比/案例信号（如 0.98 的 interaction_compare）。
+EXACT_MATCH_THRESHOLD = 0.97
+EXACT_MATCH_SCORE = 0.995
 # 进入大模型提示词的参考示例数量上限。
 MAX_PROMPT_EXAMPLES = 6
 # 进入提示词的最低相关度，过滤掉完全不相干的样例。

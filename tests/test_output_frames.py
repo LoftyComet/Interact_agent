@@ -18,6 +18,10 @@ REPLACE_FRAMES = {
     "background_knowledge": ["背景回答"],
     "case_analysis": ["案例描述", "控件形态", "基础属性", "交互机制", "优劣势"],
     "design_evaluation": ["方案复述", "结构拆解", "问题诊断", "修改建议", "需要补充的信息"],
+    "mechanism_identification": ["操作描述复述", "候选交互机制", "判断逻辑", "下一步追问"],
+    "control_form_compare": ["对比对象", "形态描述", "包含属性", "常用交互机制", "适用场景", "选择建议"],
+    "function_interaction_breakdown": ["功能概述", "情况与对应交互", "共性与差异", "小结"],
+    "mechanism_parameter_compare": ["参数维度", "资料依据", "各参数取舍", "选择建议与探索提示"],
 }
 
 

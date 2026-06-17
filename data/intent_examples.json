@@ -1,9 +1,8 @@
 {
   "// 说明": [
-    "这是从 data/logs/web_questions.jsonl 中筛选出的优质问题，作为意图识别的参考样例。",
-    "请人工核对 / 修改每条的 intent 标签。修改后会自动用于：1) 规则识别中近似命中时的强候选；2) 大模型意图判定提示词中的参考示例。",
-    "可选 intent 取值见下方 valid_intents；note 字段可填写标注理由或备注，留空即可。",
-    "若某条不应作为参考，直接删除该条即可。"
+    "本文件由 scripts/apply_intent_xlsx.py 从 docs/intent_examples_已标注.xlsx 回写生成。",
+    "intent 取人工校对后的标签；note 保留校对判别理由，用于：1) 规则识别近似命中时的强候选；2) 大模型意图判定提示词中的参考示例。",
+    "可选 intent 取值见 valid_intents；若要重新标注，改 Excel 后再跑该脚本。"
   ],
   "valid_intents": {
     "basic_interaction_mechanism": "交互机制（单击/长按/拖拽/速率式等机制原理、逻辑、优缺点）",
@@ -15,51 +14,197 @@
     "background_knowledge": "背景知识（什么是交互、IxDL、书的框架等）",
     "case_analysis": "理解交互案例（拆解某游戏/产品的交互、生成交互表达式）",
     "design_evaluation": "设计方案评估（给方案提建议、推荐交互方式、优化体验、评估维度）",
-    "open_ended": "开放问题（与交互设计无关的闲聊/常识）"
+    "open_ended": "开放问题（与交互设计无关的闲聊/常识）",
+    "mechanism_identification": "机制识别（给操作描述反推对应哪些交互机制，先给候选再追问，暂不附表达式）",
+    "control_form_compare": "控件形态对比（硬件/控件载体之间的对比，非交互机制对比）",
+    "function_interaction_breakdown": "功能交互拆解（拆解一类功能在多种情况下的交互枚举）",
+    "mechanism_parameter_compare": "同机制参数对比（同一机制不同参数的取舍，先查论文再看模型确信度）"
   },
   "examples": [
-    { "question": "单击交互方式的表达式和重点是什么", "intent": "basic_interaction_mechanism", "note": "" },
-    { "question": "键盘输入是什么交互逻辑", "intent": "basic_interaction_mechanism", "note": "" },
-    { "question": "键盘交互的具体逻辑是什么？有什么优缺点", "intent": "basic_interaction_mechanism", "note": "" },
-    { "question": "长按视频加速的交互原理", "intent": "basic_interaction_mechanism", "note": "" },
-    { "question": "你觉得什么叫滑动页面", "intent": "basic_interaction_mechanism", "note": "" },
-    { "question": "有没有三指的交互方式？一般在哪些场景使用", "intent": "basic_interaction_mechanism", "note": "" },
-    { "question": "我觉得用速率式滑动来做手雷投掷很有意思，可以细说一下这方面吗？", "intent": "basic_interaction_mechanism", "note": "追问，速率式滑动机制" },
-    { "question": "王者荣耀中安琪拉法师放大招是按住大招按钮可以释放火柱，移动方向杆可以改变方向，松开释放按钮可以结束火柱剩下的技能时间改变为防护屏障，这个属于什么交互机制？", "intent": "basic_interaction_mechanism", "note": "问“属于什么交互机制”" },
-
-    { "question": "拖拽和滑动有什么区别", "intent": "interaction_compare", "note": "" },
-    { "question": "拖拽短距离和拖拽长距离有什么不同的应用场景", "intent": "interaction_compare", "note": "" },
-    { "question": "连击和长按有什么区别", "intent": "interaction_compare", "note": "" },
-    { "question": "手表和手套在交互上有啥区别", "intent": "interaction_compare", "note": "" },
-    { "question": "你知道鼠标与电脑交互与手与手机交互的区别在哪里吗？或者说有哪些是分别独特的交互方式", "intent": "interaction_compare", "note": "" },
-
-    { "question": "按动开关有什么特点", "intent": "control_form", "note": "" },
-    { "question": "开关在实体上适合放置在什么位置", "intent": "control_form", "note": "控件放置位置" },
-    { "question": "什么样的控件形式更适合老年人", "intent": "control_form", "note": "控件选型" },
-    { "question": "我想知道椅子作为交互体有什么应用场景", "intent": "control_form", "note": "交互体/控件载体" },
-    { "question": "如果我想要在路口处设置一个辅助老年人过马路的机器人，老年人需要触发这个机器人以使其启动辅助的流程，你认为用什么样的控件形式比较好", "intent": "control_form", "note": "问“用什么样的控件形式”" },
-
-    { "question": "多模态交互", "intent": "multimodal_interaction", "note": "" },
-    { "question": "非手控的形式控制机器人运动", "intent": "multimodal_interaction", "note": "非手控，可能也归 control_form，待核对" },
-
-    { "question": "ixdl表达式是什么", "intent": "background_knowledge", "note": "" },
-    { "question": "什么是交互", "intent": "background_knowledge", "note": "" },
-    { "question": "这本书的整体结构框架是什么", "intent": "background_knowledge", "note": "" },
-
-    { "question": "英雄联盟中涉及英雄控制的交互都涉及了哪些手势？", "intent": "case_analysis", "note": "" },
-    { "question": "王者荣耀中射手释放技能（比如点射或者放大招）的操作可以怎么表示？", "intent": "case_analysis", "note": "" },
-    { "question": "可以帮我拆解绝地求生中玩家与掉落物品在各种情况下的交互逻辑系统吗", "intent": "case_analysis", "note": "" },
-    { "question": "英雄联盟中：按住Ctrl键后单机鼠标左键会发出一个警示信号，如果长按Ctrl键后按住鼠标左键并拖动。松开鼠标左键后，根据鼠标拖动到的轮盘区域决定要发出什么信号。可以生成这个交互的交互表达式吗", "intent": "case_analysis", "note": "生成交互表达式" },
-    { "question": "为什么赛车游戏能用键盘+鼠标模拟出真的在开车的手感？这其中的交互细节有哪些？如果要设计一款赛车游戏，在赛车控制上需要用到哪些交互", "intent": "case_analysis", "note": "也含设计意味，待核对" },
-
-    { "question": "我在做头部和喉部控制方向的交互，你有什么建议", "intent": "design_evaluation", "note": "" },
-    { "question": "比如我现在想在VR的场景下，实现利用眼球符合用户意图的选择交互，不要很灵敏，请你给我推荐交互方式", "intent": "design_evaluation", "note": "推荐交互方式" },
-    { "question": "你认为苹果手机的设计有什么可以改善的地方", "intent": "design_evaluation", "note": "" },
-    { "question": "如果我想做一个儿童陪伴机器人，在设计交互的时候，你有什么建议", "intent": "design_evaluation", "note": "" },
-    { "question": "在设计中我该如何评估我的交互，什么是好的交互，什么是不好的，评估的维度都有哪些", "intent": "design_evaluation", "note": "评估维度" },
-    { "question": "在第三人称射击游戏中，用一个按键+鼠标的控件设计一个投掷手雷的交互，可以控制手雷的选择种类、投掷方向和投掷力度，请给出具体的交互方案。", "intent": "design_evaluation", "note": "给出交互方案" },
-    { "question": "如果我想做成VR中的键盘，应该怎么做", "intent": "design_evaluation", "note": "" },
-    { "question": "怎么优化交互提升原神切换角色释放技能的交互呢？现在容易误触其他角色导致输出问题", "intent": "design_evaluation", "note": "优化体验" },
-    { "question": "如果我想在潜水的时候运用非手控的方式进行控制水下机器人的运动控制，分析一下用头部控制和用腿部控制哪个会更好", "intent": "design_evaluation", "note": "方案对比择优，也可考虑 interaction_compare" }
+    {
+      "question": "单击交互方式的表达式和重点是什么",
+      "intent": "basic_interaction_mechanism",
+      "note": ""
+    },
+    {
+      "question": "键盘输入是什么交互逻辑",
+      "intent": "basic_interaction_mechanism",
+      "note": "涉及到硬件形态"
+    },
+    {
+      "question": "键盘交互的具体逻辑是什么？有什么优缺点",
+      "intent": "basic_interaction_mechanism",
+      "note": "涉及到硬件形态"
+    },
+    {
+      "question": "长按视频加速的交互原理",
+      "intent": "basic_interaction_mechanism",
+      "note": ""
+    },
+    {
+      "question": "你觉得什么叫滑动页面",
+      "intent": "basic_interaction_mechanism",
+      "note": ""
+    },
+    {
+      "question": "有没有三指的交互方式？一般在哪些场景使用",
+      "intent": "basic_interaction_mechanism",
+      "note": "倾向于探索，应该加追问（对应到多指，+属性相关的）"
+    },
+    {
+      "question": "我觉得用速率式滑动来做手雷投掷很有意思，可以细说一下这方面吗？",
+      "intent": "basic_interaction_mechanism",
+      "note": "希望探讨如何进行设计"
+    },
+    {
+      "question": "王者荣耀中安琪拉法师放大招是按住大招按钮可以释放火柱，移动方向杆可以改变方向，松开释放按钮可以结束火柱剩下的技能时间改变为防护屏障，这个属于什么交互机制？",
+      "intent": "mechanism_identification",
+      "note": "猜不准，给2/3个（不要只答一个）"
+    },
+    {
+      "question": "拖拽和滑动有什么区别",
+      "intent": "interaction_compare",
+      "note": ""
+    },
+    {
+      "question": "拖拽短距离和拖拽长距离有什么不同的应用场景",
+      "intent": "mechanism_parameter_compare",
+      "note": "同一机制的的不同参数？推荐适合长距离和短距离的机制？（+追问）"
+    },
+    {
+      "question": "连击和长按有什么区别",
+      "intent": "interaction_compare",
+      "note": ""
+    },
+    {
+      "question": "手表和手套在交互上有啥区别",
+      "intent": "control_form_compare",
+      "note": "硬件影响交互的（单独一类对比）"
+    },
+    {
+      "question": "你知道鼠标与电脑交互与手与手机交互的区别在哪里吗？或者说有哪些是分别独特的交互方式",
+      "intent": "interaction_compare",
+      "note": ""
+    },
+    {
+      "question": "按动开关有什么特点",
+      "intent": "control_form",
+      "note": ""
+    },
+    {
+      "question": "开关在实体上适合放置在什么位置",
+      "intent": "control_form",
+      "note": "这个工业设计问题，+追问，拉回到我们书里知识"
+    },
+    {
+      "question": "什么样的控件形式更适合老年人",
+      "intent": "control_form",
+      "note": "人群和控件形态的关系，我们书里没有，只有例子涉及人群"
+    },
+    {
+      "question": "我想知道椅子作为交互体有什么应用场景",
+      "intent": "control_form",
+      "note": "控件形态的应用场景书里没有，应该追问后，给属性回答？"
+    },
+    {
+      "question": "如果我想要在路口处设置一个辅助老年人过马路的机器人，老年人需要触发这个机器人以使其启动辅助的流程，你认为用什么样的控件形式比较好",
+      "intent": "control_form",
+      "note": "问“用什么样的控件形式”"
+    },
+    {
+      "question": "多模态交互",
+      "intent": "multimodal_interaction",
+      "note": "这两个问题都是陈述句而非疑问句，需要反问用户更多信息后再做判断"
+    },
+    {
+      "question": "非手控的形式控制机器人运动",
+      "intent": "multimodal_interaction",
+      "note": "非手控，可能也归 control_form，待核对"
+    },
+    {
+      "question": "ixdl表达式是什么",
+      "intent": "background_knowledge",
+      "note": "背景知识里也没有解释IxDL表达式是什么，这个需要有额外的RAG资料库"
+    },
+    {
+      "question": "什么是交互",
+      "intent": "background_knowledge",
+      "note": "背景知识里也没有解释IxDL表达式是什么，这个需要有额外的RAG资料库"
+    },
+    {
+      "question": "这本书的整体结构框架是什么",
+      "intent": "background_knowledge",
+      "note": ""
+    },
+    {
+      "question": "英雄联盟中涉及英雄控制的交互都涉及了哪些手势？",
+      "intent": "function_interaction_breakdown",
+      "note": "这里不是拆解一个交互案例，而是拆解一类功能的各种交互逻辑，这个应该需要一个新的模版（比如：情况描述1，对应交互1；情况描述2，对应交互2...）"
+    },
+    {
+      "question": "王者荣耀中射手释放技能（比如点射或者放大招）的操作可以怎么表示？",
+      "intent": "case_analysis",
+      "note": ""
+    },
+    {
+      "question": "可以帮我拆解绝地求生中玩家与掉落物品在各种情况下的交互逻辑系统吗",
+      "intent": "function_interaction_breakdown",
+      "note": "这里不是拆解一个交互案例，而是拆解一类功能的各种交互逻辑，这个应该需要一个新的模版（比如：情况描述1，对应交互1；情况描述2，对应交互2...）"
+    },
+    {
+      "question": "英雄联盟中：按住Ctrl键后单机鼠标左键会发出一个警示信号，如果长按Ctrl键后按住鼠标左键并拖动。松开鼠标左键后，根据鼠标拖动到的轮盘区域决定要发出什么信号。可以生成这个交互的交互表达式吗",
+      "intent": "mechanism_identification",
+      "note": "这个是case_analysis的问题类型，但是问题想要的答案非常具体，这种问题就不应该再按照完整的交互案例的模版来回答，应该只给出用户想要的内容（这个具体的问题应该能根据描述找到“向量菜单”这个交互机制，然后只给出IxDL表达式的图，并附上一句话描述“向量菜单”的交互逻辑）"
+    },
+    {
+      "question": "为什么赛车游戏能用键盘+鼠标模拟出真的在开车的手感？这其中的交互细节有哪些？如果要设计一款赛车游戏，在赛车控制上需要用到哪些交互",
+      "intent": "case_analysis",
+      "note": "当两种类型的问题被一起问的时候，要能分别回答，而不是只判断为一个模版。这里是case analysis + Open ended"
+    },
+    {
+      "question": "我在做头部和喉部控制方向的交互，你有什么建议",
+      "intent": "open_ended",
+      "note": "这个不是评估现有方案，这个是建议新方案。一方面要承认现在的模型无法给出令人满意的建议，另一方面这种模糊的疑问，要用向用户反问更多的信息，然后用大模型的基本能力，参考着书里关于控件形态、属性和交互机制的概念去尝试回答"
+    },
+    {
+      "question": "比如我现在想在VR的场景下，实现利用眼球符合用户意图的选择交互，不要很灵敏，请你给我推荐交互方式",
+      "intent": "open_ended",
+      "note": "这个不是评估现有方案，这个是建议新方案。一方面要承认现在的模型无法给出令人满意的建议，另一方面这种相对明确的疑问，可以直接用大模型的基本能力，参考着书里关于控件形态、属性和交互机制的概念去尝试回答"
+    },
+    {
+      "question": "你认为苹果手机的设计有什么可以改善的地方",
+      "intent": "open_ended",
+      "note": "这个不是评估现有方案，这个是建议新方案。一方面要承认现在的模型无法给出令人满意的建议，另一方面这种模糊的疑问，要用向用户反问更多的信息，然后用大模型的基本能力，参考着书里关于控件形态、属性和交互机制的概念去尝试回答"
+    },
+    {
+      "question": "如果我想做一个儿童陪伴机器人，在设计交互的时候，你有什么建议",
+      "intent": "open_ended",
+      "note": "这个不是评估现有方案，这个是建议新方案。一方面要承认现在的模型无法给出令人满意的建议，另一方面这种模糊的疑问，要用向用户反问更多的信息，然后用大模型的基本能力，参考着书里关于控件形态、属性和交互机制的概念去尝试回答"
+    },
+    {
+      "question": "在设计中我该如何评估我的交互，什么是好的交互，什么是不好的，评估的维度都有哪些",
+      "intent": "open_ended",
+      "note": "这个不是评估现有方案，这个是在文“如何去评估”的方法和技巧，要承认这个书中没有相关的信息。可以利用大模型的基本能力，参考着书里的概念（控件形态、属性和交互机制等可以作为去评估的单元）去尝试回答"
+    },
+    {
+      "question": "在第三人称射击游戏中，用一个按键+鼠标的控件设计一个投掷手雷的交互，可以控制手雷的选择种类、投掷方向和投掷力度，请给出具体的交互方案。",
+      "intent": "open_ended",
+      "note": "这个不是评估现有方案，这个是建议新方案。一方面要承认现在的模型无法给出令人满意的建议，另一方面这种相对明确的疑问，可以直接用大模型的基本能力，参考着书里关于控件形态、属性和交互机制的概念去尝试回答"
+    },
+    {
+      "question": "如果我想做成VR中的键盘，应该怎么做",
+      "intent": "open_ended",
+      "note": "这个不是评估现有方案，这个是建议新方案。一方面要承认现在的模型无法给出令人满意的建议，另一方面这种模糊的疑问，要用向用户反问更多的信息，然后用大模型的基本能力，参考着书里关于控件形态、属性和交互机制的概念去尝试回答"
+    },
+    {
+      "question": "怎么优化交互提升原神切换角色释放技能的交互呢？现在容易误触其他角色导致输出问题",
+      "intent": "design_evaluation",
+      "note": "给建议前应该要简单地分析一下问题"
+    },
+    {
+      "question": "如果我想在潜水的时候运用非手控的方式进行控制水下机器人的运动控制，分析一下用头部控制和用腿部控制哪个会更好",
+      "intent": "control_form_compare",
+      "note": "其实这个更像是“控件形态”之间的对比，而不是交互机制之间的对比，可能需要一个控件形态对比的模版，比如包括：形态描述、包含属性、常用交互机制（书中的），适用场景等信息"
+    }
   ]
 }
