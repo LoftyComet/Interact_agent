@@ -35,7 +35,7 @@ const els = {
 };
 
 const state = {
-  sessionId: localStorage.getItem("gesture_agent_session") || null,
+  sessionId: sessionStorage.getItem("gesture_agent_session") || null,
   busy: false,
   abortController: null,
   lastChunks: [],
@@ -61,15 +61,17 @@ async function ensureSession() {
   const res = await api("/api/session", { method: "POST" });
   const data = await res.json();
   state.sessionId = data.session_id;
-  localStorage.setItem("gesture_agent_session", state.sessionId);
+  sessionStorage.setItem("gesture_agent_session", state.sessionId);
   return state.sessionId;
 }
 
-// 刷新页面即清空记忆：丢弃 localStorage 里的旧 session（并通知后端释放），
-// 再申请一个全新的 session。避免后端内存里堆积孤儿 session。
+// session id 存在 sessionStorage（每个标签页独立）：
+//   - 新开标签页：sessionStorage 为空 → 申请全新 session，多标签页互不干扰。
+//   - 刷新页面：sessionStorage 保留旧 id → 丢弃它并通知后端释放，再申请新 session，
+//     即“刷新清空记忆”。两种情况共用同一段逻辑。
 async function startFreshSession() {
-  const stale = localStorage.getItem("gesture_agent_session");
-  localStorage.removeItem("gesture_agent_session");
+  const stale = sessionStorage.getItem("gesture_agent_session");
+  sessionStorage.removeItem("gesture_agent_session");
   state.sessionId = null;
   if (stale) {
     api("/api/drop", {
