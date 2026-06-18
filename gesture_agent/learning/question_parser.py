@@ -33,6 +33,12 @@ MECHANISM_IDENTIFY_RE = re.compile(r"(属于什么交互机制|属于什么机�
 BREAKDOWN_RE = re.compile(r"(涉及哪些|有哪些手势|有哪些交互|各种情况|每种情况|哪些情况|不同情况|涉及.*哪些|都涉及了哪些|拆解.*各种|各种.*交互逻辑|交互逻辑系统)")
 # 同机制不同参数对比：长/短距离、不同力度/速度/时长等参数维度。
 PARAM_RE = re.compile(r"(长距离|短距离|远距离|近距离|不同参数|参数不同|不同力度|不同速度|不同距离|不同时长|大幅.*小幅)")
+# 控件形态延伸应用：控件与位置/人群/场景的关系（书中通常没有直接内容）。
+CONTROL_APPLICATION_RE = re.compile(r"(适合放置在什么位置|放置在什么位置|放在什么位置|放置在哪|安装在哪|适合老年人|适合儿童|适合.*人群|更适合.*(用户|人)|什么样的控件.*适合|什么控件.*适合|哪种控件.*适合|作为交互体|交互体.*应用场景|控件.*应用场景|控件.*场景)")
+# 评估方法论：如何评估交互、好坏标准、评估维度（不是评估某个具体方案）。
+EVAL_METHODOLOGY_RE = re.compile(r"(如何评估|怎么评估|怎样评估|如何去评估|该如何评估|评估维度|评估的维度|评估方法|评估标准|什么是好的交互|怎么衡量|如何衡量)")
+# 交互优化：现有交互存在具体问题、想优化提升（区别于评估完整方案）。
+OPTIMIZATION_RE = re.compile(r"(优化|提升.*体验|提升.*交互|改善.*交互|改善.*体验|误触|容易误|不顺手|卡顿)")
 
 INTENT_LABELS: dict[Intent, str] = {
     "basic_interaction_mechanism": "交互机制",
@@ -49,6 +55,9 @@ INTENT_LABELS: dict[Intent, str] = {
     "control_form_compare": "控件形态对比",
     "function_interaction_breakdown": "功能交互拆解",
     "mechanism_parameter_compare": "同机制参数对比",
+    "control_form_application": "控件形态延伸应用",
+    "interaction_optimization": "交互优化",
+    "evaluation_methodology": "评估方法论",
 }
 
 # Intent classification thresholds — shared with llm_intent.py
@@ -157,6 +166,14 @@ class QuestionParser:
             if current is None or score > current.score:
                 candidates[intent] = IntentCandidate(intent=intent, score=score, reason=reason)
 
+        # 评估方法论：问"如何评估/评估维度/好坏标准"，是方法论而非评估某个具体方案。
+        # 须放在 design_evaluation 之前并给更高分（"评估"也会命中 DESIGN_EVALUATION_RE）。
+        if EVAL_METHODOLOGY_RE.search(query):
+            add("evaluation_methodology", 0.995, "问题问的是如何评估交互/评估维度（方法论），而非评估某个具体方案。")
+        # 交互优化：现有交互有具体问题、想优化提升（如误触），先诊断再追问。
+        # 须放在 design_evaluation 之前（"优化"也会命中 DESIGN_EVALUATION_RE）。
+        if OPTIMIZATION_RE.search(query):
+            add("interaction_optimization", 0.995, "问题在优化现有交互的具体问题（先诊断、必要时追问）。")
         if DESIGN_EVALUATION_RE.search(query):
             add("design_evaluation", 0.99, "问题包含评估/评价/优化设计方案等设计评审信号。")
         if image_paths:
@@ -181,6 +198,10 @@ class QuestionParser:
             add("interaction_compare", 0.98, "问题包含对比/区别/差异等比较信号。")
         if MULTIMODAL_RE.search(query):
             add("multimodal_interaction", 0.95, "问题包含多模态或跨模态分工信号。")
+        # 控件形态延伸应用：控件与位置/人群/场景的关系（书中通常没有直接内容），
+        # 给 0.9 压过普通 control_form(0.88)。
+        if CONTROL_APPLICATION_RE.search(query):
+            add("control_form_application", 0.9, "问题问的是控件与位置/人群/场景的关系（书中通常没有直接内容）。")
         if CONTROL_FORM_RE.search(query):
             add("control_form", 0.88, "问题包含控件形态或具体控件名称。")
         if PROPERTY_RE.search(query):
@@ -239,6 +260,9 @@ class QuestionParser:
             "control_form_compare": "control_form",
             "function_interaction_breakdown": "interaction_case",
             "mechanism_parameter_compare": "interaction_mechanism",
+            "control_form_application": "control_form",
+            "interaction_optimization": "design_evaluation",
+            "evaluation_methodology": "design_evaluation",
         }
         mapped_layer = intent_layer_map[intent]
         if mapped_layer not in layers:

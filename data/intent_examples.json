@@ -18,7 +18,10 @@
     "mechanism_identification": "机制识别（给操作描述反推对应哪些交互机制，先给候选再追问，暂不附表达式）",
     "control_form_compare": "控件形态对比（硬件/控件载体之间的对比，非交互机制对比）",
     "function_interaction_breakdown": "功能交互拆解（拆解一类功能在多种情况下的交互枚举）",
-    "mechanism_parameter_compare": "同机制参数对比（同一机制不同参数的取舍，先查论文再看模型确信度）"
+    "mechanism_parameter_compare": "同机制参数对比（同一机制不同参数的取舍，先查论文再看模型确信度）",
+    "control_form_application": "控件形态延伸应用（控件与位置/人群/场景的关系，书里没有直接内容，套话+追问+用属性间接答）",
+    "interaction_optimization": "交互优化（现有交互有具体问题想优化，先诊断+追问再给建议）",
+    "evaluation_methodology": "评估方法论（如何评估交互/评估维度，用控件形态/属性/机制作评估单元）"
   },
   "examples": [
     {
@@ -93,17 +96,17 @@
     },
     {
       "question": "开关在实体上适合放置在什么位置",
-      "intent": "control_form",
+      "intent": "control_form_application",
       "note": "这个工业设计问题，+追问，拉回到我们书里知识"
     },
     {
       "question": "什么样的控件形式更适合老年人",
-      "intent": "control_form",
+      "intent": "control_form_application",
       "note": "人群和控件形态的关系，我们书里没有，只有例子涉及人群"
     },
     {
       "question": "我想知道椅子作为交互体有什么应用场景",
-      "intent": "control_form",
+      "intent": "control_form_application",
       "note": "控件形态的应用场景书里没有，应该追问后，给属性回答？"
     },
     {
@@ -183,7 +186,7 @@
     },
     {
       "question": "在设计中我该如何评估我的交互，什么是好的交互，什么是不好的，评估的维度都有哪些",
-      "intent": "open_ended",
+      "intent": "evaluation_methodology",
       "note": "这个不是评估现有方案，这个是在文“如何去评估”的方法和技巧，要承认这个书中没有相关的信息。可以利用大模型的基本能力，参考着书里的概念（控件形态、属性和交互机制等可以作为去评估的单元）去尝试回答"
     },
     {
@@ -198,7 +201,7 @@
     },
     {
       "question": "怎么优化交互提升原神切换角色释放技能的交互呢？现在容易误触其他角色导致输出问题",
-      "intent": "design_evaluation",
+      "intent": "interaction_optimization",
       "note": "给建议前应该要简单地分析一下问题"
     },
     {

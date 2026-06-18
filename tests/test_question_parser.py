@@ -228,3 +228,43 @@ def test_plain_mechanism_compare_stays_interaction_compare() -> None:
     structure = parser.parse("拖拽和滑动有什么区别")
 
     assert structure.intent == "interaction_compare"
+
+
+def test_control_form_application_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("什么样的控件形式更适合老年人")
+
+    assert structure.intent == "control_form_application"
+    assert "需要澄清的信息" in structure.output_frame
+
+
+def test_interaction_optimization_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("怎么优化交互提升原神切换角色释放技能呢？现在容易误触其他角色")
+
+    assert structure.intent == "interaction_optimization"
+    assert "问题诊断" in structure.output_frame
+
+
+def test_evaluation_methodology_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("在设计中我该如何评估我的交互，评估的维度都有哪些")
+
+    assert structure.intent == "evaluation_methodology"
+    assert "评估单元" in structure.output_frame
+
+
+def test_concrete_design_evaluation_not_optimization() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    # 评审一个完整方案（不含"优化/误触"信号）仍判 design_evaluation
+    structure = parser.parse("帮我评估这本词典里旋钮+长按的方案")
+
+    assert structure.intent == "design_evaluation"

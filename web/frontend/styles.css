@@ -830,7 +830,42 @@ body {
 
 .chunk-pop-body {
   border-top: 1px solid var(--border);
-  padding-top: 8px;
+  padding-top: 10px;
+  line-height: 1.85;
+}
+
+.chunk-pop-body > *:first-child {
+  margin-top: 0;
+}
+
+.chunk-pop-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.chunk-pop-body p {
+  margin: 0 0 12px;
+}
+
+.chunk-pop-body p > strong:only-child {
+  display: block;
+  margin-top: 18px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.chunk-pop-body > p:first-child > strong:only-child {
+  margin-top: 0;
+}
+
+.chunk-pop-body ul,
+.chunk-pop-body ol {
+  margin: 6px 0 12px;
+  padding-left: 20px;
+}
+
+.chunk-pop-body li {
+  margin: 5px 0;
 }
 
 /* Inline citation superscripts */
