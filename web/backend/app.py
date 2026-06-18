@@ -324,6 +324,16 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         rt.reset_session(session_id)
         return jsonify({"status": "ok", "session_id": session_id})
 
+    @app.post("/api/drop")
+    def drop() -> Response:
+        payload = request.get_json(silent=True) or {}
+        session_id = payload.get("session_id") or ""
+        if not session_id:
+            return jsonify({"error": "missing session_id"}), 400
+        rt: AgentRuntime = app.config["AGENT_RUNTIME"]
+        rt.drop_session(session_id)
+        return jsonify({"status": "ok", "session_id": session_id})
+
     @app.post("/api/session")
     def new_session() -> Response:
         return jsonify({"session_id": uuid.uuid4().hex})

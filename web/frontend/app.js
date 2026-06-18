@@ -65,6 +65,22 @@ async function ensureSession() {
   return state.sessionId;
 }
 
+// 刷新页面即清空记忆：丢弃 localStorage 里的旧 session（并通知后端释放），
+// 再申请一个全新的 session。避免后端内存里堆积孤儿 session。
+async function startFreshSession() {
+  const stale = localStorage.getItem("gesture_agent_session");
+  localStorage.removeItem("gesture_agent_session");
+  state.sessionId = null;
+  if (stale) {
+    api("/api/drop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: stale }),
+    }).catch(() => {}); // 释放失败无伤大雅，后端进程重启也会清掉
+  }
+  return ensureSession();
+}
+
 async function refreshHealth() {
   try {
     const res = await api("/api/health");
@@ -1084,6 +1100,6 @@ els.papersBuild &&
 
 refreshHealth();
 loadProviders();
-ensureSession().catch((err) => {
+startFreshSession().catch((err) => {
   appendMessage({ role: "assistant", kind: "error", text: `初始化会话失败：${err.message}` });
 });
