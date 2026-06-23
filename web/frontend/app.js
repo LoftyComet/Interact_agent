@@ -339,9 +339,47 @@ function setBubbleContent(bubble, text, { markdown }) {
   if (markdown) {
     bubble.innerHTML = renderMarkdown(text);
     linkifyCitations(bubble);
+    bindImageZoom(bubble);
   } else {
     bubble.textContent = text;
   }
+}
+
+// 回答里的图默认缩到合适尺寸（案例图/白模图不撑满），点击可放大查看细节。
+function bindImageZoom(container) {
+  const imgs = container.querySelectorAll("img");
+  imgs.forEach((img) => {
+    if (img.dataset.zoomBound) return;
+    img.dataset.zoomBound = "1";
+    img.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openImageLightbox(img.src, img.alt);
+    });
+  });
+}
+
+function openImageLightbox(src, alt) {
+  closeImageLightbox();
+  const overlay = document.createElement("div");
+  overlay.className = "img-lightbox";
+  overlay.id = "img-lightbox-active";
+  const big = document.createElement("img");
+  big.src = src;
+  if (alt) big.alt = alt;
+  overlay.appendChild(big);
+  overlay.addEventListener("click", closeImageLightbox);
+  document.addEventListener("keydown", lightboxEscHandler);
+  document.body.appendChild(overlay);
+}
+
+function lightboxEscHandler(e) {
+  if (e.key === "Escape") closeImageLightbox();
+}
+
+function closeImageLightbox() {
+  const existing = document.getElementById("img-lightbox-active");
+  if (existing) existing.remove();
+  document.removeEventListener("keydown", lightboxEscHandler);
 }
 
 function linkifyCitations(container) {
@@ -543,6 +581,7 @@ function showChunkPopover(anchor, chunk, idx) {
     const body = document.createElement("div");
     body.className = "chunk-pop-body markdown";
     body.innerHTML = renderMarkdown(formatChunkBody(chunk.text));
+    bindImageZoom(body);
     pop.appendChild(body);
   }
 
