@@ -22,6 +22,9 @@ REPLACE_FRAMES = {
     "control_form_compare": ["对比对象", "形态描述", "包含属性", "常用交互机制", "适用场景", "选择建议"],
     "function_interaction_breakdown": ["功能概述", "情况与对应交互", "共性与差异", "小结"],
     "mechanism_parameter_compare": ["参数维度", "资料依据", "各参数取舍", "选择建议与探索提示"],
+    "control_form_application": ["资料边界说明", "需要澄清的信息", "可参考的属性与机制", "初步建议"],
+    "interaction_optimization": ["现状复述", "问题诊断", "需要澄清的信息", "优化建议"],
+    "evaluation_methodology": ["资料边界说明", "评估单元", "评估维度与检查点", "评估方法建议"],
 }
 
 

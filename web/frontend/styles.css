@@ -276,11 +276,16 @@ body {
 }
 
 .bubble.markdown img {
-  max-width: 100%;
+  max-width: min(100%, 320px);
+  max-height: 280px;
+  width: auto;
   height: auto;
+  object-fit: contain;
   border-radius: 8px;
+  border: 1px solid var(--border);
   margin: 8px 0;
   display: block;
+  cursor: zoom-in;
 }
 
 .bubble.markdown h1,
@@ -830,7 +835,55 @@ body {
 
 .chunk-pop-body {
   border-top: 1px solid var(--border);
-  padding-top: 8px;
+  padding-top: 10px;
+  line-height: 1.85;
+}
+
+.chunk-pop-body > *:first-child {
+  margin-top: 0;
+}
+
+.chunk-pop-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.chunk-pop-body p {
+  margin: 0 0 12px;
+}
+
+.chunk-pop-body p > strong:only-child {
+  display: block;
+  margin-top: 18px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.chunk-pop-body > p:first-child > strong:only-child {
+  margin-top: 0;
+}
+
+.chunk-pop-body ul,
+.chunk-pop-body ol {
+  margin: 6px 0 12px;
+  padding-left: 20px;
+}
+
+.chunk-pop-body li {
+  margin: 5px 0;
+}
+
+.chunk-pop-body img {
+  max-width: min(100%, 280px);
+  max-height: 240px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 6px 0;
+  display: block;
+  cursor: zoom-in;
 }
 
 /* Inline citation superscripts */
@@ -846,6 +899,26 @@ body {
 
 .cite-ref:hover {
   background: var(--primary-soft);
+}
+
+/* 图片点击放大 */
+.img-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 18, 40, 0.78);
+  padding: 32px;
+  cursor: zoom-out;
+}
+
+.img-lightbox img {
+  max-width: 92vw;
+  max-height: 92vh;
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
 }
 
 /* ===== 模式切换 + 论文面板 ===== */

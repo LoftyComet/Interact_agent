@@ -25,6 +25,8 @@ TERM_SENSITIVE_INTENTS = {
     "control_form_compare",
     "function_interaction_breakdown",
     "mechanism_parameter_compare",
+    "control_form_application",
+    "interaction_optimization",
 }
 
 # 这些虚词/高频字若出现在错别字窗口的差异位，说明窗口跨了词边界，
@@ -77,9 +79,12 @@ class InputVerifier:
         if not issues:
             return InputVerificationResult(status="pass")
 
-        # 按已确认的产品选择：能给出 canonical 猜测就纠正后照常回答；
-        # 给不出映射的词不阻断、不反问，直接放行。
-        correctable = [i for i in issues if i.canonical and i.canonical != i.original]
+        # 只有"错别字/近义词映射"（wrong_term）且给得出确定 canonical 的才改写；
+        # 机制不兼容、属性矛盾这类不是用词问题，只作信息提示，不改写、不阻断。
+        correctable = [
+            i for i in issues
+            if i.issue_type == "wrong_term" and i.canonical and i.canonical != i.original
+        ]
         if not correctable:
             return InputVerificationResult(status="pass", issues=issues)
         corrected = self._apply_corrections(structure, correctable)
@@ -189,18 +194,20 @@ class InputVerifier:
         return result
 
     def _check_term_existence(self, terms: list[str]) -> list[TermIssue]:
+        # 不在枚举、也不是别名的术语：只记录、不硬猜最接近词。
+        # 编辑距离猜词（如把生造词强行改成某个标准术语）误判率高，已移除；
+        # 真正的错别字交给 _fuzzy_scan_query（等长仅差 1 字）和 LLM 兜底处理。
         issues: list[TermIssue] = []
         for term in terms:
             if term in self._all_terms:
                 continue
             if term in self._alias_map:
                 continue
-            closest = self._find_closest_term(term)
             issues.append(TermIssue(
                 original=term,
-                canonical=closest or "",
-                issue_type="wrong_term",
-                explanation=f"术语「{term}」不在词典枚举中" + (f"，最接近的是「{closest}」" if closest else ""),
+                canonical="",
+                issue_type="unknown_term",
+                explanation=f"术语「{term}」不在词典枚举中",
             ))
         return issues
 
@@ -239,18 +246,6 @@ class InputVerifier:
                 explanation="同时提到了离散属性和连续属性，可能存在矛盾",
             ))
         return issues
-
-    def _find_closest_term(self, unknown: str) -> Optional[str]:
-        best_term: Optional[str] = None
-        best_dist = 3
-        for term in self._all_terms:
-            if len(term) > 10 or len(unknown) > 10:
-                continue
-            d = _edit_distance(unknown, term)
-            if d < best_dist:
-                best_dist = d
-                best_term = term
-        return best_term
 
     def _apply_corrections(self, structure: QuestionStructure, issues: list[TermIssue]) -> QuestionStructure:
         correction_map = {i.original: i.canonical for i in issues if i.canonical}
@@ -330,6 +325,8 @@ class InputVerifier:
             "control_form_compare": ["control_form", "interaction_mechanism"],
             "function_interaction_breakdown": ["control_form", "basic_property", "interaction_mechanism"],
             "mechanism_parameter_compare": ["interaction_mechanism"],
+            "control_form_application": ["control_form", "basic_property", "interaction_mechanism"],
+            "interaction_optimization": ["control_form", "basic_property", "interaction_mechanism"],
         }
         for layer in intent_layers.get(structure.intent, ["control_form", "basic_property", "interaction_mechanism"]):
             _add(layer)
@@ -348,16 +345,3 @@ class InputVerifier:
             mechs = ", ".join(item.mechanisms[:8]) if item.mechanisms else "无"
             lines.append(f"- {item.term}（{item.term_type}）: mechanisms=[{mechs}]")
         return "\n".join(lines) if lines else "（无相关知识）"
-
-
-def _edit_distance(a: str, b: str) -> int:
-    if len(a) > len(b):
-        a, b = b, a
-    prev = list(range(len(a) + 1))
-    for j in range(1, len(b) + 1):
-        curr = [j] + [0] * len(a)
-        for i in range(1, len(a) + 1):
-            cost = 0 if a[i - 1] == b[j - 1] else 1
-            curr[i] = min(curr[i - 1] + 1, prev[i] + 1, prev[i - 1] + cost)
-        prev = curr
-    return prev[len(a)]

@@ -112,7 +112,10 @@ class LLMIntentResolver:
 8. 区分 mechanism_identification 与 basic_interaction_mechanism：若用户给一段操作描述、问“这属于什么交互机制/能不能生成表达式”（反推），判 mechanism_identification；若用户已点名某个已知机制要讲解，判 basic_interaction_mechanism。
 9. 区分 function_interaction_breakdown 与 case_analysis：若拆解“一类功能/多种情况”的交互枚举（涉及哪些手势、各种情况下的交互逻辑系统），判 function_interaction_breakdown；若拆解单个具体案例，判 case_analysis。
 10. 区分 mechanism_parameter_compare 与 interaction_compare：若对比的是同一机制的不同参数（拖拽长距离 vs 短距离），判 mechanism_parameter_compare。
-11. 只输出 JSON，不要输出解释文本。
+11. 区分 control_form_application 与 control_form：若问的是控件与放置位置、人群（老年人/儿童）、应用场景的关系（书中通常没有），判 control_form_application；若问控件本身的定义/属性/可承载机制，判 control_form。
+12. 区分 interaction_optimization 与 design_evaluation：若用户已有一个在用的交互、说它有具体问题想优化提升（误触、不顺手），判 interaction_optimization；若用户给出一个待评审的完整设计方案，判 design_evaluation。
+13. 区分 evaluation_methodology 与 design_evaluation：若问的是“如何评估交互/评估维度/好坏标准”这类方法论，判 evaluation_methodology；若是评估某个具体方案，判 design_evaluation。
+14. 只输出 JSON，不要输出解释文本。
 
 JSON 格式：
 {{

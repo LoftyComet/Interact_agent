@@ -35,7 +35,7 @@ const els = {
 };
 
 const state = {
-  sessionId: localStorage.getItem("gesture_agent_session") || null,
+  sessionId: sessionStorage.getItem("gesture_agent_session") || null,
   busy: false,
   abortController: null,
   lastChunks: [],
@@ -61,8 +61,26 @@ async function ensureSession() {
   const res = await api("/api/session", { method: "POST" });
   const data = await res.json();
   state.sessionId = data.session_id;
-  localStorage.setItem("gesture_agent_session", state.sessionId);
+  sessionStorage.setItem("gesture_agent_session", state.sessionId);
   return state.sessionId;
+}
+
+// session id 存在 sessionStorage（每个标签页独立）：
+//   - 新开标签页：sessionStorage 为空 → 申请全新 session，多标签页互不干扰。
+//   - 刷新页面：sessionStorage 保留旧 id → 丢弃它并通知后端释放，再申请新 session，
+//     即“刷新清空记忆”。两种情况共用同一段逻辑。
+async function startFreshSession() {
+  const stale = sessionStorage.getItem("gesture_agent_session");
+  sessionStorage.removeItem("gesture_agent_session");
+  state.sessionId = null;
+  if (stale) {
+    api("/api/drop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: stale }),
+    }).catch(() => {}); // 释放失败无伤大雅，后端进程重启也会清掉
+  }
+  return ensureSession();
 }
 
 async function refreshHealth() {
@@ -220,6 +238,51 @@ function formatJsonValueAsMarkdown(value, depth = 0) {
   return String(value);
 }
 
+/**
+ * 知识库原文里小标题（核心定义/交互特性…）只是独立短行，项目符号用的是
+ * 全角 ●/○ 而非 markdown 的 "-"，直接交给 marked 会糊成一大段。这里把它
+ * 整理成规整 markdown：小标题转加粗标题、●/○ 转列表项、段落间补空行。
+ */
+const CHUNK_SUBHEADINGS = new Set([
+  "核心定义",
+  "交互特性",
+  "适用场景",
+  "不适用场景",
+  "典型案例",
+  "交互逻辑",
+  "关联内容",
+  "核心机制",
+  "设计要点",
+]);
+
+function formatChunkBody(text) {
+  if (!text) return "";
+  const out = [];
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) {
+      if (out.length && out[out.length - 1] !== "") out.push("");
+      continue;
+    }
+    // 小标题：单独成行的固定标签 → 加粗小标题，前后留空行
+    if (CHUNK_SUBHEADINGS.has(line)) {
+      if (out.length && out[out.length - 1] !== "") out.push("");
+      out.push(`**${line}**`);
+      out.push("");
+      continue;
+    }
+    // 全角项目符号 ●/○/▪ → markdown 列表项
+    const bullet = line.match(/^[●○▪•·]\s*(.+)$/);
+    if (bullet) {
+      out.push(`- ${bullet[1].trim()}`);
+      continue;
+    }
+    out.push(line);
+  }
+  return out.join("\n").trim();
+}
+
 function renderColumnTable(value) {
   const dims = value["对比维度"];
   const otherKeys = Object.keys(value).filter((k) => k !== "对比维度");
@@ -276,9 +339,47 @@ function setBubbleContent(bubble, text, { markdown }) {
   if (markdown) {
     bubble.innerHTML = renderMarkdown(text);
     linkifyCitations(bubble);
+    bindImageZoom(bubble);
   } else {
     bubble.textContent = text;
   }
+}
+
+// 回答里的图默认缩到合适尺寸（案例图/白模图不撑满），点击可放大查看细节。
+function bindImageZoom(container) {
+  const imgs = container.querySelectorAll("img");
+  imgs.forEach((img) => {
+    if (img.dataset.zoomBound) return;
+    img.dataset.zoomBound = "1";
+    img.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openImageLightbox(img.src, img.alt);
+    });
+  });
+}
+
+function openImageLightbox(src, alt) {
+  closeImageLightbox();
+  const overlay = document.createElement("div");
+  overlay.className = "img-lightbox";
+  overlay.id = "img-lightbox-active";
+  const big = document.createElement("img");
+  big.src = src;
+  if (alt) big.alt = alt;
+  overlay.appendChild(big);
+  overlay.addEventListener("click", closeImageLightbox);
+  document.addEventListener("keydown", lightboxEscHandler);
+  document.body.appendChild(overlay);
+}
+
+function lightboxEscHandler(e) {
+  if (e.key === "Escape") closeImageLightbox();
+}
+
+function closeImageLightbox() {
+  const existing = document.getElementById("img-lightbox-active");
+  if (existing) existing.remove();
+  document.removeEventListener("keydown", lightboxEscHandler);
 }
 
 function linkifyCitations(container) {
@@ -409,9 +510,13 @@ function renderChunks(chunks) {
 
 function attachChunkRefs(messageRow, chunks) {
   if (!chunks || chunks.length === 0) return;
+  // 只列出回答正文里实际标注过的引用编号；没在文本中用到的不展示。
+  const used = collectUsedCitations(messageRow);
+  if (used.size === 0) return;
   const refBar = document.createElement("div");
   refBar.className = "ref-bar";
   for (let i = 0; i < chunks.length; i++) {
+    if (!used.has(i + 1)) continue;
     const chip = document.createElement("button");
     chip.className = "ref-chip";
     chip.textContent = `[${i + 1}] ${chunks[i].title || "来源"}`;
@@ -421,7 +526,30 @@ function attachChunkRefs(messageRow, chunks) {
     });
     refBar.appendChild(chip);
   }
+  if (!refBar.childElementCount) return;
   messageRow.appendChild(refBar);
+}
+
+// 从已渲染的回答气泡里收集实际使用过的引用编号 [n]。
+function collectUsedCitations(messageRow) {
+  const used = new Set();
+  const bubble = messageRow.querySelector(".bubble");
+  if (!bubble) return used;
+  // linkifyCitations 已把 [n] 转成 sup.cite-ref，优先用它；否则回退扫描文本。
+  const refs = bubble.querySelectorAll(".cite-ref");
+  if (refs.length) {
+    refs.forEach((el) => {
+      const n = parseInt(el.dataset.citeIdx, 10);
+      if (!Number.isNaN(n)) used.add(n);
+    });
+    return used;
+  }
+  const re = /\[(\d+)\]/g;
+  let m;
+  while ((m = re.exec(bubble.textContent)) !== null) {
+    used.add(parseInt(m[1], 10));
+  }
+  return used;
 }
 
 function showChunkPopover(anchor, chunk, idx) {
@@ -452,7 +580,8 @@ function showChunkPopover(anchor, chunk, idx) {
   if (chunk.text) {
     const body = document.createElement("div");
     body.className = "chunk-pop-body markdown";
-    body.innerHTML = renderMarkdown(chunk.text);
+    body.innerHTML = renderMarkdown(formatChunkBody(chunk.text));
+    bindImageZoom(body);
     pop.appendChild(body);
   }
 
@@ -1012,6 +1141,6 @@ els.papersBuild &&
 
 refreshHealth();
 loadProviders();
-ensureSession().catch((err) => {
+startFreshSession().catch((err) => {
   appendMessage({ role: "assistant", kind: "error", text: `初始化会话失败：${err.message}` });
 });

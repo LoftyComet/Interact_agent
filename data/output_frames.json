@@ -82,6 +82,24 @@
       "资料依据",
       "各参数取舍",
       "选择建议与探索提示"
+    ],
+    "control_form_application": [
+      "资料边界说明",
+      "需要澄清的信息",
+      "可参考的属性与机制",
+      "初步建议"
+    ],
+    "interaction_optimization": [
+      "现状复述",
+      "问题诊断",
+      "需要澄清的信息",
+      "优化建议"
+    ],
+    "evaluation_methodology": [
+      "资料边界说明",
+      "评估单元",
+      "评估维度与检查点",
+      "评估方法建议"
     ]
   },
   "source": "output_frames.md"
