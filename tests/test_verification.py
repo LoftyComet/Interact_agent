@@ -76,27 +76,29 @@ class TestInputVerifier:
         result = verifier.verify(structure)
         assert result.status == "pass"
 
-    def test_detect_wrong_term(self, term_inventory, structured_items):
+    def test_short_typo_in_terms_passes_without_llm(self, term_inventory, structured_items):
+        # 2 字错别字（旋纽→旋钮）：编辑距离硬猜已移除，而 _fuzzy_scan_query 只处理
+        # len>=3 的窗口（2 字窗口与真实词只差 1 字太多，误报高）。
+        # 故不开 LLM 时此类短错别字放行、不再自动纠正——这是"只保留高置信度校正"的取舍。
         verifier = InputVerifier(term_inventory, structured_items)
         structure = _make_structure(["单击", "旋纽"])  # 旋纽 is typo for 旋钮
         result = verifier.verify(structure)
-        assert result.status == "corrected"
-        assert any(i.original == "旋纽" for i in result.issues)
-        assert result.corrected_structure is not None
-        assert "旋钮" in result.corrected_structure.terms
+        assert result.status == "pass"
 
     def test_detect_impossible_combination(self, term_inventory, structured_items):
         verifier = InputVerifier(term_inventory, structured_items)
         structure = _make_structure(["旋钮", "双击"], layers=["control_form", "interaction_mechanism"])
         result = verifier.verify(structure)
-        assert result.status == "corrected"
+        # 机制不兼容只作信息提示，不改写输入：status 为 pass，但 issues 里保留该检测。
+        assert result.status == "pass"
         assert any(i.issue_type == "impossible_combination" for i in result.issues)
 
     def test_detect_property_contradiction(self, term_inventory, structured_items):
         verifier = InputVerifier(term_inventory, structured_items)
         structure = _make_structure(["二元属性", "位置属性"], layers=["basic_property"])
         result = verifier.verify(structure)
-        assert result.status == "corrected"
+        # 属性矛盾同样只作信息提示，不改写输入。
+        assert result.status == "pass"
         assert any(i.issue_type == "contradictory" for i in result.issues)
 
     def test_alias_resolves(self, term_inventory, structured_items):
@@ -138,6 +140,14 @@ class TestInputVerifier:
         )
         result = verifier.verify(structure)
         assert result.status == "pass"
+
+    def test_unknown_term_not_force_guessed(self, term_inventory, structured_items):
+        # 生造/陌生术语不再用编辑距离硬猜成某个标准词：放行、不改写、不产生 canonical。
+        verifier = InputVerifier(term_inventory, structured_items)
+        structure = _make_structure(["外星科技按钮"], layers=["control_form"])
+        result = verifier.verify(structure)
+        assert result.status == "pass"
+        assert all(not i.canonical for i in result.issues if i.original == "外星科技按钮")
 
     def test_llm_fallback_maps_synonym(self, term_inventory, structured_items):
         # 编辑距离抓不到的语义近义词（转盘→旋钮）由 LLM 兜底映射。

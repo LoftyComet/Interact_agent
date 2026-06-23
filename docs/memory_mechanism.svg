@@ -1,0 +1,192 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1480" viewBox="0 0 1180 1480" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#5b6b7b"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#2f9e44"/>
+    </marker>
+    <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#e03131"/>
+    </marker>
+    <style>
+      .title { font-size: 26px; font-weight: 700; fill: #1a2733; }
+      .subtitle { font-size: 14px; fill: #5b6b7b; }
+      .zone-label { font-size: 15px; font-weight: 700; }
+      .box-title { font-size: 15px; font-weight: 700; fill: #1a2733; }
+      .box-text { font-size: 12.5px; fill: #34495e; }
+      .code { font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 11.5px; fill: #2b5797; }
+      .edge-label { font-size: 12px; fill: #5b6b7b; }
+      .edge-label-strong { font-size: 12.5px; font-weight: 700; }
+      .note { font-size: 12px; fill: #6b7785; }
+    </style>
+  </defs>
+
+  <rect width="1180" height="1480" fill="#f7f9fb"/>
+
+  <!-- Header -->
+  <text x="40" y="48" class="title">手势交互词典 Agent · 记忆机制</text>
+  <text x="40" y="74" class="subtitle">浏览器会话生命周期 · 后端内存会话池 · 6 轮滚动短期记忆 · 两维度记忆注入判定</text>
+
+  <!-- ===================== ZONE 1: BROWSER ===================== -->
+  <rect x="40" y="98" width="1100" height="300" rx="12" fill="#fff" stroke="#c5d3e0" stroke-width="1.5"/>
+  <rect x="40" y="98" width="1100" height="34" rx="12" fill="#e7f0fa"/>
+  <rect x="40" y="118" width="1100" height="14" fill="#e7f0fa"/>
+  <text x="58" y="120" class="zone-label" fill="#2b5797">① 浏览器前端 · web/frontend/app.js</text>
+
+  <!-- sessionStorage box -->
+  <rect x="68" y="152" width="300" height="118" rx="8" fill="#f0f6ff" stroke="#a9c4e6"/>
+  <text x="84" y="176" class="box-title">sessionStorage（每标签页独立）</text>
+  <text x="84" y="200" class="code">key: gesture_agent_session</text>
+  <text x="84" y="222" class="box-text">• 标签页级隔离 → 多标签页互不串记忆</text>
+  <text x="84" y="242" class="box-text">• 刷新后保留，关闭标签页即销毁</text>
+
+  <!-- startFreshSession box -->
+  <rect x="420" y="152" width="330" height="118" rx="8" fill="#fff7ed" stroke="#e7b97a"/>
+  <text x="436" y="176" class="box-title">startFreshSession()（每次页面加载）</text>
+  <text x="436" y="200" class="box-text">1. 读出旧 session_id 并 removeItem</text>
+  <text x="436" y="220" class="box-text">2. 通知后端 <tspan class="code">/api/drop</tspan> 释放旧 session</text>
+  <text x="436" y="240" class="box-text">3. <tspan class="code">/api/session</tspan> 申请全新 id 并写回</text>
+
+  <!-- ensureSession box -->
+  <rect x="800" y="152" width="312" height="118" rx="8" fill="#f0f6ff" stroke="#a9c4e6"/>
+  <text x="816" y="176" class="box-title">ensureSession()</text>
+  <text x="816" y="200" class="box-text">已有 id 直接复用；</text>
+  <text x="816" y="220" class="box-text">无则申请并写入 sessionStorage。</text>
+  <text x="816" y="240" class="box-text">提问时携带 session_id 调用后端。</text>
+
+  <!-- behavior summary inside browser zone -->
+  <rect x="68" y="288" width="1044" height="92" rx="8" fill="#f4f8f4" stroke="#bcdcc0"/>
+  <text x="84" y="312" class="box-title" fill="#2f7d3a">行为结果</text>
+  <text x="84" y="336" class="box-text">🔄 <tspan font-weight="700">F5 刷新</tspan> → sessionStorage 留着旧 id → 被丢弃并 drop 后端 session → 申请新 session = <tspan fill="#e03131" font-weight="700">记忆清空</tspan></text>
+  <text x="84" y="358" class="box-text">🆕 <tspan font-weight="700">新开标签页</tspan> → sessionStorage 为空 → 直接申请新 session = <tspan fill="#2f9e44" font-weight="700">独立全新记忆</tspan>，多标签页互不干扰</text>
+
+  <!-- arrow browser -> backend -->
+  <line x1="590" y1="398" x2="590" y2="438" stroke="#5b6b7b" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="600" y="424" class="edge-label">HTTP · session_id 随每次请求携带</text>
+
+  <!-- ===================== ZONE 2: BACKEND POOL ===================== -->
+  <rect x="40" y="446" width="1100" height="248" rx="12" fill="#fff" stroke="#c5d3e0" stroke-width="1.5"/>
+  <rect x="40" y="446" width="1100" height="34" rx="12" fill="#eaf3ec"/>
+  <rect x="40" y="466" width="1100" height="14" fill="#eaf3ec"/>
+  <text x="58" y="468" class="zone-label" fill="#2f7d3a">② 后端会话池 · web/backend/app.py · AgentRuntime</text>
+
+  <!-- _sessions dict -->
+  <rect x="68" y="500" width="430" height="170" rx="8" fill="#f0faf2" stroke="#9fd3aa"/>
+  <text x="84" y="524" class="box-title">_sessions：内存字典（线程锁保护）</text>
+  <text x="84" y="548" class="code">dict[session_id → ConversationSession]</text>
+  <rect x="84" y="562" width="398" height="30" rx="5" fill="#fff" stroke="#cfe4d4"/>
+  <text x="96" y="582" class="code">"a1b2…" → ConversationSession(turns=[…])</text>
+  <rect x="84" y="598" width="398" height="30" rx="5" fill="#fff" stroke="#cfe4d4"/>
+  <text x="96" y="618" class="code">"c3d4…" → ConversationSession(turns=[…])</text>
+  <text x="84" y="652" class="note">⚠ 纯内存，无持久化 → 后端进程重启 = 全部记忆清空</text>
+
+  <!-- endpoints -->
+  <rect x="528" y="500" width="584" height="170" rx="8" fill="#f7f9fb" stroke="#cdd9e4"/>
+  <text x="544" y="524" class="box-title">会话生命周期端点</text>
+
+  <text x="544" y="552" class="code">POST /api/session</text>
+  <text x="720" y="552" class="box-text">生成 uuid，前端持有（不预建对象）</text>
+
+  <text x="544" y="578" class="code">get_session(id)</text>
+  <text x="720" y="578" class="box-text">首次提问时懒创建 ConversationSession</text>
+
+  <text x="544" y="604" class="code">POST /api/reset</text>
+  <text x="720" y="604" class="box-text">session.reset() 清空记忆，<tspan font-weight="700">保留同一 id</tspan></text>
+
+  <text x="544" y="630" class="code">POST /api/drop</text>
+  <text x="720" y="630" class="box-text">从字典移除整个 session（刷新时调用）</text>
+
+  <text x="544" y="658" class="note">id 找不到时 get_session 会重建 → 孤儿 session 不会复活旧记忆</text>
+
+  <!-- arrow backend pool -> session -->
+  <line x1="283" y1="694" x2="283" y2="734" stroke="#5b6b7b" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="293" y="720" class="edge-label">每个 session_id 对应一个</text>
+
+  <!-- ===================== ZONE 3: ConversationSession ===================== -->
+  <rect x="40" y="742" width="1100" height="294" rx="12" fill="#fff" stroke="#c5d3e0" stroke-width="1.5"/>
+  <rect x="40" y="742" width="1100" height="34" rx="12" fill="#f3eef9"/>
+  <rect x="40" y="762" width="1100" height="14" fill="#f3eef9"/>
+  <text x="58" y="764" class="zone-label" fill="#6b3fa0">③ 短期记忆 · learning/session.py · ConversationSession</text>
+
+  <!-- rolling history -->
+  <rect x="68" y="796" width="500" height="210" rx="8" fill="#f8f4fd" stroke="#cdb4e8"/>
+  <text x="84" y="820" class="box-title">turns：滚动历史（MAX_HISTORY_TURNS = 6）</text>
+  <text x="84" y="842" class="box-text">每轮 record_turn 追加一个 ConversationTurn，</text>
+  <text x="84" y="861" class="box-text">超过 6 轮自动丢弃最旧：<tspan class="code">turns[-6:]</tspan></text>
+
+  <g>
+    <rect x="84" y="876" width="468" height="26" rx="4" fill="#fff" stroke="#dccaee"/>
+    <text x="94" y="894" class="code">ConversationTurn: user_query / resolved_query</text>
+    <rect x="84" y="906" width="468" height="26" rx="4" fill="#fff" stroke="#dccaee"/>
+    <text x="94" y="924" class="code">           structure(intent/terms/frame) / answer_summary</text>
+  </g>
+  <text x="84" y="956" class="box-text">memory_summary()：取最近 4 轮，拼成文本摘要</text>
+  <text x="84" y="976" class="box-text">（问题 + intent + 命中术语 + 输出框架 + 回答摘要）</text>
+  <text x="84" y="996" class="note">答案用 _summarize_answer 截断到 220 字，控制上下文体积</text>
+
+  <!-- inject control -->
+  <rect x="596" y="796" width="516" height="210" rx="8" fill="#f7f9fb" stroke="#cdd9e4"/>
+  <text x="612" y="820" class="box-title">记忆注入开关 · _contextualize_query()</text>
+  <text x="612" y="846" class="box-text">记忆<tspan font-weight="700">不是每轮都注入</tspan>，由话题关系决定：</text>
+
+  <rect x="612" y="860" width="484" height="40" rx="6" fill="#eef8f0" stroke="#a9d6b3"/>
+  <text x="624" y="878" class="edge-label-strong" fill="#2f7d3a">FOLLOW_UP（追问）</text>
+  <text x="624" y="894" class="box-text">→ 把 memory_summary 拼进 query，模型带着上文作答</text>
+
+  <rect x="612" y="908" width="484" height="40" rx="6" fill="#fdf0f0" stroke="#e6a9a9"/>
+  <text x="624" y="926" class="edge-label-strong" fill="#c0392b">NEW_TOPIC（新话题）</text>
+  <text x="624" y="942" class="box-text">→ 不注入记忆，按全新问题独立作答</text>
+
+  <text x="612" y="976" class="box-text">记忆仍持续累积在 turns 里，只是<tspan font-weight="700">不喂给模型</tspan>。</text>
+  <text x="612" y="996" class="note">澄清态另有 CLARIFY_REPLY 分支，复用 pending 的记忆上下文</text>
+
+  <!-- arrow to dimension model -->
+  <line x1="854" y1="1036" x2="854" y2="1076" stroke="#2f9e44" stroke-width="2" marker-end="url(#arrowGreen)"/>
+  <text x="864" y="1062" class="edge-label">谁来判 FOLLOW_UP / NEW_TOPIC？</text>
+
+  <!-- ===================== ZONE 4: Two-dimension model ===================== -->
+  <rect x="40" y="1084" width="1100" height="346" rx="12" fill="#fff" stroke="#c5d3e0" stroke-width="1.5"/>
+  <rect x="40" y="1084" width="1100" height="34" rx="12" fill="#fbeeef"/>
+  <rect x="40" y="1104" width="1100" height="14" fill="#fbeeef"/>
+  <text x="58" y="1106" class="zone-label" fill="#b03050">④ 两维度判定 · 维度 A 决定记忆注入 · learning/turn_classifier.py</text>
+
+  <!-- Dimension A -->
+  <rect x="68" y="1138" width="700" height="274" rx="8" fill="#fff6f8" stroke="#e8b6c2"/>
+  <text x="84" y="1162" class="box-title">维度 A：话题关系 — TurnClassifier.classify()</text>
+  <text x="84" y="1182" class="box-text">分层判定，从强信号到弱信号，每层带置信度：</text>
+
+  <rect x="84" y="1196" width="668" height="30" rx="5" fill="#eef8f0" stroke="#bcdcc0"/>
+  <text x="96" y="1215" class="box-text"><tspan class="code">0.95</tspan> 指代词（它/这个/上述/刚才/继续）→ <tspan font-weight="700" fill="#2f7d3a">FOLLOW_UP</tspan></text>
+
+  <rect x="84" y="1230" width="668" height="30" rx="5" fill="#eef8f0" stroke="#bcdcc0"/>
+  <text x="96" y="1249" class="box-text"><tspan class="code">0.90</tspan> 可延续意图（design_evaluation 的风险/优化追问）→ <tspan font-weight="700" fill="#2f7d3a">FOLLOW_UP</tspan></text>
+
+  <rect x="84" y="1264" width="668" height="30" rx="5" fill="#eef8f0" stroke="#bcdcc0"/>
+  <text x="96" y="1283" class="box-text"><tspan class="code">0.80</tspan> 泛化词 + 与最近 4 轮共享词典术语 → <tspan font-weight="700" fill="#2f7d3a">FOLLOW_UP</tspan></text>
+
+  <rect x="84" y="1298" width="668" height="30" rx="5" fill="#fdf0f0" stroke="#e6c0c0"/>
+  <text x="96" y="1317" class="box-text"><tspan class="code">0.50</tspan> 弱信号兜底：无指代/无延续/无术语重合 → <tspan font-weight="700" fill="#c0392b">NEW_TOPIC</tspan></text>
+
+  <rect x="84" y="1332" width="668" height="30" rx="5" fill="#fff7ed" stroke="#e7c79a"/>
+  <text x="96" y="1351" class="box-text">置信度 &lt; 0.65 → 降级 <tspan font-weight="700">LLMTurnRelationResolver</tspan> 做二分类兜底</text>
+
+  <text x="84" y="1388" class="note">澄清态下先分流：CLARIFY_REPLY（回答澄清）vs NEW_TOPIC（换了无关新问题）</text>
+
+  <!-- Dimension B -->
+  <rect x="788" y="1138" width="324" height="274" rx="8" fill="#f7f9fb" stroke="#cdd9e4"/>
+  <text x="804" y="1162" class="box-title">维度 B：可答性</text>
+  <text x="804" y="1184" class="box-text">由意图解析层产出，</text>
+  <text x="804" y="1202" class="box-text">与维度 A 正交。</text>
+  <text x="804" y="1228" class="box-text">判断信息是否充分：</text>
+  <text x="804" y="1250" class="box-text">• 意图明确 → 直接作答</text>
+  <text x="804" y="1270" class="box-text">• 模糊/缺对象 → 发起澄清</text>
+  <text x="804" y="1290" class="box-text">  （pending clarification）</text>
+  <text x="804" y="1316" class="box-text">某些意图先选子类型，</text>
+  <text x="804" y="1336" class="box-text">如语音交互的</text>
+  <text x="804" y="1356" class="box-text">含义识别类 / 声学控制类。</text>
+  <text x="804" y="1388" class="note">两维度互不替代</text>
+
+  <!-- footer -->
+  <text x="40" y="1458" class="note">数据流：浏览器 sessionStorage → /api 携带 session_id → 后端 _sessions 内存池 → ConversationSession 6 轮滚动 → 维度 A 判定是否注入 memory_summary。记忆全程驻留后端内存，无持久化。</text>
+</svg>
