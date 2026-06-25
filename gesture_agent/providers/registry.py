@@ -11,6 +11,7 @@ from typing import Any, Callable, Optional
 
 from gesture_agent.providers.anthropic_client import AnthropicClient
 from gesture_agent.providers.base import ProviderError
+from gesture_agent.providers.deepseek import DeepSeekClient
 from gesture_agent.providers.siliconflow import SiliconFlowClient
 from gesture_agent.settings.env import get_env
 
@@ -37,6 +38,12 @@ def _build_kimi(model=None, base_url=None, timeout=None, use_vision_model=False)
     return AnthropicClient.from_env(model=model, timeout=timeout, use_vision_model=use_vision_model)
 
 
+def _build_deepseek(model=None, base_url=None, timeout=None, use_vision_model=False):
+    return DeepSeekClient.from_env(
+        model=model, base_url=base_url, timeout=timeout, use_vision_model=use_vision_model
+    )
+
+
 PROVIDERS: dict[str, ProviderSpec] = {
     "siliconflow": ProviderSpec(
         id="siliconflow",
@@ -49,6 +56,12 @@ PROVIDERS: dict[str, ProviderSpec] = {
         label="Kimi",
         api_key_env="KIMI_API_KEY",
         build=_build_kimi,
+    ),
+    "deepseek": ProviderSpec(
+        id="deepseek",
+        label="DeepSeek 官方",
+        api_key_env="DEEPSEEK_API_KEY",
+        build=_build_deepseek,
     ),
 }
 
