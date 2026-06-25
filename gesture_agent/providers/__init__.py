@@ -2,6 +2,7 @@
 
 from .anthropic_client import AnthropicClient, AnthropicError
 from .base import ProviderError
+from .deepseek import DeepSeekClient, DeepSeekError
 from .registry import (
     DEFAULT_PROVIDER,
     PROVIDERS,
@@ -14,6 +15,8 @@ from .siliconflow import SiliconFlowClient, SiliconFlowError
 __all__ = [
     "AnthropicClient",
     "AnthropicError",
+    "DeepSeekClient",
+    "DeepSeekError",
     "ProviderError",
     "SiliconFlowClient",
     "SiliconFlowError",

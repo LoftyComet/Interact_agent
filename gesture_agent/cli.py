@@ -13,7 +13,7 @@ from .learning import ClarificationIntentResolver, ConversationSession, LLMInten
 from .learning.output_frames import load_output_frames
 from .learning.prompt_builder import build_messages
 from .media import image_path_to_data_url
-from .providers import SiliconFlowClient, SiliconFlowError
+from .providers import build_chat_client, list_providers, ProviderError, resolve_provider_id
 from .settings.app_config import DEFAULT_AGENT_CONFIG_PATH, load_agent_config
 from .verification import InputVerifier, OutputVerifier
 from .verification.prompts import OUTPUT_CORRECTION_PROMPT
@@ -42,16 +42,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--top-k", type=int, default=None, help="检索资料片段数量。")
     parser.add_argument("--image", action="append", default=None, help="图片案例路径，可重复传入。")
     parser.add_argument(
+        "--provider",
+        default=None,
+        help="模型提供商。可选：siliconflow（默认）、deepseek、kimi。",
+    )
+    parser.add_argument(
         "--model",
         default=None,
-        help="SiliconFlow 模型名。默认读取 SILICONFLOW_MODEL；传入 --image 时优先读取 SILICONFLOW_VISION_MODEL。",
+        help="模型名。默认读取对应 provider 的环境变量（如 DEEPSEEK_MODEL）。",
     )
-    parser.add_argument("--base-url", default=None, help="SiliconFlow base URL。")
+    parser.add_argument("--base-url", default=None, help="API base URL。")
     parser.add_argument("--temperature", type=float, default=None)
     parser.add_argument("--max-tokens", type=int, default=None, help="模型最大输出 token 数；回答半句停止通常需要调大它。")
     parser.add_argument("--timeout", type=int, default=None, help="API 请求超时时间，单位秒。默认读取 SILICONFLOW_TIMEOUT 或 60。")
     parser.add_argument("--stream", action="store_true", default=None, help="使用流式输出，避免长回答结束前终端无反馈。")
-    parser.add_argument("--check-api", action="store_true", default=None, help="只检查 SiliconFlow API 连通性和模型列表，不读取词典、不提问。")
+    parser.add_argument("--check-api", action="store_true", default=None, help="只检查 API 连通性和模型列表，不读取词典、不提问。")
     parser.add_argument("--show-structure", action="store_true", default=None, help="输出问题结构。")
     parser.add_argument("--show-context", action="store_true", default=None, help="输出检索到的资料标题。")
     parser.add_argument("--dry-run", action="store_true", default=None, help="只做拆解和检索，不调用 API。")
@@ -159,15 +164,16 @@ def _pick_bool(value: Optional[bool], fallback: bool) -> bool:
     return bool(fallback if value is None else value)
 
 
-def _try_build_client(args: argparse.Namespace) -> Optional[SiliconFlowClient]:
+def _try_build_client(args: argparse.Namespace) -> Any:
     try:
-        return SiliconFlowClient.from_env(
+        return build_chat_client(
+            provider_id=args.provider,
             model=args.model,
             base_url=args.base_url,
             timeout=args.timeout,
             use_vision_model=bool(args.image),
         )
-    except SiliconFlowError:
+    except ProviderError:
         return None
 
 
@@ -267,14 +273,15 @@ def run_once(
             term_inventory=kb.term_inventory,
             prompt_config=args.prompt_config,
         )
-        client = SiliconFlowClient.from_env(
+        client = build_chat_client(
+            provider_id=args.provider,
             model=args.model,
             base_url=args.base_url,
             timeout=args.timeout,
             use_vision_model=bool(args.image),
         )
         print(
-            f"已检索到 {len(chunks)} 条资料，正在调用 SiliconFlow API，model={client.model}，timeout={client.timeout}s...",
+            f"已检索到 {len(chunks)} 条资料，正在调用 API...",
             file=sys.stderr,
             flush=True,
         )
@@ -300,10 +307,10 @@ def run_once(
             finally:
                 print()
             answer = "".join(answer_parts)
-    except SiliconFlowError as exc:
-        if "Missing SILICONFLOW_API_KEY" in str(exc):
+    except ProviderError as exc:
+        if "Missing" in str(exc) and "API_KEY" in str(exc):
             print(
-                "未设置 SILICONFLOW_API_KEY，已完成本地拆解与检索。把 key 填入 `.env` 或设置 shell 环境变量后可调用硅基流动 API。",
+                f"API 密钥未配置：{exc}\n已完成本地拆解与检索。把 key 填入 `.env` 或设置 shell 环境变量后可调用 API。",
                 file=sys.stderr,
             )
             if not (args.show_structure or args.show_context):
@@ -338,7 +345,7 @@ def run_once(
                         max_tokens=args.max_tokens,
                         enable_thinking=args.enable_thinking,
                     )
-                except SiliconFlowError:
+                except ProviderError:
                     break
 
     if answer is not None:
@@ -364,13 +371,14 @@ def build_intent_resolver(args: argparse.Namespace, parser: QuestionParser) -> O
     if args.dry_run or (args.no_llm_clarify and not args.llm_intent):
         return None
     try:
-        client = SiliconFlowClient.from_env(
+        client = build_chat_client(
+            provider_id=args.provider,
             model=args.model,
             base_url=args.base_url,
             timeout=args.timeout,
             use_vision_model=bool(args.image),
         )
-    except SiliconFlowError as exc:
+    except ProviderError as exc:
         print(f"LLM intent 判断不可用，已回退到本地规则：{exc}", file=sys.stderr)
         return None
     if args.llm_intent:
@@ -383,13 +391,14 @@ def build_turn_classifier(args: argparse.Namespace, parser: QuestionParser) -> T
     if args.dry_run or (args.no_llm_clarify and not args.llm_intent):
         return TurnClassifier(parser)
     try:
-        client = SiliconFlowClient.from_env(
+        client = build_chat_client(
+            provider_id=args.provider,
             model=args.model,
             base_url=args.base_url,
             timeout=args.timeout,
             use_vision_model=bool(args.image),
         )
-    except SiliconFlowError:
+    except ProviderError:
         return TurnClassifier(parser)
     return TurnClassifier(parser, relation_resolver=LLMTurnRelationResolver(client))
 
@@ -399,12 +408,13 @@ def build_output_frame_resolver(args: argparse.Namespace, parser: QuestionParser
     if mode == "false" or args.dry_run:
         return None
     try:
-        client = SiliconFlowClient.from_env(
+        client = build_chat_client(
+            provider_id=args.provider,
             model=args.model,
             base_url=args.base_url,
             timeout=args.timeout,
         )
-    except SiliconFlowError:
+    except ProviderError:
         return None
     return LLMOutputFrameResolver(
         client,
@@ -416,10 +426,16 @@ def build_output_frame_resolver(args: argparse.Namespace, parser: QuestionParser
 
 def check_api(args: argparse.Namespace) -> int:
     try:
-        client = SiliconFlowClient.from_env(model=args.model, base_url=args.base_url, timeout=args.timeout)
-        print(f"正在检查 SiliconFlow API，base_url={client.base_url}，timeout={client.timeout}s...", file=sys.stderr)
+        client = build_chat_client(
+            provider_id=args.provider,
+            model=args.model,
+            base_url=args.base_url,
+            timeout=args.timeout,
+        )
+        provider_label = args.provider or resolve_provider_id(None)
+        print(f"正在检查 API（{provider_label}），base_url={client.base_url}，timeout={client.timeout}s...", file=sys.stderr)
         models = client.list_models(limit=30)
-    except SiliconFlowError as exc:
+    except ProviderError as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
