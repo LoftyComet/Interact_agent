@@ -1,0 +1,337 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2400" viewBox="0 0 1200 2400" font-family="-apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif">
+  <defs>
+    <linearGradient id="hG" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#1a2733"/><stop offset="100%" stop-color="#2c4b6e"/></linearGradient>
+    <linearGradient id="s1" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#c0392b"/><stop offset="100%" stop-color="#e74c3c"/></linearGradient>
+    <linearGradient id="s2" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#d4a017"/><stop offset="100%" stop-color="#f0c040"/></linearGradient>
+    <linearGradient id="s3" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#6b3fa0"/><stop offset="100%" stop-color="#8e5cc4"/></linearGradient>
+    <linearGradient id="s4" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#2b6e4f"/><stop offset="100%" stop-color="#3da876"/></linearGradient>
+    <style>
+      .t1{font-size:26px;font-weight:700;fill:#fff}.t2{font-size:13px;fill:#b0c4d8}.st{font-size:16px;font-weight:700;fill:#fff}
+      .pn{font-size:12px;font-weight:700}.pr{fill:#c0392b}.py{fill:#8a5d00}.pp{fill:#5a2d8a}.pg{fill:#2b5d3a}
+      .pt{font-size:11.5px;fill:#4a3535}.it{font-size:11.5px;fill:#354a38}
+      .cs{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:10.5px;fill:#6a7890}
+      .rk{font-size:11px;fill:#7a5d00}.nt{font-size:11px;fill:#7a8a9a}
+      .ph{font-size:12px;font-weight:700;fill:#c0392b}.pm{font-size:12px;font-weight:700;fill:#b8860b}.pl{font-size:12px;font-weight:700;fill:#5b6b7b}
+      .sp{font-size:11px;fill:#5b6b7b}.lg{font-size:14px}
+    </style>
+  </defs>
+  <rect width="1200" height="2400" fill="#f5f7fa"/>
+
+  <!-- HEADER -->
+  <rect x="0" y="0" width="1200" height="88" fill="url(#hG)"/>
+  <text x="40" y="38" class="t1">手势交互词典 Agent · 记忆系统问题诊断与改进方案</text>
+  <text x="40" y="64" class="t2">基础设施 / 记忆内容质量 / 注入判定 / 用户体验 · 四个维度 14 项诊断 · 含优先级与实现路径</text>
+
+  <!-- LEGEND -->
+  <rect x="40" y="102" width="1120" height="30" rx="6" fill="#fff" stroke="#d5dce4" stroke-width="1"/>
+  <rect x="54" y="110" width="10" height="10" rx="2" fill="#ffe0e0"/><text x="70" y="120" class="nt">🔴 问题</text>
+  <rect x="154" y="110" width="10" height="10" rx="2" fill="#d4edda"/><text x="170" y="120" class="nt">🟢 改进</text>
+  <rect x="270" y="110" width="10" height="10" rx="2" fill="#fff3cd"/><text x="286" y="120" class="nt">⚠ 风险/代价</text>
+  <rect x="410" y="110" width="10" height="10" rx="2" fill="#e2e6ea"/><text x="426" y="120" class="nt">⚙ 涉及代码</text>
+  <circle cx="560" cy="115" r="6" fill="#c0392b"/><text x="572" y="120" class="nt">高优先</text>
+  <circle cx="636" cy="115" r="6" fill="#d4a017"/><text x="648" y="120" class="nt">中优先</text>
+  <circle cx="712" cy="115" r="6" fill="#7a8a9a"/><text x="724" y="120" class="nt">低优先</text>
+
+  <!-- ===== S1: 基础设施 (y=146, h=400 -> ends 546) ===== -->
+  <rect x="40" y="146" width="1120" height="400" rx="10" fill="#fff" stroke="#e8d0d0" stroke-width="1.5"/>
+  <rect x="40" y="146" width="1120" height="34" rx="10" fill="url(#s1)"/><rect x="40" y="166" width="1120" height="14" fill="url(#s1)"/>
+  <text x="56" y="168" class="st">一、基础设施层（存储与生命周期）</text>
+
+  <!-- P1: y=196, h=110 -->
+  <rect x="56" y="196" width="520" height="110" rx="6" fill="#fff5f5" stroke="#e8c4c4" stroke-width="1"/>
+  <rect x="56" y="196" width="520" height="24" rx="6" fill="#ffe8e8"/><rect x="56" y="208" width="520" height="12" fill="#ffe8e8"/>
+  <circle cx="74" cy="208" r="5" fill="#c0392b"/><text x="86" y="213" class="pn pr">问题1 · 纯内存存储，后端重启全丢</text>
+  <text x="72" y="236" class="pt">_sessions 是 Python dict，进程重启、部署更新或 OOM kill</text>
+  <text x="72" y="254" class="pt">让所有用户会话记忆归零。无序列化、无磁盘备份。</text>
+  <text x="72" y="274" class="cs">⚙ AgentRuntime._sessions (dict[str, ConversationSession])</text>
+  <text x="72" y="294" class="sp">关联：P2 P3 都是同一根因的不同表现</text>
+
+  <rect x="592" y="196" width="552" height="110" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="196" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="208" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="208" r="5" fill="#2f7d3a"/><text x="622" y="213" class="pn" fill="#2f7d3a">轻量：序列化到文件/SQLite；成熟：换 Redis</text>
+  <text x="608" y="236" class="it">ConversationSession 加 to_dict()/from_dict()，启动时遍历恢复。</text>
+  <text x="608" y="254" class="it">Redis 方案：多进程共享 + TTL 天然支持，一次解决 P1-P3。</text>
+  <text x="608" y="274" class="rk">⚠ 序列化需注意 structure.intent 是字符串枚举，恢复后 parser 引用需重建</text>
+  <text x="608" y="294" class="sp">彻底解需要进程外存储，短期可用 JSON 文件过渡</text>
+
+  <!-- P2: y=318, h=110 -->
+  <rect x="56" y="318" width="520" height="110" rx="6" fill="#fff5f5" stroke="#e8c4c4" stroke-width="1"/>
+  <rect x="56" y="318" width="520" height="24" rx="6" fill="#ffe8e8"/><rect x="56" y="330" width="520" height="12" fill="#ffe8e8"/>
+  <circle cx="74" cy="330" r="5" fill="#c0392b"/><text x="86" y="335" class="pn pr">问题2 · 无过期淘汰，孤儿 session 内存泄漏 🔴高优</text>
+  <text x="72" y="358" class="pt">用户直接关标签页不会调 /api/drop。浏览器崩溃、网络断开等</text>
+  <text x="72" y="376" class="pt">更多路径产生孤儿。无 TTL 无 LRU，session 永远堆在内存里。</text>
+  <text x="72" y="396" class="cs">⚙ 前端无 beforeunload 清理；后端 _sessions 无淘汰逻辑</text>
+  <text x="72" y="416" class="sp">线上影响最大——每个泄露 session 带 6 轮历史 + parser 引用</text>
+
+  <rect x="592" y="318" width="552" height="110" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="318" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="330" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="330" r="5" fill="#2f7d3a"/><text x="622" y="335" class="pn" fill="#2f7d3a">加 last_access 时间戳 + 惰性/定时淘汰</text>
+  <text x="608" y="358" class="it">get_session 时更新 last_access；请求时惰性清理超过 N 分钟未</text>
+  <text x="608" y="376" class="it">访问的 session。或后台线程定时扫描。Redis 方案自带 TTL。</text>
+  <text x="608" y="396" class="rk">⚠ 惰性淘汰对低频用户有内存浪费；定时线程在 Flask dev server 中不稳定</text>
+  <text x="608" y="416" class="sp">建议先用惰性 + 前端 beforeunload 补齐；Redis 引入后自然解决</text>
+
+  <!-- P3: y=440, h=92 -->
+  <rect x="56" y="440" width="520" height="92" rx="6" fill="#fff5f5" stroke="#e8c4c4" stroke-width="1"/>
+  <rect x="56" y="440" width="520" height="24" rx="6" fill="#ffe8e8"/><rect x="56" y="452" width="520" height="12" fill="#ffe8e8"/>
+  <circle cx="74" cy="452" r="5" fill="#c0392b"/><text x="86" y="457" class="pn pr">问题3 · 单进程强绑定，多 worker 分裂 🟡中优</text>
+  <text x="72" y="480" class="pt">gunicorn 多 worker 各有一份 _sessions，同用户请求落到不同</text>
+  <text x="72" y="498" class="pt">worker = 会话分裂。dev 单线程不暴露，生产多 worker 必现。</text>
+  <text x="72" y="518" class="cs">⚙ app.py:609 debug=True；gunicorn --workers >1 时暴露</text>
+
+  <rect x="592" y="440" width="552" height="92" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="440" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="452" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="452" r="5" fill="#2f7d3a"/><text x="622" y="457" class="pn" fill="#2f7d3a">根本解：进程外共享存储（Redis/SQLite）</text>
+  <text x="608" y="480" class="it">权宜解：nginx ip_hash 做 sticky session。推荐 Redis：同时解决</text>
+  <text x="608" y="498" class="it">持久化 + 淘汰 + 多进程共享，一次引入解决 P1-P3。</text>
+  <text x="608" y="518" class="rk">⚠ Redis 引入运维依赖；SQLite 单写锁高并发下是瓶颈</text>
+
+  <!-- S1 ends at 546 -->
+
+  <!-- ===== S2: 记忆内容质量 (y=566, h=524 -> ends 1090) ===== -->
+  <rect x="40" y="566" width="1120" height="524" rx="10" fill="#fff" stroke="#e6dba0" stroke-width="1.5"/>
+  <rect x="40" y="566" width="1120" height="34" rx="10" fill="url(#s2)"/><rect x="40" y="586" width="1120" height="14" fill="url(#s2)"/>
+  <text x="56" y="588" class="st">二、记忆内容质量（存什么、怎么存）</text>
+
+  <!-- P4: y=616, h=110 -->
+  <rect x="56" y="616" width="520" height="110" rx="6" fill="#fffdf4" stroke="#e8dcb0" stroke-width="1"/>
+  <rect x="56" y="616" width="520" height="24" rx="6" fill="#fff9e0"/><rect x="56" y="628" width="520" height="12" fill="#fff9e0"/>
+  <circle cx="74" cy="628" r="5" fill="#d4a017"/><text x="86" y="633" class="pn py">问题4 · 答案摘要只是粗暴截断 🔴高优</text>
+  <text x="72" y="656" class="pt">_summarize_answer(answer, limit=220) 纯字符截断。可能</text>
+  <text x="72" y="674" class="pt">砍在关键结论中间；也可能前220字全是客套话——成为无效记忆。</text>
+  <text x="72" y="694" class="cs">⚙ session.py:227 — cleaned[:limit].rstrip() + "..."</text>
+  <text x="72" y="714" class="sp">记忆是给模型看的上下文，低质量摘要直接拖累回答质量</text>
+
+  <rect x="592" y="616" width="552" height="110" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="616" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="628" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="628" r="5" fill="#2f7d3a"/><text x="622" y="633" class="pn" fill="#2f7d3a">LLM 轻量摘要（temperature=0, max_tokens=150）</text>
+  <text x="608" y="656" class="it">每轮用小模型做一次摘要，提取核心观点而非机械截断。成本</text>
+  <text x="608" y="674" class="it">极小（每轮一次小请求）。备选：在句号边界截断保证句子完整。</text>
+  <text x="608" y="694" class="rk">⚠ 增加一次 API 请求，非流式模式下用户感知延迟增加约 0.5-1s</text>
+  <text x="608" y="714" class="sp">长远看这是值得的投资——记忆质量直接影响多轮对话体验</text>
+
+  <!-- P5: y=738, h=110 -->
+  <rect x="56" y="738" width="520" height="110" rx="6" fill="#fffdf4" stroke="#e8dcb0" stroke-width="1"/>
+  <rect x="56" y="738" width="520" height="24" rx="6" fill="#fff9e0"/><rect x="56" y="750" width="520" height="12" fill="#fff9e0"/>
+  <circle cx="74" cy="750" r="5" fill="#d4a017"/><text x="86" y="755" class="pn py">问题5 · 记忆粒度太粗，拼成一段纯文本</text>
+  <text x="72" y="778" class="pt">memory_summary() 把 question + intent + terms + frame</text>
+  <text x="72" y="796" class="pt">+ answer_summary 挤成一段。模型要从噪声里找有用信息。</text>
+  <text x="72" y="816" class="cs">⚙ session.py:131 memory_summary() → "\n".join(lines)</text>
+  <text x="72" y="836" class="sp">结构化记忆比纯文本更利于模型理解和引用</text>
+
+  <rect x="592" y="738" width="552" height="110" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="738" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="750" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="750" r="5" fill="#2f7d3a"/><text x="622" y="755" class="pn" fill="#2f7d3a">结构化注入：拆成独立 system message 或 JSON 块</text>
+  <text x="608" y="778" class="it">上一轮 intent/terms/answer_summary 作为独立字段放入 prompt，</text>
+  <text x="608" y="796" class="it">而非拼在 user message 底部。模型理解成本更低、引用更准确。</text>
+  <text x="608" y="816" class="rk">⚠ prompt 模板改动影响所有意图的输出结构，需同步调 prompt_builder.py</text>
+  <text x="608" y="836" class="sp">可以和 P8（分层注入）一起做，共享 prompt 结构调整</text>
+
+  <!-- P6: y=860, h=92 -->
+  <rect x="56" y="860" width="520" height="92" rx="6" fill="#fffdf4" stroke="#e8dcb0" stroke-width="1"/>
+  <rect x="56" y="860" width="520" height="24" rx="6" fill="#fff9e0"/><rect x="56" y="872" width="520" height="12" fill="#fff9e0"/>
+  <circle cx="74" cy="872" r="5" fill="#d4a017"/><text x="86" y="877" class="pn py">问题6 · 固定 6 轮无弹性</text>
+  <text x="72" y="900" class="pt">MAX_HISTORY_TURNS = 6 一刀切。深入讨论时 6 轮不够覆盖</text>
+  <text x="72" y="918" class="pt">完整上下文；随便聊时 6 轮多占内存。两层截断可合并简化。</text>
+  <text x="72" y="938" class="cs">⚙ MAX_HISTORY_TURNS=6, memory_summary(max_turns=4)</text>
+
+  <rect x="592" y="860" width="552" height="92" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="860" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="872" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="872" r="5" fill="#2f7d3a"/><text x="622" y="877" class="pn" fill="#2f7d3a">按话题连续性动态调整 + 合并存储和注入参数</text>
+  <text x="608" y="900" class="it">连续 FOLLOW_UP → 保留更多轮（如10轮）；切话题 → 压缩到2轮。</text>
+  <text x="608" y="918" class="it">合并存储轮数和注入轮数为一个可配置参数，消除两层截断。</text>
+  <text x="608" y="938" class="rk">⚠ 动态调整引入状态依赖，测试用例需要覆盖各种话题切换模式</text>
+
+  <!-- P7: y=964, h=110 -->
+  <rect x="56" y="964" width="520" height="110" rx="6" fill="#fffdf4" stroke="#e8dcb0" stroke-width="1"/>
+  <rect x="56" y="964" width="520" height="24" rx="6" fill="#fff9e0"/><rect x="56" y="976" width="520" height="12" fill="#fff9e0"/>
+  <circle cx="74" cy="976" r="5" fill="#d4a017"/><text x="86" y="981" class="pn py">问题7 · 无跨会话持久记忆 🟢低优</text>
+  <text x="72" y="1004" class="pt">每次新标签页是完全白纸。用户昨天深入学过的概念今天</text>
+  <text x="72" y="1022" class="pt">全忘。没有用户级别的长期知识积累。适合放在更上层解决。</text>
+  <text x="72" y="1042" class="cs">⚙ 当前无任何用户级别持久化机制</text>
+  <text x="72" y="1062" class="sp">这是「用户记忆」而非「会话记忆」，属于更高层需求</text>
+
+  <rect x="592" y="964" width="552" height="110" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="964" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="976" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="976" r="5" fill="#2f7d3a"/><text x="622" y="981" class="pn" fill="#2f7d3a">用户级别「已掌握概念」清单（长期方向）</text>
+  <text x="608" y="1004" class="it">localStorage 存术语学习状态；新 session 启动时注入作为背景</text>
+  <text x="608" y="1022" class="it">知识。需引入用户认证或至少浏览器级持久化。实现复杂。</text>
+  <text x="608" y="1042" class="rk">⚠ 需用户系统支撑，短期收益不如 P1-P6；跨设备同步更复杂</text>
+  <text x="608" y="1062" class="sp">可先做浏览器级的 localStorage 方案，无需后端改动</text>
+
+  <!-- S2 ends at 1090 -->
+
+  <!-- ===== S3: 注入判定 (y=1110, h=414 -> ends 1524) ===== -->
+  <rect x="40" y="1110" width="1120" height="414" rx="10" fill="#fff" stroke="#d4bee4" stroke-width="1.5"/>
+  <rect x="40" y="1110" width="1120" height="34" rx="10" fill="url(#s3)"/><rect x="40" y="1130" width="1120" height="14" fill="url(#s3)"/>
+  <text x="56" y="1132" class="st">三、记忆注入判定（什么时候注入、注入多少）</text>
+
+  <!-- P8: y=1160, h=110 -->
+  <rect x="56" y="1160" width="520" height="110" rx="6" fill="#faf6fd" stroke="#dcc8e8" stroke-width="1"/>
+  <rect x="56" y="1160" width="520" height="24" rx="6" fill="#f0e6f6"/><rect x="56" y="1172" width="520" height="12" fill="#f0e6f6"/>
+  <circle cx="74" cy="1172" r="5" fill="#6b3fa0"/><text x="86" y="1177" class="pn pp">问题8 · 注入是全有或全无 🟡中优</text>
+  <text x="72" y="1200" class="pt">_contextualize_query 要么注入完整 4 轮记忆，要么完全不注入。</text>
+  <text x="72" y="1218" class="pt">没有中间状态——比如只注入"上一轮意图和术语"的轻量模式。</text>
+  <text x="72" y="1238" class="cs">⚙ session.py:219 _contextualize_query — 二元判断</text>
+  <text x="72" y="1258" class="sp">全量注入在短追问时浪费 token，真正需要时又可能不够</text>
+
+  <rect x="592" y="1160" width="552" height="110" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="1160" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="1172" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="1172" r="5" fill="#2f7d3a"/><text x="622" y="1177" class="pn" fill="#2f7d3a">分层注入：轻·中·全三档，按置信度选择</text>
+  <text x="608" y="1200" class="it">轻注入：仅上一轮术语 + intent。中注入：最近 2 轮摘要。</text>
+  <text x="608" y="1218" class="it">全注入：4 轮完整记忆。根据 TurnClassifier 置信度选择层级。</text>
+  <text x="608" y="1238" class="rk">⚠ 分层逻辑增加分支，需同步调整 prompt 模板，测试所有意图组合</text>
+  <text x="608" y="1258" class="sp">和 P5（结构化注入）共享 prompt 调整，建议一起实施</text>
+
+  <!-- P9: y=1282, h=110 -->
+  <rect x="56" y="1282" width="520" height="110" rx="6" fill="#faf6fd" stroke="#dcc8e8" stroke-width="1"/>
+  <rect x="56" y="1282" width="520" height="24" rx="6" fill="#f0e6f6"/><rect x="56" y="1294" width="520" height="12" fill="#f0e6f6"/>
+  <circle cx="74" cy="1294" r="5" fill="#6b3fa0"/><text x="86" y="1299" class="pn pp">问题9 · LLM 降级只看最近 2 轮</text>
+  <text x="72" y="1322" class="pt">LLMTurnRelationResolver._LLM_CONTEXT_TURNS = 2。如果</text>
+  <text x="72" y="1340" class="pt">追问跨了 3 轮以上（如绕回第一个问题），LLM 也看不出关联。</text>
+  <text x="72" y="1360" class="cs">⚙ turn_classifier.py:181 _LLM_CONTEXT_TURNS = 2</text>
+  <text x="72" y="1380" class="sp">弱信号兜底已经判错了，LLM 再信息不足就是双重失败</text>
+
+  <rect x="592" y="1282" width="552" height="110" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="1282" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="1294" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="1294" r="5" fill="#2f7d3a"/><text x="622" y="1299" class="pn" fill="#2f7d3a">LLM 上下文给 4 轮 + 追加「更早历史摘要」</text>
+  <text x="608" y="1322" class="it">给 LLM 看到完整脉络（与 memory_summary 一致）。去掉</text>
+  <text x="608" y="1340" class="it">_LLM_CONTEXT_TURNS 常量，直接用 memory_summary(max_turns=4)。</text>
+  <text x="608" y="1360" class="rk">⚠ prompt 变长增加 token 消耗和延迟；极端情况需截断保护</text>
+  <text x="608" y="1380" class="sp">改动很小，几乎只是改常量值 + prompt 模板，但效果提升明显</text>
+
+  <!-- P10: y=1404, h=92 -->
+  <rect x="56" y="1404" width="520" height="92" rx="6" fill="#faf6fd" stroke="#dcc8e8" stroke-width="1"/>
+  <rect x="56" y="1404" width="520" height="24" rx="6" fill="#f0e6f6"/><rect x="56" y="1416" width="520" height="12" fill="#f0e6f6"/>
+  <circle cx="74" cy="1416" r="5" fill="#6b3fa0"/><text x="86" y="1421" class="pn pp">问题10 · 规则可能「自信地错」</text>
+  <text x="72" y="1444" class="pt">指代词 regex 直接 0.95 置信度返回 FOLLOW_UP。但如果指代</text>
+  <text x="72" y="1462" class="pt">的是全新话题对象，判错就会错误地带入旧记忆干扰回答。</text>
+  <text x="72" y="1482" class="cs">⚙ turn_classifier.py:33 ANAPHORA_RE，不验证指代对象</text>
+
+  <rect x="592" y="1404" width="552" height="92" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="1404" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="1416" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="1416" r="5" fill="#2f7d3a"/><text x="622" y="1421" class="pn" fill="#2f7d3a">指代词命中后加术语共享验证</text>
+  <text x="608" y="1444" class="it">出现指代词时检查当前 query 术语是否与最近轮共享。不共享则</text>
+  <text x="608" y="1462" class="it">降置信度到 0.65 以下，触发 LLM 兜底。</text>
+  <text x="608" y="1482" class="rk">⚠ 指代消解本质是 NP-hard，规则永远不完美；加验证是降低而非消除误判</text>
+
+  <!-- S3 ends at 1524 -->
+
+  <!-- ===== S4: 用户体验 (y=1544, h=290 -> ends 1834) ===== -->
+  <rect x="40" y="1544" width="1120" height="290" rx="10" fill="#fff" stroke="#bcdcc0" stroke-width="1.5"/>
+  <rect x="40" y="1544" width="1120" height="34" rx="10" fill="url(#s4)"/><rect x="40" y="1564" width="1120" height="14" fill="url(#s4)"/>
+  <text x="56" y="1566" class="st">四、用户体验（可见性、可控性、容错性）</text>
+
+  <!-- P11: y=1594, h=110 -->
+  <rect x="56" y="1594" width="520" height="110" rx="6" fill="#faf6fd" stroke="#dcc8e8" stroke-width="1"/>
+  <rect x="56" y="1594" width="520" height="24" rx="6" fill="#f0e6f6"/><rect x="56" y="1606" width="520" height="12" fill="#f0e6f6"/>
+  <circle cx="74" cy="1606" r="5" fill="#6b3fa0"/><text x="86" y="1611" class="pn pp">问题11 · 无反馈闭环 🟢低优</text>
+  <text x="72" y="1634" class="pt">TurnClassifier 判断后无机制记录"判对了还是判错了"。</text>
+  <text x="72" y="1652" class="pt">追问被当新话题时，回答质量下降是唯一反馈——系统感知不到。</text>
+  <text x="72" y="1672" class="cs">⚙ turn_classifier.py — classify 结果不记录，无离线分析</text>
+  <text x="72" y="1692" class="sp">这是持续改进的基础设施，没有它规则阈值永远靠猜</text>
+
+  <rect x="592" y="1594" width="552" height="110" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="1594" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="1606" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="1606" r="5" fill="#2f7d3a"/><text x="622" y="1611" class="pn" fill="#2f7d3a">记录分类决策 + 用户行为信号，离线分析</text>
+  <text x="608" y="1634" class="it">记录 classification 和后续 query；若用户紧接着又问高度相似</text>
+  <text x="608" y="1652" class="it">的 query → 标记上一轮可能判错。离线分析改进规则阈值。</text>
+  <text x="608" y="1672" class="rk">⚠ 需要积累足够数据才有统计意义，短期价值有限</text>
+  <text x="608" y="1692" class="sp">可复用现有的 web_questions.jsonl 日志，加一个字段即可</text>
+
+  <!-- P12: y=1716, h=92 -->
+  <rect x="56" y="1716" width="520" height="92" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="56" y="1716" width="520" height="24" rx="6" fill="#e2f3e8"/><rect x="56" y="1728" width="520" height="12" fill="#e2f3e8"/>
+  <circle cx="74" cy="1728" r="5" fill="#2f7d3a"/><text x="86" y="1733" class="pn pg">问题12 · 用户完全看不见记忆状态 🟡中优</text>
+  <text x="72" y="1756" class="pt">前端无任何 UI 展示"系统现在记得什么"。</text>
+  <text x="72" y="1774" class="pt">追问是否能被理解、上次回答是否被参考——全靠用户猜。</text>
+  <text x="72" y="1794" class="cs">⚙ SSE meta 事件有 memory_context 但前端未渲染</text>
+
+  <rect x="592" y="1716" width="552" height="92" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="1716" width="552" height="24" rx="6" fill="#e2f3e8"/><rect x="592" y="1728" width="552" height="12" fill="#e2f3e8"/>
+  <circle cx="610" cy="1728" r="5" fill="#2f7d3a"/><text x="622" y="1733" class="pn" fill="#2f7d3a">加可折叠「记忆面板」，利用已有的 memory_context</text>
+  <text x="608" y="1756" class="it">侧栏展示 current memory_summary，标记每轮 terms/intent。</text>
+  <text x="608" y="1774" class="it">SSE meta 事件已有 memory_context，前端直接渲染即可。</text>
+  <text x="608" y="1794" class="rk">⚠ 暴露内部机制可能让用户困惑意图标签含义，需要友好的文案包装</text>
+
+  <!-- S4 ends at 1834 -->
+
+  <!-- ===== S5: 用户体验续 (y=1854, h=170 -> ends 2024) ===== -->
+  <rect x="40" y="1854" width="1120" height="170" rx="10" fill="#fff" stroke="#bcdcc0" stroke-width="1.5"/>
+  <rect x="40" y="1854" width="1120" height="28" rx="10" fill="url(#s4)"/><rect x="40" y="1872" width="1120" height="10" fill="url(#s4)"/>
+  <text x="56" y="1873" class="st" font-size="14">四、用户体验（续）</text>
+
+  <!-- P13: y=1896, h=56 -->
+  <rect x="56" y="1896" width="520" height="56" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="56" y="1896" width="520" height="22" rx="6" fill="#e2f3e8"/><rect x="56" y="1908" width="520" height="10" fill="#e2f3e8"/>
+  <circle cx="74" cy="1907" r="5" fill="#2f7d3a"/><text x="86" y="1912" class="pn pg">问题13 · reset 全量不可逆</text>
+  <text x="72" y="1936" class="pt">点 reset → turns=[] 全部清空。无逐轮删除、无撤销机制。</text>
+  <text x="72" y="1948" class="sp">基于 P12 的记忆面板，增加逐轮删除按钮 + 5 秒 undo</text>
+
+  <rect x="592" y="1896" width="552" height="56" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="1896" width="552" height="22" rx="6" fill="#e2f3e8"/><rect x="592" y="1908" width="552" height="10" fill="#e2f3e8"/>
+  <circle cx="610" cy="1907" r="5" fill="#2f7d3a"/><text x="622" y="1912" class="pn" fill="#2f7d3a">reset 时备份 turns 到临时变量，5 秒内可 undo</text>
+  <text x="608" y="1936" class="it">前端 reset 按钮增加 confirm 对话框，避免误操作。</text>
+  <text x="608" y="1948" class="sp">改动很小：后端 session.reset 加 backup 参数；前端加 confirm</text>
+
+  <!-- P14: y=1962, h=50 -->
+  <rect x="56" y="1962" width="520" height="50" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="56" y="1962" width="520" height="22" rx="6" fill="#e2f3e8"/><rect x="56" y="1974" width="520" height="10" fill="#e2f3e8"/>
+  <circle cx="74" cy="1973" r="5" fill="#2f7d3a"/><text x="86" y="1978" class="pn pg">问题14 · 误刷新 / 崩溃丢记忆的代价太高 🟢低优</text>
+  <text x="72" y="2002" class="pt">当前刷新即清空符合需求，但误触 F5 或浏览器崩溃恢复无后路。</text>
+
+  <rect x="592" y="1962" width="552" height="50" rx="6" fill="#f2f9f4" stroke="#bcdcc0" stroke-width="1"/>
+  <rect x="592" y="1962" width="552" height="22" rx="6" fill="#e2f3e8"/><rect x="592" y="1974" width="552" height="10" fill="#e2f3e8"/>
+  <circle cx="610" cy="1973" r="5" fill="#2f7d3a"/><text x="622" y="1978" class="pn" fill="#2f7d3a">后端「回收站」5 分钟 TTL + 前端恢复提示</text>
+  <text x="608" y="2002" class="it">drop 前把 turns 存临时文件设 TTL；前端检测刷新事件提示恢复。</text>
+
+  <!-- S5 ends at 2024 -->
+
+  <!-- ===== S6: 优先级建议 (y=2044, h=280 -> ends 2324) ===== -->
+  <rect x="40" y="2044" width="1120" height="280" rx="10" fill="#fff" stroke="#c5d3e0" stroke-width="1.5"/>
+  <rect x="40" y="2044" width="1120" height="34" rx="10" fill="#f0f2f5"/><rect x="40" y="2064" width="1120" height="14" fill="#f0f2f5"/>
+  <text x="56" y="2066" class="st" fill="#1a2733">五、优先级建议与推荐实施路径</text>
+
+  <!-- 高 -->
+  <rect x="56" y="2092" width="350" height="210" rx="8" fill="#fff5f5" stroke="#e0b0b0" stroke-width="1.5"/>
+  <rect x="56" y="2092" width="350" height="28" rx="8" fill="#fde8e8"/><rect x="56" y="2108" width="350" height="12" fill="#fde8e8"/>
+  <text x="72" y="2111" class="ph">🔴 高优先（近期应做）</text>
+  <text x="72" y="2136" class="pt" font-weight="700">P2 · 孤儿 session 淘汰 🔴</text>
+  <text x="72" y="2154" class="pt">→ last_access + 惰性淘汰，线上稳定核心</text>
+  <text x="72" y="2178" class="pt" font-weight="700">P4 · 答案摘要质量 🔴</text>
+  <text x="72" y="2196" class="pt">→ LLM 轻量摘要替代字符截断</text>
+  <text x="72" y="2220" class="pt" font-weight="700">P5+P8 · 记忆粒度 + 分层注入</text>
+  <text x="72" y="2238" class="pt">→ 结构化注入，共享 prompt 调整</text>
+  <text x="72" y="2262" class="nt">改动小、收益直接；无外部依赖</text>
+  <text x="72" y="2282" class="nt" fill="#2f7d3a">工作量：5-8h · 无新增外部依赖</text>
+
+  <!-- 中 -->
+  <rect x="424" y="2092" width="350" height="210" rx="8" fill="#fffef5" stroke="#e0d4a0" stroke-width="1.5"/>
+  <rect x="424" y="2092" width="350" height="28" rx="8" fill="#fff9e0"/><rect x="424" y="2108" width="350" height="12" fill="#fff9e0"/>
+  <text x="440" y="2111" class="pm">🟡 中优先（按需推进）</text>
+  <text x="440" y="2136" class="pt" font-weight="700">P3 · 多 worker 共享</text>
+  <text x="440" y="2154" class="pt">→ 部署前必须解决，引入 Redis 最佳</text>
+  <text x="440" y="2178" class="pt" font-weight="700">P12 · 记忆可视化</text>
+  <text x="440" y="2196" class="pt">→ 记忆面板，小改动大幅提升信任</text>
+  <text x="440" y="2220" class="pt" font-weight="700">P9 · LLM 上下文扩到 4 轮</text>
+  <text x="440" y="2238" class="pt">→ 常量调整，极低成本</text>
+  <text x="440" y="2262" class="nt">Redis 引入运维依赖；前端改动独立</text>
+  <text x="440" y="2282" class="nt" fill="#2f7d3a">工作量：10-18h · Redis 引入运维依赖</text>
+
+  <!-- 低 -->
+  <rect x="792" y="2092" width="352" height="210" rx="8" fill="#f5f7f9" stroke="#c5d3e0" stroke-width="1.5"/>
+  <rect x="792" y="2092" width="352" height="28" rx="8" fill="#e8ecf0"/><rect x="792" y="2108" width="352" height="12" fill="#e8ecf0"/>
+  <text x="808" y="2111" class="pl">🟢 低优先（长期投资）</text>
+  <text x="808" y="2136" class="pt" font-weight="700">P1 · 持久化存储</text>
+  <text x="808" y="2154" class="pt">→ 序列化 / Redis，基础设施改动</text>
+  <text x="808" y="2178" class="pt" font-weight="700">P7 · 跨会话用户记忆</text>
+  <text x="808" y="2196" class="pt">→ 持久记忆 / 已掌握概念清单</text>
+  <text x="808" y="2220" class="pt" font-weight="700">P14 · 刷新恢复机制</text>
+  <text x="808" y="2238" class="pt">→ 回收站 TTL + 前端提示</text>
+  <text x="808" y="2262" class="nt">P10 P11 P13 · 规则增强 / 反馈 / undo</text>
+  <text x="808" y="2282" class="nt" fill="#2f7d3a">工作量：25-50h · 需架构 + 长期积累</text>
+
+  <!-- footer -->
+  <text x="40" y="2362" class="nt">诊断范围：web/backend/app.py · gesture_agent/learning/session.py · turn_classifier.py · web/frontend/app.js · gesture_agent/learning/prompt_builder.py</text>
+  <text x="40" y="2380" class="nt" fill="#a0b0c0">参照记忆索引：[[session-memory-mechanism]] [[turn-relation-two-dimension-model]] | 生成日期 2026-06-23</text>
+</svg>
