@@ -95,7 +95,7 @@ def test_term_inventory_config_can_load_expert_term_types(tmp_path) -> None:
 {
   "mode": "merge",
   "by_type": {
-    "基础交互机制": ["专家机制"],
+    "基础交互逻辑": ["专家机制"],
     "响应类型": ["微变"]
   }
 }
@@ -105,7 +105,7 @@ def test_term_inventory_config_can_load_expert_term_types(tmp_path) -> None:
 
     kb = KnowledgeBase.load("data", term_inventory_path=config)
 
-    assert kb.term_inventory.by_type["基础交互机制"] == ["专家机制"]
+    assert kb.term_inventory.by_type["基础交互逻辑"] == ["专家机制"]
     assert kb.term_inventory.by_type["响应类型"] == ["微变"]
     assert "专家机制" in kb.terms
 
@@ -145,7 +145,7 @@ def test_query_rewrite_expands_structured_terms() -> None:
     rewritten = kb.rewrite_query("点一下是什么？")
 
     assert "单击" in rewritten
-    assert "基础交互机制" in rewritten
+    assert "基础交互逻辑" in rewritten
 
 
 def test_structured_knowledge_can_be_loaded_from_json(tmp_path) -> None:
@@ -157,7 +157,7 @@ def test_structured_knowledge_can_be_loaded_from_json(tmp_path) -> None:
     {
       "id": "custom:air-tap",
       "term": "空中点按",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "在空中完成一次短促点按。",
       "aliases": ["air tap"],

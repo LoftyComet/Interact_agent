@@ -289,7 +289,7 @@
     {
       "id": "2.md:17",
       "term": "开关",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "(A、控件处于状态0,对应某个物件状态;B、控件处于状态1,对应另一个物件状态)",
       "aliases": [],
@@ -316,7 +316,7 @@
     {
       "id": "2.md:43",
       "term": "单击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "(与“单击”对应的功能,只在Step3时被触发;Step2的时间理论上可无限长)",
       "aliases": [
@@ -354,7 +354,7 @@
     {
       "id": "2.md:67",
       "term": "按下",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "(与“按下”对应的功能,在Step2时就会被触发)",
       "aliases": [
@@ -383,7 +383,7 @@
     {
       "id": "2.md:91",
       "term": "持续触发",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "(与“持续触发”对应的功能,在进入Step2的瞬间即触发,维持Step2的时间越长,触发次数越多)",
       "aliases": [],
@@ -410,7 +410,7 @@
     {
       "id": "2.md:115",
       "term": "长按",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "(与“长按”对应的功能,在Step2或Step3的时间阈值被满足后被触发)",
       "aliases": [
@@ -443,7 +443,7 @@
     {
       "id": "2.md:143",
       "term": "双击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "(“双击”需要在一定时间阈值内完成总共四步才会触发相应功能)",
       "aliases": [
@@ -475,7 +475,7 @@
     {
       "id": "2.md:171",
       "term": "多点开关",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -502,7 +502,7 @@
     {
       "id": "2.md:193",
       "term": "开关",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "1-a 开关",
       "aliases": [],
@@ -521,7 +521,7 @@
     {
       "id": "2.md:196",
       "term": "多点有序点击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -544,7 +544,7 @@
     {
       "id": "2.md:218",
       "term": "单击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "1-b 单击",
       "aliases": [
@@ -566,7 +566,7 @@
     {
       "id": "2.md:222",
       "term": "多点同时点击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -600,7 +600,7 @@
     {
       "id": "2.md:258",
       "term": "拖拽",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [
@@ -629,7 +629,7 @@
     {
       "id": "2.md:284",
       "term": "甩动",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -657,7 +657,7 @@
     {
       "id": "2.md:311",
       "term": "翻动",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -683,7 +683,7 @@
     {
       "id": "2.md:338",
       "term": "滑动切换",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -713,7 +713,7 @@
     {
       "id": "2.md:367",
       "term": "越界切换",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -739,7 +739,7 @@
     {
       "id": "2.md:394",
       "term": "晃动/震动",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -768,7 +768,7 @@
     {
       "id": "2.md:426",
       "term": "捏合缩放",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -795,7 +795,7 @@
     {
       "id": "2.md:453",
       "term": "环绕旋转",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -826,7 +826,7 @@
     {
       "id": "2.md:480",
       "term": "整体移动",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -862,7 +862,7 @@
     {
       "id": "2.md:521",
       "term": "限位点击",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -888,7 +888,7 @@
     {
       "id": "2.md:544",
       "term": "长按拖拽",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -916,7 +916,7 @@
     {
       "id": "2.md:569",
       "term": "双按拖拽",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -946,7 +946,7 @@
     {
       "id": "2.md:595",
       "term": "轻扫切换",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -967,7 +967,7 @@
     {
       "id": "2.md:619",
       "term": "速率式滑动",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -992,7 +992,7 @@
     {
       "id": "2.md:644",
       "term": "域控式移动",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1014,7 +1014,7 @@
     {
       "id": "2.md:672",
       "term": "异位连触",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1041,7 +1041,7 @@
     {
       "id": "2.md:698",
       "term": "向量菜单",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1066,7 +1066,7 @@
     {
       "id": "2.md:723",
       "term": "动势点选",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1093,7 +1093,7 @@
     {
       "id": "2.md:760",
       "term": "快击",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1122,7 +1122,7 @@
     {
       "id": "2.md:785",
       "term": "点击缓冲",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1150,7 +1150,7 @@
     {
       "id": "2.md:810",
       "term": "缓冲连发",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1177,7 +1177,7 @@
     {
       "id": "2.md:836",
       "term": "边缘滑入",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1205,7 +1205,7 @@
     {
       "id": "2.md:863",
       "term": "滑入停留",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1234,7 +1234,7 @@
     {
       "id": "2.md:884",
       "term": "方向解耦",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1257,7 +1257,7 @@
     {
       "id": "2.md:910",
       "term": "轻拨",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -1281,7 +1281,7 @@
     {
       "id": "2.md:934",
       "term": "点拖互斥",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "(图需要修改么?根据表达式)",
       "aliases": [],
@@ -1309,7 +1309,7 @@
     {
       "id": "2.md:959",
       "term": "捏合解耦",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2272,7 +2272,7 @@
     {
       "id": "dic.md:7",
       "term": "开关",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -2296,7 +2296,7 @@
     {
       "id": "dic.md:23",
       "term": "单击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [
@@ -2328,7 +2328,7 @@
     {
       "id": "dic.md:39",
       "term": "按下",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [
@@ -2357,7 +2357,7 @@
     {
       "id": "dic.md:56",
       "term": "长按",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [
@@ -2394,7 +2394,7 @@
     {
       "id": "dic.md:116",
       "term": "滑动切换",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "核心定义",
       "aliases": [],
@@ -2418,7 +2418,7 @@
     {
       "id": "dic.md:138",
       "term": "开关",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "a. 交互方式的背景",
       "aliases": [],
@@ -2440,7 +2440,7 @@
     {
       "id": "dic.md:155",
       "term": "单击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [
@@ -2469,7 +2469,7 @@
     {
       "id": "dic.md:172",
       "term": "按下",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [
@@ -2494,7 +2494,7 @@
     {
       "id": "dic.md:189",
       "term": "长按",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [
@@ -2526,7 +2526,7 @@
     {
       "id": "dic.md:206",
       "term": "双击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [
@@ -2555,7 +2555,7 @@
     {
       "id": "dic.md:223",
       "term": "多点开关",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2578,7 +2578,7 @@
     {
       "id": "dic.md:240",
       "term": "多点有序点击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2602,7 +2602,7 @@
     {
       "id": "dic.md:257",
       "term": "多点同时点击",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2626,7 +2626,7 @@
     {
       "id": "dic.md:276",
       "term": "拖拽",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [
@@ -2652,7 +2652,7 @@
     {
       "id": "dic.md:293",
       "term": "甩动",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2677,7 +2677,7 @@
     {
       "id": "dic.md:314",
       "term": "滑动切换",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2700,7 +2700,7 @@
     {
       "id": "dic.md:333",
       "term": "越界切换",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2720,7 +2720,7 @@
     {
       "id": "dic.md:350",
       "term": "晃动-震动",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2745,7 +2745,7 @@
     {
       "id": "dic.md:367",
       "term": "多点捏合",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2771,7 +2771,7 @@
     {
       "id": "dic.md:384",
       "term": "圆规旋转",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2795,7 +2795,7 @@
     {
       "id": "dic.md:401",
       "term": "多点移动",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2818,7 +2818,7 @@
     {
       "id": "dic.md:419",
       "term": "长按拖拽",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2842,7 +2842,7 @@
     {
       "id": "dic.md:436",
       "term": "双按拖拽",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2868,7 +2868,7 @@
     {
       "id": "dic.md:453",
       "term": "轻扫切换",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2891,7 +2891,7 @@
     {
       "id": "dic.md:470",
       "term": "速率式滑动",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2913,7 +2913,7 @@
     {
       "id": "dic.md:491",
       "term": "域控式移动",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义lian",
       "aliases": [],
@@ -2934,7 +2934,7 @@
     {
       "id": "dic.md:508",
       "term": "点序触发",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2955,7 +2955,7 @@
     {
       "id": "dic.md:526",
       "term": "向量菜单",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -2980,7 +2980,7 @@
     {
       "id": "dic.md:543",
       "term": "速感点选",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3003,7 +3003,7 @@
     {
       "id": "dic.md:560",
       "term": "动势触发",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3027,7 +3027,7 @@
     {
       "id": "dic.md:578",
       "term": "快击-快抬",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3053,7 +3053,7 @@
     {
       "id": "dic.md:595",
       "term": "点击缓冲",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3076,7 +3076,7 @@
     {
       "id": "dic.md:612",
       "term": "按键连发",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3102,7 +3102,7 @@
     {
       "id": "dic.md:629",
       "term": "分段长按",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3128,7 +3128,7 @@
     {
       "id": "dic.md:660",
       "term": "边缘滑入",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3153,7 +3153,7 @@
     {
       "id": "dic.md:679",
       "term": "方向解耦",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3176,7 +3176,7 @@
     {
       "id": "dic.md:696",
       "term": "轻拨",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3201,7 +3201,7 @@
     {
       "id": "dic.md:713",
       "term": "防抖点击",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3227,7 +3227,7 @@
     {
       "id": "dic.md:730",
       "term": "捏合解耦",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3252,7 +3252,7 @@
     {
       "id": "dic.md:747",
       "term": "翻页向量菜单",
-      "term_type": "高级交互机制",
+      "term_type": "交互逻辑的组合与扩展",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3280,7 +3280,7 @@
     {
       "id": "dic.md:766",
       "term": "单元含义",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3302,7 +3302,7 @@
     {
       "id": "dic.md:783",
       "term": "序列含义",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3325,7 +3325,7 @@
     {
       "id": "dic.md:800",
       "term": "情境感知",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3346,7 +3346,7 @@
     {
       "id": "dic.md:817",
       "term": "歧义校准",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "交互定义",
       "aliases": [],
@@ -3391,7 +3391,7 @@
     {
       "id": "交互机制对比.md:1",
       "term": "交互机制的对比",
-      "term_type": "基础交互机制",
+      "term_type": "基础交互逻辑",
       "layer": "interaction_mechanism",
       "definition": "在逐一认识各类交互方式之后,我们将相似的交互方式进行对比,以便进一步理解这些交互机制。本(节)不再重复基础细节,而是聚焦相似交互之间易混淆的特点与场景,把极易混淆的交互放在一起对比、划清界限。读者单独阅读每个交互机制可以理解“是什么”,却未必能判断“该用谁、不该用谁”,而本章的核心价值,正是划清表象相似却底层不同的边界,给出清晰可辨别的判断依据,帮你避开相似交互里最容易踩的坑,真正做到选对交互、用对场景。",
       "aliases": [],

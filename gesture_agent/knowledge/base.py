@@ -521,10 +521,10 @@ def _term_type_for_layer(layer: Layer, title: str) -> str:
         return "控件形态"
     if layer == "interaction_mechanism":
         if re.match(r"^[34]-[a-z]", title, flags=re.IGNORECASE):
-            return "高级交互机制"
-        return "基础交互机制"
+            return "交互逻辑的组合与扩展"
+        return "基础交互逻辑"
     if layer == "multimodal_interaction":
-        return "多模态交互"
+        return "含义与多模态"
     if layer == "voice_interaction":
         return "语音交互"
     if layer == "background_knowledge":

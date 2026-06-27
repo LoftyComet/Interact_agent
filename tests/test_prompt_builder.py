@@ -66,7 +66,7 @@ def test_term_inventory_query_terms_appear_first() -> None:
     # Find the first layer line and check matched terms come early
     lines = section.splitlines()
     for line in lines:
-        if "interaction_mechanism" in line or "基础交互机制" in line:
+        if "interaction_mechanism" in line or "基础交互逻辑" in line:
             terms_part = line.split("：", 1)[-1]
             positions = {t: terms_part.find(t) for t in ["长按", "单击"] if t in terms_part}
             # Both matched terms should appear within the first half of the term list

@@ -44,7 +44,7 @@ INTENT_LABELS: dict[Intent, str] = {
     "basic_interaction_mechanism": "交互机制",
     "control_form": "控件形态",
     "basic_property": "基础属性",
-    "multimodal_interaction": "多模态交互",
+    "multimodal_interaction": "含义与多模态",
     "voice_interaction": "语音交互",
     "interaction_compare": "交互机制对比",
     "background_knowledge": "背景知识",
@@ -377,8 +377,8 @@ class QuestionParser:
         if not terms:
             return False
         mechanism_terms = set(self.kb.term_inventory.by_layer.get("interaction_mechanism", []))
-        mechanism_terms.update(self.kb.term_inventory.by_type.get("基础交互机制", []))
-        mechanism_terms.update(self.kb.term_inventory.by_type.get("高级交互机制", []))
+        mechanism_terms.update(self.kb.term_inventory.by_type.get("基础交互逻辑", []))
+        mechanism_terms.update(self.kb.term_inventory.by_type.get("交互逻辑的组合与扩展", []))
         if not any(term in mechanism_terms for term in terms):
             return False
         source_query = query_text or query

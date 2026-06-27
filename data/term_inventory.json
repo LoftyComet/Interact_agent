@@ -2,7 +2,23 @@
   "schema": "tree",
   "mode": "replace",
   "source": "手势词典大纲定稿.xlsx",
-  "structural_terms": ["控件形态", "基本属性", "基础属性", "交互机制", "响应逻辑", "交互特性", "适用边界", "不适用场景", "系统反馈", "状态/变化序列", "方案复述", "结构拆解", "问题诊断", "修改建议", "规范术语版本"],
+  "structural_terms": [
+    "控件形态",
+    "基本属性",
+    "基础属性",
+    "交互机制",
+    "响应逻辑",
+    "交互特性",
+    "适用边界",
+    "不适用场景",
+    "系统反馈",
+    "状态/变化序列",
+    "方案复述",
+    "结构拆解",
+    "问题诊断",
+    "修改建议",
+    "规范术语版本"
+  ],
   "root": {
     "id": "0",
     "label": "基础概念",
@@ -16,74 +32,303 @@
           {
             "label": "点击类",
             "label_en": "Tap",
-            "type": "基础交互机制",
+            "type": "基础交互逻辑",
             "children": [
-              {"label": "开关", "label_en": "Switch", "desc": "01状态"},
-              {"label": "单击", "label_en": "Single Tap", "desc": "010变化"},
-              {"label": "按下", "label_en": "Press", "desc": "01变化"},
-              {"label": "持续触发", "label_en": "Continuous Trigger", "desc": "01状态×时间"},
-              {"label": "长按", "label_en": "Long Press", "desc": "01状态×时间"},
-              {"label": "双击", "label_en": "Double Tap", "desc": "0101/时间"},
-              {"label": "多点开关", "label_en": "Multi-Switch"},
-              {"label": "多点有序点击", "label_en": "Ordered Multi-Click", "desc": "点击包括：单击、按下、长按、双击"},
-              {"label": "多点同时点击", "label_en": "Synced Multi-Click", "desc": "点击包括：单击、按下、长按、双击"}
-            ]
+              {
+                "label": "单点点击",
+                "children": [
+                  {
+                    "label": "开关",
+                    "label_en": "Switch",
+                    "desc": "01状态",
+                    "code": "1-a"
+                  },
+                  {
+                    "label": "单击",
+                    "label_en": "Single Tap",
+                    "desc": "010变化",
+                    "code": "1-b"
+                  },
+                  {
+                    "label": "按下",
+                    "label_en": "Press",
+                    "desc": "01变化",
+                    "code": "1-c"
+                  },
+                  {
+                    "label": "持续触发",
+                    "label_en": "Continuous Trigger",
+                    "desc": "01状态×时间",
+                    "code": "1-d"
+                  },
+                  {
+                    "label": "长按",
+                    "label_en": "Long Press",
+                    "desc": "01状态×时间",
+                    "code": "1-e"
+                  },
+                  {
+                    "label": "双击",
+                    "label_en": "Double Tap",
+                    "desc": "0101/时间",
+                    "code": "1-f"
+                  }
+                ]
+              },
+              {
+                "label": "多点点击",
+                "children": [
+                  {
+                    "label": "多点开关",
+                    "label_en": "Multi-Switch",
+                    "code": "1-g"
+                  },
+                  {
+                    "label": "多点有序点击",
+                    "label_en": "Ordered Multi-Click",
+                    "desc": "点击包括：单击、按下、长按、双击",
+                    "code": "1-h"
+                  },
+                  {
+                    "label": "多点同时点击",
+                    "label_en": "Synced Multi-Click",
+                    "desc": "点击包括：单击、按下、长按、双击",
+                    "code": "1-i"
+                  }
+                ]
+              }
+            ],
+            "code": "1"
           },
           {
             "label": "位移类",
             "label_en": "Displacement Technique",
-            "type": "基础交互机制",
+            "type": "基础交互逻辑",
             "children": [
-              {"label": "拖拽", "label_en": "Drag", "desc": "有位置、无速度；赋值(连续) 🆚 微变"},
-              {"label": "甩动", "label_en": "Flick", "desc": "有位置、有速度；赋值(连续) 🆚 微变"},
-              {"label": "翻动", "label_en": "Swipe", "desc": "位置/速度/归位；赋值(连续) 🆚 微变"},
-              {"label": "滑动切换", "label_en": "Slide-Switch", "desc": "赋值(离散/实时吸附) 🆚 步骤；一次性 🆚 持续性切换"},
-              {"label": "越界切换", "label_en": "Crossing-Switch", "desc": "单线单向切换；双线双向切换"},
-              {"label": "晃动·震动", "label_en": "Shake/Vibrate", "desc": "晃动触发；震动触发", "aliases": ["晃动/震动", "晃动", "震动"]},
-              {"label": "捏合缩放", "label_en": "Pinch Zoom"},
-              {"label": "环绕旋转", "label_en": "Pinch Rotate"},
-              {"label": "整体移动", "label_en": "Bodily Move"}
-            ]
+              {
+                "label": "单点位移",
+                "children": [
+                  {
+                    "label": "拖拽",
+                    "label_en": "Drag",
+                    "desc": "有位置、无速度；赋值(连续) 🆚 微变",
+                    "code": "2-a"
+                  },
+                  {
+                    "label": "甩动",
+                    "label_en": "Flick",
+                    "desc": "有位置、有速度；赋值(连续) 🆚 微变",
+                    "code": "2-b"
+                  },
+                  {
+                    "label": "翻动",
+                    "label_en": "Swipe",
+                    "desc": "位置/速度/归位；赋值(连续) 🆚 微变",
+                    "code": "2-c"
+                  },
+                  {
+                    "label": "滑动切换",
+                    "label_en": "Slide-Switch",
+                    "desc": "赋值(离散/实时吸附) 🆚 步骤；一次性 🆚 持续性切换",
+                    "code": "2-d"
+                  },
+                  {
+                    "label": "越界切换",
+                    "label_en": "Crossing-Switch",
+                    "desc": "单线单向切换；双线双向切换",
+                    "code": "2-e"
+                  },
+                  {
+                    "label": "晃动·震动",
+                    "label_en": "Shake/Vibrate",
+                    "desc": "晃动触发；震动触发",
+                    "aliases": [
+                      "晃动/震动",
+                      "晃动",
+                      "震动"
+                    ],
+                    "code": "2-f"
+                  }
+                ]
+              },
+              {
+                "label": "多点位移",
+                "children": [
+                  {
+                    "label": "捏合缩放",
+                    "label_en": "Pinch Zoom",
+                    "code": "2-g"
+                  },
+                  {
+                    "label": "环绕旋转",
+                    "label_en": "Pinch Rotate",
+                    "code": "2-h"
+                  },
+                  {
+                    "label": "整体移动",
+                    "label_en": "Bodily Move",
+                    "code": "2-i"
+                  }
+                ]
+              }
+            ],
+            "code": "2"
           },
           {
             "label": "多维协同",
             "label_en": "Multi-Dimensional Coordination",
-            "type": "高级交互机制",
+            "type": "交互逻辑的组合与扩展",
             "children": [
-              {"label": "限位点击", "label_en": "Slop Click"},
-              {"label": "长按拖拽", "label_en": "Long-Press Drag"},
-              {"label": "双按拖拽", "label_en": "Double-Press Drag"},
-              {"label": "轻扫切换", "label_en": "Stroke-Switch"},
-              {"label": "速率式滑动", "label_en": "Speed-Slide"},
-              {"label": "域控式移动", "label_en": "Domain-Controlled Move", "desc": "例：进度条比例、塞尔达摇杆"},
-              {"label": "异位连触", "label_en": "Positional Multi-Tap", "desc": "例：Ta-Tap(时间限制)、相对位置密码"},
-              {"label": "向量菜单", "label_en": "Vector Menu", "desc": "列表菜单、扇形菜单(Pinterest)、Zigzag菜单(Maya)"},
-              {"label": "动势点选", "label_en": "Magic-Tap", "desc": "1.0(速度条件、加速度触发)；2.0(加速度条件、速度触发)"}
-            ]
+              {
+                "label": "限位点击",
+                "label_en": "Slop Click",
+                "code": "3-a"
+              },
+              {
+                "label": "长按拖拽",
+                "label_en": "Long-Press Drag",
+                "code": "3-b"
+              },
+              {
+                "label": "双按拖拽",
+                "label_en": "Double-Press Drag",
+                "code": "3-c"
+              },
+              {
+                "label": "轻扫切换",
+                "label_en": "Stroke-Switch",
+                "code": "3-d"
+              },
+              {
+                "label": "速率式滑动",
+                "label_en": "Speed-Slide",
+                "code": "3-e"
+              },
+              {
+                "label": "域控式移动",
+                "label_en": "Domain-Controlled Move",
+                "desc": "例：进度条比例、塞尔达摇杆",
+                "code": "3-f"
+              },
+              {
+                "label": "异位连触",
+                "label_en": "Positional Multi-Tap",
+                "desc": "例：Ta-Tap(时间限制)、相对位置密码",
+                "code": "3-g"
+              },
+              {
+                "label": "向量菜单",
+                "label_en": "Vector Menu",
+                "desc": "列表菜单、扇形菜单(Pinterest)、Zigzag菜单(Maya)",
+                "code": "3-h"
+              },
+              {
+                "label": "动势点选",
+                "label_en": "Magic-Tap",
+                "desc": "1.0(速度条件、加速度触发)；2.0(加速度条件、速度触发)",
+                "code": "3-i"
+              }
+            ],
+            "code": "3"
           },
           {
             "label": "冲突调和",
             "label_en": "Conflict Reconciliation",
-            "type": "高级交互机制",
+            "type": "交互逻辑的组合与扩展",
             "children": [
-              {"label": "快击·快抬", "label_en": "Quick Tap/Lift", "desc": "单击 🆚 长按：010变化/时间", "aliases": ["快击-快抬", "快击"]},
-              {"label": "点击缓冲", "label_en": "Click Buffer", "desc": "单击 🆚 双击：010变化+延时"},
-              {"label": "缓冲连发", "label_en": "Buffered Repeat", "desc": "一次性 🆚 持续性 点击", "aliases": ["按键连发"]},
-              {"label": "边缘滑入", "label_en": "Edge Swipe-In", "desc": "同向拖拽：起始选择机制"},
-              {"label": "滑入停留", "label_en": "Swipe-In Hold", "desc": "多个边缘滑入功能"},
-              {"label": "方向解耦", "label_en": "Directional Decoupling", "desc": "交叉拖拽：起始/过程ADF"},
-              {"label": "轻拨", "label_en": "Light Flick", "desc": "一次性 🆚 持续性 拖动"},
-              {"label": "点拖互斥", "label_en": "Tap-Drag Exclusion", "desc": "单击 🆚 拖拽"},
-              {"label": "捏合解耦", "label_en": "Pinch Decoupling", "desc": "多点捏合 🆚 圆规旋转：T map", "aliases": ["圆规旋转"]}
-            ]
+              {
+                "label": "点击类冲突调和",
+                "children": [
+                  {
+                    "label": "快击·快抬",
+                    "label_en": "Quick Tap/Lift",
+                    "desc": "单击 🆚 长按：010变化/时间",
+                    "aliases": [
+                      "快击-快抬",
+                      "快击"
+                    ],
+                    "code": "4-a"
+                  },
+                  {
+                    "label": "点击缓冲",
+                    "label_en": "Click Buffer",
+                    "desc": "单击 🆚 双击：010变化+延时",
+                    "code": "4-b"
+                  },
+                  {
+                    "label": "缓冲连发",
+                    "label_en": "Buffered Repeat",
+                    "desc": "一次性 🆚 持续性 点击",
+                    "aliases": [
+                      "按键连发"
+                    ],
+                    "code": "4-c"
+                  }
+                ]
+              },
+              {
+                "label": "位移类冲突调和",
+                "children": [
+                  {
+                    "label": "边缘滑入",
+                    "label_en": "Edge Swipe-In",
+                    "desc": "同向拖拽：起始选择机制",
+                    "code": "4-d"
+                  },
+                  {
+                    "label": "滑入停留",
+                    "label_en": "Swipe-In Hold",
+                    "desc": "多个边缘滑入功能",
+                    "code": "4-e"
+                  },
+                  {
+                    "label": "方向解耦",
+                    "label_en": "Directional Decoupling",
+                    "desc": "交叉拖拽：起始/过程ADF",
+                    "code": "4-f"
+                  },
+                  {
+                    "label": "轻拨",
+                    "label_en": "Light Flick",
+                    "desc": "一次性 🆚 持续性 拖动",
+                    "code": "4-g"
+                  }
+                ]
+              },
+              {
+                "label": "其他冲突调和",
+                "children": [
+                  {
+                    "label": "点拖互斥",
+                    "label_en": "Tap-Drag Exclusion",
+                    "desc": "单击 🆚 拖拽",
+                    "code": "4-h"
+                  },
+                  {
+                    "label": "捏合解耦",
+                    "label_en": "Pinch Decoupling",
+                    "desc": "多点捏合 🆚 圆规旋转：T map",
+                    "aliases": [
+                      "圆规旋转"
+                    ],
+                    "code": "4-i"
+                  }
+                ]
+              }
+            ],
+            "code": "4"
           },
           {
             "label": "含义识别",
             "label_en": "Meaning Recognition",
-            "type": "高级交互机制",
+            "type": "交互逻辑的组合与扩展",
             "abstract": true,
             "desc": "更抽象的交互机制(36+1)：将承载含义的复杂属性/控件形态识别为单元含义或序列含义",
-            "aliases": ["单元含义", "序列含义", "情境感知"]
+            "aliases": [
+              "单元含义",
+              "序列含义",
+              "情境感知"
+            ]
           }
         ]
       },
@@ -94,18 +339,108 @@
         "layer": "basic_property",
         "type": "基础属性",
         "children": [
-          {"label": "二元属性", "label_en": "Binary", "desc": "0/1，模拟二元", "aliases": ["二元"]},
-          {"label": "多级属性", "label_en": "Multi-Level", "desc": "离散 1D 位移/旋转/压力/...", "aliases": ["多级"]},
-          {"label": "位置属性", "label_en": "Position", "desc": "连续 1D/2D/3D，幅度/方向/速度", "aliases": ["位置"]},
-          {"label": "角度属性", "label_en": "Angle", "desc": "连续 1D/2D/3D", "aliases": ["角度"]},
-          {"label": "力属性", "label_en": "Force", "desc": "压力/拉力/扭力/肌力/场力...", "aliases": ["力"]},
-          {"label": "声音属性", "label_en": "Sound", "desc": "音量/音调/节奏/发音/...", "aliases": ["声音"]},
-          {"label": "光属性", "label_en": "Light", "desc": "强度/颜色/方向/...", "aliases": ["光"]},
-          {"label": "温度属性", "label_en": "Temperature", "desc": "连续 1D", "aliases": ["温度"]},
-          {"label": "形变属性", "label_en": "Deformation", "desc": "挤压/拉伸/弯曲/...", "aliases": ["形变"]},
-          {"label": "时间属性", "label_en": "Time", "desc": "特殊控件", "aliases": ["时间"]},
-          {"label": "生理信号", "label_en": "Physiological Signal", "desc": "心率/血压/体温/脑电/..."},
-          {"label": "阶次控制", "label_en": "Order Control", "desc": "零阶/一阶/二阶/..."}
+          {
+            "label": "二元属性",
+            "label_en": "Binary",
+            "desc": "0/1，模拟二元",
+            "aliases": [
+              "二元"
+            ],
+            "code": "1"
+          },
+          {
+            "label": "多级属性",
+            "label_en": "Multi-Level",
+            "desc": "离散 1D 位移/旋转/压力/...",
+            "aliases": [
+              "多级"
+            ],
+            "code": "2"
+          },
+          {
+            "label": "位置属性",
+            "label_en": "Position",
+            "desc": "连续 1D/2D/3D，幅度/方向/速度",
+            "aliases": [
+              "位置"
+            ],
+            "code": "3"
+          },
+          {
+            "label": "角度属性",
+            "label_en": "Angle",
+            "desc": "连续 1D/2D/3D",
+            "aliases": [
+              "角度"
+            ],
+            "code": "4"
+          },
+          {
+            "label": "力属性",
+            "label_en": "Force",
+            "desc": "压力/拉力/扭力/肌力/场力...",
+            "aliases": [
+              "力"
+            ],
+            "code": "5"
+          },
+          {
+            "label": "声音属性",
+            "label_en": "Sound",
+            "desc": "音量/音调/节奏/发音/...",
+            "aliases": [
+              "声音"
+            ],
+            "code": "6"
+          },
+          {
+            "label": "光属性",
+            "label_en": "Light",
+            "desc": "强度/颜色/方向/...",
+            "aliases": [
+              "光"
+            ],
+            "code": "7"
+          },
+          {
+            "label": "温度属性",
+            "label_en": "Temperature",
+            "desc": "连续 1D",
+            "aliases": [
+              "温度"
+            ],
+            "code": "8"
+          },
+          {
+            "label": "形变属性",
+            "label_en": "Deformation",
+            "desc": "挤压/拉伸/弯曲/...",
+            "aliases": [
+              "形变"
+            ],
+            "code": "9"
+          },
+          {
+            "label": "时间属性",
+            "label_en": "Time",
+            "desc": "特殊控件",
+            "aliases": [
+              "时间"
+            ],
+            "code": "10"
+          },
+          {
+            "label": "生理信号",
+            "label_en": "Physiological Signal",
+            "desc": "心率/血压/体温/脑电/...",
+            "code": "11"
+          },
+          {
+            "label": "阶次控制",
+            "label_en": "Order Control",
+            "desc": "零阶/一阶/二阶/...",
+            "code": "12"
+          }
         ]
       },
       {
@@ -118,65 +453,365 @@
             "label": "实体",
             "label_en": "Object",
             "children": [
-              {"label": "按钮", "label_en": "Button", "desc": "二元", "index": 1},
-              {"label": "拨钮/杆", "label_en": "Toggle Switch/Lever", "desc": "二元 / 多级 / 1D位移", "index": 2, "aliases": ["拨钮"]},
-              {"label": "滚轮", "label_en": "Scroll Wheel", "desc": "二元 / 多级 / 1D旋转", "index": 3},
-              {"label": "指摇杆", "label_en": "Thumbstick", "desc": "二元 / 2D位移", "index": 4},
-              {"label": "轨迹球", "label_en": "Trackball", "desc": "二元 / 2D旋转", "index": 5},
-              {"label": "指点杆", "label_en": "Pointing Stick", "desc": "2D切向力", "index": 6},
-              {"label": "触控面", "label_en": "Touch Surface", "desc": "二元 / 压力 / 2D位移", "index": 7},
-              {"label": "插头-插座", "label_en": "Plug-Socket", "desc": "二元", "index": 8},
-              {"label": "旋钮", "label_en": "Knob", "desc": "二元 / 多级 / 1D旋转", "index": 9},
-              {"label": "旋转手柄", "label_en": "Rotary Handle", "desc": "1D旋转", "index": 10},
-              {"label": "钳形手柄", "label_en": "Trigger Handle", "desc": "1D旋转", "index": 11},
-              {"label": "摇柄", "label_en": "Crank", "desc": "1D旋转", "index": 12},
-              {"label": "推拉杆", "label_en": "Push-Pull Lever", "desc": "二元/多级 / 1D位移 / 1D旋转", "index": 13},
-              {"label": "手摇杆", "label_en": "Hand Joystick", "desc": "多级 / 2D位移 / 2D旋转", "index": 14},
-              {"label": "鼠标/自由手柄", "label_en": "Mouse/Free Controller", "desc": "位置 / 旋转 / 速度", "index": 15, "aliases": ["鼠标", "自由手柄"]},
-              {"label": "圆环", "label_en": "Ring", "desc": "1D旋转 / 形变", "index": 16},
-              {"label": "绳", "label_en": "Rope", "desc": "1D位移 / 1D旋转 / 形变", "index": 17, "aliases": ["绳/线"]},
-              {"label": "笔", "label_en": "Pen", "desc": "二元 / 2D位移 / 3D旋转 / 压力", "index": 18},
-              {"label": "踏板", "label_en": "Pedal", "desc": "位置 / 旋转", "index": 19},
-              {"label": "履带", "label_en": "Track", "desc": "位置 / 旋转", "index": 20},
-              {"label": "门板窗", "label_en": "Door/Panel/Window", "desc": "位置 / 旋转 / 形变", "index": 21},
-              {"label": "座椅", "label_en": "Seat", "desc": "部件位置 / 旋转 / 压力", "index": 22},
-              {"label": "载具", "label_en": "Vehicle", "desc": "位置 / 旋转 / 阶次", "index": 23},
-              {"label": "柔体", "label_en": "Soft Body", "desc": "如手风琴、懒人沙发", "index": 24}
+              {
+                "label": "点触实体",
+                "children": [
+                  {
+                    "label": "按钮",
+                    "label_en": "Button",
+                    "desc": "二元",
+                    "index": 1,
+                    "code": "1"
+                  },
+                  {
+                    "label": "拨钮/杆",
+                    "label_en": "Toggle Switch/Lever",
+                    "desc": "二元 / 多级 / 1D位移",
+                    "index": 2,
+                    "aliases": [
+                      "拨钮"
+                    ],
+                    "code": "2"
+                  },
+                  {
+                    "label": "滚轮",
+                    "label_en": "Scroll Wheel",
+                    "desc": "二元 / 多级 / 1D旋转",
+                    "index": 3,
+                    "code": "3"
+                  },
+                  {
+                    "label": "指摇杆",
+                    "label_en": "Thumbstick",
+                    "desc": "二元 / 2D位移",
+                    "index": 4,
+                    "code": "4"
+                  },
+                  {
+                    "label": "轨迹球",
+                    "label_en": "Trackball",
+                    "desc": "二元 / 2D旋转",
+                    "index": 5,
+                    "code": "5"
+                  },
+                  {
+                    "label": "指点杆",
+                    "label_en": "Pointing Stick",
+                    "desc": "2D切向力",
+                    "index": 6,
+                    "code": "6"
+                  },
+                  {
+                    "label": "触控面",
+                    "label_en": "Touch Surface",
+                    "desc": "二元 / 压力 / 2D位移",
+                    "index": 7,
+                    "code": "7"
+                  }
+                ]
+              },
+              {
+                "label": "握持实体",
+                "children": [
+                  {
+                    "label": "插头-插座",
+                    "label_en": "Plug-Socket",
+                    "desc": "二元",
+                    "index": 8,
+                    "code": "8"
+                  },
+                  {
+                    "label": "旋钮",
+                    "label_en": "Knob",
+                    "desc": "二元 / 多级 / 1D旋转",
+                    "index": 9,
+                    "code": "9"
+                  },
+                  {
+                    "label": "旋转手柄",
+                    "label_en": "Rotary Handle",
+                    "desc": "1D旋转",
+                    "index": 10,
+                    "code": "10"
+                  },
+                  {
+                    "label": "钳形手柄",
+                    "label_en": "Trigger Handle",
+                    "desc": "1D旋转",
+                    "index": 11,
+                    "code": "11"
+                  },
+                  {
+                    "label": "摇柄",
+                    "label_en": "Crank",
+                    "desc": "1D旋转",
+                    "index": 12,
+                    "code": "12"
+                  },
+                  {
+                    "label": "推拉杆",
+                    "label_en": "Push-Pull Lever",
+                    "desc": "二元/多级 / 1D位移 / 1D旋转",
+                    "index": 13,
+                    "code": "13"
+                  },
+                  {
+                    "label": "手摇杆",
+                    "label_en": "Hand Joystick",
+                    "desc": "多级 / 2D位移 / 2D旋转",
+                    "index": 14,
+                    "code": "14"
+                  },
+                  {
+                    "label": "鼠标/自由手柄",
+                    "label_en": "Mouse/Free Controller",
+                    "desc": "位置 / 旋转 / 速度",
+                    "index": 15,
+                    "aliases": [
+                      "鼠标",
+                      "自由手柄"
+                    ],
+                    "code": "15"
+                  },
+                  {
+                    "label": "圆环",
+                    "label_en": "Ring",
+                    "desc": "1D旋转 / 形变",
+                    "index": 16,
+                    "code": "16"
+                  },
+                  {
+                    "label": "绳",
+                    "label_en": "Rope",
+                    "desc": "1D位移 / 1D旋转 / 形变",
+                    "index": 17,
+                    "aliases": [
+                      "绳/线"
+                    ],
+                    "code": "17"
+                  },
+                  {
+                    "label": "笔",
+                    "label_en": "Pen",
+                    "desc": "二元 / 2D位移 / 3D旋转 / 压力",
+                    "index": 18,
+                    "code": "18"
+                  }
+                ]
+              },
+              {
+                "label": "其他实体",
+                "children": [
+                  {
+                    "label": "踏板",
+                    "label_en": "Pedal",
+                    "desc": "位置 / 旋转",
+                    "index": 19,
+                    "code": "19"
+                  },
+                  {
+                    "label": "履带",
+                    "label_en": "Track",
+                    "desc": "位置 / 旋转",
+                    "index": 20,
+                    "code": "20"
+                  },
+                  {
+                    "label": "门板窗",
+                    "label_en": "Door/Panel/Window",
+                    "desc": "位置 / 旋转 / 形变",
+                    "index": 21,
+                    "code": "21"
+                  },
+                  {
+                    "label": "座椅",
+                    "label_en": "Seat",
+                    "desc": "部件位置 / 旋转 / 压力",
+                    "index": 22,
+                    "code": "22"
+                  },
+                  {
+                    "label": "载具",
+                    "label_en": "Vehicle",
+                    "desc": "位置 / 旋转 / 阶次",
+                    "index": 23,
+                    "code": "23"
+                  },
+                  {
+                    "label": "柔体",
+                    "label_en": "Soft Body",
+                    "desc": "如手风琴、懒人沙发",
+                    "index": 24,
+                    "code": "24"
+                  }
+                ]
+              }
             ]
           },
           {
             "label": "姿态",
             "label_en": "Gesture",
             "children": [
-              {"label": "眼睛", "label_en": "Eyes", "desc": "二元 / 位置 / 旋转", "index": 25, "group": "头"},
-              {"label": "嘴巴", "label_en": "Mouth", "desc": "二元 / 声音 / 形变", "index": 26, "group": "头"},
-              {"label": "舌头", "label_en": "Tongue", "desc": "二元 / 位置 / 声音", "index": 27, "group": "头"},
-              {"label": "面部", "label_en": "Face", "desc": "整体布局", "index": 28, "group": "头"},
-              {"label": "头部", "label_en": "Head", "desc": "位置 / 旋转", "index": 29, "group": "头"},
-              {"label": "指尖", "label_en": "Fingertip", "desc": "二元 / 位置", "index": 30, "group": "手势"},
-              {"label": "手", "label_en": "Hand", "desc": "位置 / 旋转 / 姿势 / 力 / 声音", "index": 31, "group": "手势", "aliases": ["手势"]},
-              {"label": "手臂", "label_en": "Arm", "desc": "位置 / 旋转 / 姿势 / 力", "index": 32, "group": "手势"},
-              {"label": "腿脚", "label_en": "Legs/Feet", "desc": "位置 / 旋转 / 力", "index": 33, "group": "其他"},
-              {"label": "胸腹", "label_en": "Torso", "desc": "位置 / 旋转 / 力 / 形变", "index": 34, "group": "其他"},
-              {"label": "全身", "label_en": "Full Body", "desc": "整体布局", "index": 35, "group": "其他"}
+              {
+                "label": "头",
+                "children": [
+                  {
+                    "label": "眼睛",
+                    "label_en": "Eyes",
+                    "desc": "二元 / 位置 / 旋转",
+                    "index": 25,
+                    "group": "头",
+                    "code": "25"
+                  },
+                  {
+                    "label": "嘴巴",
+                    "label_en": "Mouth",
+                    "desc": "二元 / 声音 / 形变",
+                    "index": 26,
+                    "group": "头",
+                    "code": "26"
+                  },
+                  {
+                    "label": "舌头",
+                    "label_en": "Tongue",
+                    "desc": "二元 / 位置 / 声音",
+                    "index": 27,
+                    "group": "头",
+                    "code": "27"
+                  },
+                  {
+                    "label": "面部",
+                    "label_en": "Face",
+                    "desc": "整体布局",
+                    "index": 28,
+                    "group": "头",
+                    "code": "28"
+                  },
+                  {
+                    "label": "头部",
+                    "label_en": "Head",
+                    "desc": "位置 / 旋转",
+                    "index": 29,
+                    "group": "头",
+                    "code": "29"
+                  }
+                ]
+              },
+              {
+                "label": "手势",
+                "children": [
+                  {
+                    "label": "指尖",
+                    "label_en": "Fingertip",
+                    "desc": "二元 / 位置",
+                    "index": 30,
+                    "group": "手势",
+                    "code": "30"
+                  },
+                  {
+                    "label": "手",
+                    "label_en": "Hand",
+                    "desc": "位置 / 旋转 / 姿势 / 力 / 声音",
+                    "index": 31,
+                    "group": "手势",
+                    "aliases": [
+                      "手势"
+                    ],
+                    "code": "31"
+                  },
+                  {
+                    "label": "手臂",
+                    "label_en": "Arm",
+                    "desc": "位置 / 旋转 / 姿势 / 力",
+                    "index": 32,
+                    "group": "手势",
+                    "code": "32"
+                  }
+                ]
+              },
+              {
+                "label": "其他",
+                "children": [
+                  {
+                    "label": "腿脚",
+                    "label_en": "Legs/Feet",
+                    "desc": "位置 / 旋转 / 力",
+                    "index": 33,
+                    "group": "其他",
+                    "code": "33"
+                  },
+                  {
+                    "label": "胸腹",
+                    "label_en": "Torso",
+                    "desc": "位置 / 旋转 / 力 / 形变",
+                    "index": 34,
+                    "group": "其他",
+                    "code": "34"
+                  },
+                  {
+                    "label": "全身",
+                    "label_en": "Full Body",
+                    "desc": "整体布局",
+                    "index": 35,
+                    "group": "其他",
+                    "code": "35"
+                  }
+                ]
+              }
             ]
           },
           {
             "label": "流体",
             "label_en": "Fluid",
             "children": [
-              {"label": "液体", "label_en": "Liquid", "desc": "位置 / 温度 / 力", "index": 36},
-              {"label": "气体", "label_en": "Gas", "desc": "位置 / 温度 / 力", "index": 37},
-              {"label": "颗粒", "label_en": "Particle", "desc": "形状 / 位置 / 温度 / 力", "index": 38}
+              {
+                "label": "液体",
+                "label_en": "Liquid",
+                "desc": "位置 / 温度 / 力",
+                "index": 36,
+                "code": "36"
+              },
+              {
+                "label": "气体",
+                "label_en": "Gas",
+                "desc": "位置 / 温度 / 力",
+                "index": 37,
+                "code": "37"
+              },
+              {
+                "label": "颗粒",
+                "label_en": "Particle",
+                "desc": "形状 / 位置 / 温度 / 力",
+                "index": 38,
+                "code": "38"
+              }
             ]
           },
           {
             "label": "其他",
             "label_en": "Others",
             "children": [
-              {"label": "语音", "label_en": "Voice", "desc": "声音：内容 / 语调 / 音量 / 语速", "index": 39},
-              {"label": "生命体征", "label_en": "Vital Signs", "desc": "生理信号：心率 / 血压 / 体温 / 脑电...", "index": 40},
-              {"label": "环境", "label_en": "Environment", "desc": "声音 / 光 / 温度 / 湿度 / 时间 / 位置", "index": 41}
+              {
+                "label": "语音",
+                "label_en": "Voice",
+                "desc": "声音：内容 / 语调 / 音量 / 语速",
+                "index": 39,
+                "code": "39"
+              },
+              {
+                "label": "生命体征",
+                "label_en": "Vital Signs",
+                "desc": "生理信号：心率 / 血压 / 体温 / 脑电...",
+                "index": 40,
+                "code": "40"
+              },
+              {
+                "label": "环境",
+                "label_en": "Environment",
+                "desc": "声音 / 光 / 温度 / 湿度 / 时间 / 位置",
+                "index": 41,
+                "code": "41"
+              }
             ]
           }
         ]
@@ -185,40 +820,104 @@
         "label": "含义与多模态",
         "label_en": "Meaning & Multi-Modal",
         "layer": "multimodal_interaction",
-        "type": "多模态交互",
+        "type": "含义与多模态",
         "children": [
           {
             "label": "解释含义",
             "label_en": "Meaning Interpretation",
             "children": [
-              {"label": "语义", "label_en": "Semantics", "desc": "通过文字 / 语音 / 手写等"},
-              {"label": "情感", "label_en": "Emotion", "desc": "通过面部 / 声音 / 全身等"},
-              {"label": "特定识别", "label_en": "Special Detection", "desc": "路况/跌倒/疲劳/智能雨刷/气流/障碍物感知"}
+              {
+                "label": "语义",
+                "label_en": "Semantics",
+                "desc": "通过文字 / 语音 / 手写等"
+              },
+              {
+                "label": "情感",
+                "label_en": "Emotion",
+                "desc": "通过面部 / 声音 / 全身等"
+              },
+              {
+                "label": "特定识别",
+                "label_en": "Special Detection",
+                "desc": "路况/跌倒/疲劳/智能雨刷/气流/障碍物感知"
+              }
             ]
           },
           {
             "label": "典型案例",
             "label_en": "Typical Cases",
             "children": [
-              {"label": "摩斯码", "label_en": "Morse Code", "desc": "复杂二元"},
-              {"label": "图像识别", "label_en": "Image Recognition", "desc": "复杂布局"},
-              {"label": "轨迹/字迹", "label_en": "Trajectory/Handwriting", "desc": "复杂位移"},
-              {"label": "手语识别", "label_en": "Sign Language", "desc": "手势变化"},
-              {"label": "唇语识别", "label_en": "Lip Reading", "desc": "嘴巴变化"},
-              {"label": "表情识别", "label_en": "Expression Recognition", "desc": "面部"},
-              {"label": "语音识别", "label_en": "Speech Recognition", "desc": "语音变化"},
-              {"label": "脑机接口", "label_en": "Brain-Computer Interface", "desc": "生理信号：有意识脑电"}
+              {
+                "label": "摩斯码",
+                "label_en": "Morse Code",
+                "desc": "复杂二元"
+              },
+              {
+                "label": "图像识别",
+                "label_en": "Image Recognition",
+                "desc": "复杂布局"
+              },
+              {
+                "label": "轨迹/字迹",
+                "label_en": "Trajectory/Handwriting",
+                "desc": "复杂位移"
+              },
+              {
+                "label": "手语识别",
+                "label_en": "Sign Language",
+                "desc": "手势变化"
+              },
+              {
+                "label": "唇语识别",
+                "label_en": "Lip Reading",
+                "desc": "嘴巴变化"
+              },
+              {
+                "label": "表情识别",
+                "label_en": "Expression Recognition",
+                "desc": "面部"
+              },
+              {
+                "label": "语音识别",
+                "label_en": "Speech Recognition",
+                "desc": "语音变化"
+              },
+              {
+                "label": "脑机接口",
+                "label_en": "Brain-Computer Interface",
+                "desc": "生理信号：有意识脑电"
+              }
             ]
           },
           {
             "label": "多模态组合案例",
             "label_en": "Multi-Modal",
             "children": [
-              {"label": "眼睛+手势", "desc": "例：Vision Pro"},
-              {"label": "眼睛+语音", "desc": "例：Vision Pro"},
-              {"label": "手势+语音", "desc": "例：指哪扫/开哪"},
-              {"label": "面部+图像", "desc": "例：人脸验证"},
-              {"label": "位移(地理)+时间", "desc": "例：汽车导航"}
+              {
+                "label": "眼睛+手势",
+                "desc": "例：Vision Pro",
+                "code": "1"
+              },
+              {
+                "label": "眼睛+语音",
+                "desc": "例：Vision Pro",
+                "code": "2"
+              },
+              {
+                "label": "手势+语音",
+                "desc": "例：指哪扫/开哪",
+                "code": "3"
+              },
+              {
+                "label": "面部+图像",
+                "desc": "例：人脸验证",
+                "code": "4"
+              },
+              {
+                "label": "位移(地理)+时间",
+                "desc": "例：汽车导航",
+                "code": "5"
+              }
             ]
           }
         ]
@@ -226,73 +925,217 @@
     ]
   },
   "aliases": {
-    "基础交互机制": {
-      "点一下": "单击", "点击一下": "单击", "tap": "单击", "click": "单击",
-      "按一下": "按下", "按压": "按下", "press": "按下", "触碰": "按下",
-      "按住": "长按", "长摁": "长按", "摁住": "长按", "long press": "长按",
-      "拖动": "拖拽", "拖": "拖拽", "drag": "拖拽",
-      "滑一下": "滑动切换", "划一下": "滑动切换", "划动": "滑动切换", "swipe": "滑动切换",
-      "双点": "双击", "连点两下": "双击", "连击": "双击", "double click": "双击", "double tap": "双击",
-      "摇晃": "晃动·震动", "摇一摇": "晃动·震动", "shake": "晃动·震动",
-      "捏": "捏合缩放", "两指捏合": "捏合缩放", "pinch": "捏合缩放", "缩放": "捏合缩放", "zoom": "捏合缩放", "放大": "捏合缩放", "缩小": "捏合缩放",
-      "猛甩": "甩动", "flick": "甩动", "翻一下": "翻动",
-      "开关切换": "开关", "toggle": "开关", "switch": "开关"
+    "基础交互逻辑": {
+      "点一下": "单击",
+      "点击一下": "单击",
+      "tap": "单击",
+      "click": "单击",
+      "按一下": "按下",
+      "按压": "按下",
+      "press": "按下",
+      "触碰": "按下",
+      "按住": "长按",
+      "长摁": "长按",
+      "摁住": "长按",
+      "long press": "长按",
+      "拖动": "拖拽",
+      "拖": "拖拽",
+      "drag": "拖拽",
+      "滑一下": "滑动切换",
+      "划一下": "滑动切换",
+      "划动": "滑动切换",
+      "swipe": "滑动切换",
+      "双点": "双击",
+      "连点两下": "双击",
+      "连击": "双击",
+      "double click": "双击",
+      "double tap": "双击",
+      "摇晃": "晃动·震动",
+      "摇一摇": "晃动·震动",
+      "shake": "晃动·震动",
+      "捏": "捏合缩放",
+      "两指捏合": "捏合缩放",
+      "pinch": "捏合缩放",
+      "缩放": "捏合缩放",
+      "zoom": "捏合缩放",
+      "放大": "捏合缩放",
+      "缩小": "捏合缩放",
+      "猛甩": "甩动",
+      "flick": "甩动",
+      "翻一下": "翻动",
+      "开关切换": "开关",
+      "toggle": "开关",
+      "switch": "开关"
     },
-    "高级交互机制": {
-      "快速点击": "快击·快抬", "扫一下": "轻扫切换", "扫动": "轻扫切换", "轻扫": "轻扫切换",
-      "从边缘滑入": "边缘滑入", "侧滑": "边缘滑入",
-      "按住拖": "长按拖拽", "长按拖动": "长按拖拽", "拨一下": "轻拨",
-      "连续点击": "缓冲连发", "连按": "缓冲连发"
+    "交互逻辑的组合与扩展": {
+      "快速点击": "快击·快抬",
+      "扫一下": "轻扫切换",
+      "扫动": "轻扫切换",
+      "轻扫": "轻扫切换",
+      "从边缘滑入": "边缘滑入",
+      "侧滑": "边缘滑入",
+      "按住拖": "长按拖拽",
+      "长按拖动": "长按拖拽",
+      "拨一下": "轻拨",
+      "连续点击": "缓冲连发",
+      "连按": "缓冲连发"
     },
     "控件形态": {
-      "knob": "旋钮", "转动": "旋钮", "扭转": "旋钮", "转盘": "旋钮", "拨盘": "旋钮", "调节钮": "旋钮", "旋钮开关": "旋钮",
-      "摇杆": "指摇杆", "joystick": "指摇杆", "摇杆控制器": "指摇杆", "操纵杆": "指摇杆",
-      "trackball": "轨迹球", "trackpad": "触控面", "触摸板": "触控面", "触摸屏": "触控面", "触屏": "触控面", "触控板": "触控面", "触控屏": "触控面", "触摸面板": "触控面",
-      "button": "按钮", "按键": "按钮", "圆钮": "按钮",
-      "wheel": "滚轮", "scroll wheel": "滚轮", "滚轮键": "滚轮", "鼠标滚轮": "滚轮",
-      "pedal": "踏板", "脚踏": "踏板", "脚踏板": "踏板",
-      "拨动": "拨钮/杆", "拨杆": "拨钮/杆", "拨钮": "拨钮/杆", "拨档": "拨钮/杆",
-      "手柄": "鼠标/自由手柄", "握把": "鼠标/自由手柄", "把手": "鼠标/自由手柄", "手持控制器": "鼠标/自由手柄",
-      "扳机": "钳形手柄", "扳机手柄": "钳形手柄", "钳形扳机": "钳形手柄",
-      "推拉": "推拉杆", "推杆": "推拉杆", "拉杆": "推拉杆", "滑杆": "推拉杆",
-      "绳子": "绳", "线": "绳", "拉绳": "绳", "细绳": "绳",
-      "pen": "笔", "stylus": "笔", "触控笔": "笔", "手写笔": "笔",
-      "摇把": "摇柄", "曲柄": "摇柄", "摇手柄": "摇柄",
-      "转环": "圆环", "圆圈": "圆环", "环形": "圆环",
+      "knob": "旋钮",
+      "转动": "旋钮",
+      "扭转": "旋钮",
+      "转盘": "旋钮",
+      "拨盘": "旋钮",
+      "调节钮": "旋钮",
+      "旋钮开关": "旋钮",
+      "摇杆": "指摇杆",
+      "joystick": "指摇杆",
+      "摇杆控制器": "指摇杆",
+      "操纵杆": "指摇杆",
+      "trackball": "轨迹球",
+      "trackpad": "触控面",
+      "触摸板": "触控面",
+      "触摸屏": "触控面",
+      "触屏": "触控面",
+      "触控板": "触控面",
+      "触控屏": "触控面",
+      "触摸面板": "触控面",
+      "button": "按钮",
+      "按键": "按钮",
+      "圆钮": "按钮",
+      "wheel": "滚轮",
+      "scroll wheel": "滚轮",
+      "滚轮键": "滚轮",
+      "鼠标滚轮": "滚轮",
+      "pedal": "踏板",
+      "脚踏": "踏板",
+      "脚踏板": "踏板",
+      "拨动": "拨钮/杆",
+      "拨杆": "拨钮/杆",
+      "拨钮": "拨钮/杆",
+      "拨档": "拨钮/杆",
+      "手柄": "鼠标/自由手柄",
+      "握把": "鼠标/自由手柄",
+      "把手": "鼠标/自由手柄",
+      "手持控制器": "鼠标/自由手柄",
+      "扳机": "钳形手柄",
+      "扳机手柄": "钳形手柄",
+      "钳形扳机": "钳形手柄",
+      "推拉": "推拉杆",
+      "推杆": "推拉杆",
+      "拉杆": "推拉杆",
+      "滑杆": "推拉杆",
+      "绳子": "绳",
+      "线": "绳",
+      "拉绳": "绳",
+      "细绳": "绳",
+      "pen": "笔",
+      "stylus": "笔",
+      "触控笔": "笔",
+      "手写笔": "笔",
+      "摇把": "摇柄",
+      "曲柄": "摇柄",
+      "摇手柄": "摇柄",
+      "转环": "圆环",
+      "圆圈": "圆环",
+      "环形": "圆环",
       "方向盘": "手摇杆",
-      "门": "门板窗", "窗户": "门板窗", "门板": "门板窗", "窗": "门板窗",
-      "椅子": "座椅", "座位": "座椅",
-      "车": "载具", "车辆": "载具", "交通工具": "载具",
-      "软体": "柔体", "柔性体": "柔体",
-      "眼": "眼睛", "眼球": "眼睛", "视线": "眼睛",
-      "嘴": "嘴巴", "口": "嘴巴",
-      "脸": "面部", "脸部": "面部", "表情": "面部",
+      "门": "门板窗",
+      "窗户": "门板窗",
+      "门板": "门板窗",
+      "窗": "门板窗",
+      "椅子": "座椅",
+      "座位": "座椅",
+      "车": "载具",
+      "车辆": "载具",
+      "交通工具": "载具",
+      "软体": "柔体",
+      "柔性体": "柔体",
+      "眼": "眼睛",
+      "眼球": "眼睛",
+      "视线": "眼睛",
+      "嘴": "嘴巴",
+      "口": "嘴巴",
+      "脸": "面部",
+      "脸部": "面部",
+      "表情": "面部",
       "头": "头部",
-      "手指": "指尖", "指头": "指尖",
-      "胳膊": "手臂", "上肢": "手臂",
-      "腿": "腿脚", "下肢": "腿脚", "腿部": "腿脚",
-      "胸": "胸腹", "腹部": "胸腹", "躯干": "胸腹",
-      "身体": "全身", "整个身体": "全身",
+      "手指": "指尖",
+      "指头": "指尖",
+      "胳膊": "手臂",
+      "上肢": "手臂",
+      "腿": "腿脚",
+      "下肢": "腿脚",
+      "腿部": "腿脚",
+      "胸": "胸腹",
+      "腹部": "胸腹",
+      "躯干": "胸腹",
+      "身体": "全身",
+      "整个身体": "全身",
       "水": "液体",
-      "空气": "气体", "气流": "气体",
-      "颗粒物": "颗粒", "粉末": "颗粒",
-      "说话": "语音", "嗓音": "语音",
-      "心率": "生命体征", "脉搏": "生命体征", "血压": "生命体征", "脑电": "生命体征",
-      "周围环境": "环境", "外部环境": "环境"
+      "空气": "气体",
+      "气流": "气体",
+      "颗粒物": "颗粒",
+      "粉末": "颗粒",
+      "说话": "语音",
+      "嗓音": "语音",
+      "心率": "生命体征",
+      "脉搏": "生命体征",
+      "血压": "生命体征",
+      "脑电": "生命体征",
+      "周围环境": "环境",
+      "外部环境": "环境"
     },
     "基础属性": {
-      "位移": "位置属性", "坐标": "位置属性", "position": "位置属性", "位置": "位置属性", "方位": "位置属性",
-      "亮度": "光属性", "颜色": "光属性", "light": "光属性", "光照": "光属性", "色彩": "光属性",
-      "力度": "力属性", "压力": "力属性", "force": "力属性", "力气": "力属性", "按压力": "力属性", "推力": "力属性",
-      "音量": "声音属性", "audio": "声音属性", "响度": "声音属性",
-      "旋转角度": "角度属性", "angle": "角度属性", "角度": "角度属性", "转角": "角度属性",
-      "冷热": "温度属性", "温度": "温度属性", "温热": "温度属性",
-      "时长": "时间属性", "duration": "时间属性", "时间": "时间属性", "持续时间": "时间属性",
-      "开关量": "二元属性", "布尔": "二元属性", "boolean": "二元属性", "二值": "二元属性", "通断": "二元属性",
-      "变形": "形变属性", "弯曲": "形变属性", "形变": "形变属性", "形状变化": "形变属性",
-      "档位": "多级属性", "多档": "多级属性", "等级": "多级属性", "级别": "多级属性",
-      "心跳": "生理信号", "生理": "生理信号", "脑电信号": "生理信号",
-      "次序": "阶次控制", "顺序": "阶次控制", "排序": "阶次控制"
+      "位移": "位置属性",
+      "坐标": "位置属性",
+      "position": "位置属性",
+      "位置": "位置属性",
+      "方位": "位置属性",
+      "亮度": "光属性",
+      "颜色": "光属性",
+      "light": "光属性",
+      "光照": "光属性",
+      "色彩": "光属性",
+      "力度": "力属性",
+      "压力": "力属性",
+      "force": "力属性",
+      "力气": "力属性",
+      "按压力": "力属性",
+      "推力": "力属性",
+      "音量": "声音属性",
+      "audio": "声音属性",
+      "响度": "声音属性",
+      "旋转角度": "角度属性",
+      "angle": "角度属性",
+      "角度": "角度属性",
+      "转角": "角度属性",
+      "冷热": "温度属性",
+      "温度": "温度属性",
+      "温热": "温度属性",
+      "时长": "时间属性",
+      "duration": "时间属性",
+      "时间": "时间属性",
+      "持续时间": "时间属性",
+      "开关量": "二元属性",
+      "布尔": "二元属性",
+      "boolean": "二元属性",
+      "二值": "二元属性",
+      "通断": "二元属性",
+      "变形": "形变属性",
+      "弯曲": "形变属性",
+      "形变": "形变属性",
+      "形状变化": "形变属性",
+      "档位": "多级属性",
+      "多档": "多级属性",
+      "等级": "多级属性",
+      "级别": "多级属性",
+      "心跳": "生理信号",
+      "生理": "生理信号",
+      "脑电信号": "生理信号",
+      "次序": "阶次控制",
+      "顺序": "阶次控制",
+      "排序": "阶次控制"
     }
   }
 }
