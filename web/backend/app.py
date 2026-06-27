@@ -151,6 +151,8 @@ class AgentRuntime:
                     intent_resolver=self._build_intent_resolver(),
                     output_frame_resolver=self._build_output_frame_resolver(),
                     turn_classifier=self._build_turn_classifier(),
+                    dynamic_clarify_question=self.config.llm_dynamic_clarify_question,
+                    intent_candidate_options=self.config.intent_candidate_options,
                 )
                 self._sessions[session_id] = session
             return session

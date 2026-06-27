@@ -74,6 +74,75 @@ CLARIFY_OPTION_SPECS: dict[Intent, ClarifyOptionSpec] = {
             ),
         ),
     ),
+    "control_form_application": ClarifyOptionSpec(
+        message="控件形态的应用需要考虑放置位置、适用人群和交互场景，你想了解哪个方面？",
+        options=(
+            SubTypeOption(
+                label="放置位置",
+                value="控件形态的放置位置：在不同身体部位（头部、手部、躯干、腿部等）放置控件的影响和考量",
+                desc="不同身体部位的控件放置策略与适用性分析",
+                keywords=("放置", "位置", "安装", "穿戴", "部位", "放在"),
+            ),
+            SubTypeOption(
+                label="适用人群",
+                value="控件形态的适用人群：针对老年人、儿童、残障人士等不同人群的控件选择与适配",
+                desc="不同用户群体的控件形态适配与无障碍设计",
+                keywords=("老年人", "儿童", "残障", "人群", "用户群体", "适用人群"),
+            ),
+            SubTypeOption(
+                label="应用场景",
+                value="控件形态的应用场景：在不同使用环境（驾驶、运动、办公、户外等）中的控件选择",
+                desc="不同使用场景下的控件形态选择与约束",
+                keywords=("场景", "环境", "驾驶", "运动", "办公", "户外"),
+            ),
+        ),
+    ),
+    "case_analysis": ClarifyOptionSpec(
+        message="案例分析可以从不同角度进行，你想重点了解哪方面？",
+        options=(
+            SubTypeOption(
+                label="交互机制拆解",
+                value="案例分析角度：拆解案例中的交互机制和操作逻辑",
+                desc="识别案例中使用了哪些基础交互机制及其组合方式",
+                keywords=("机制", "操作", "逻辑", "怎么实现", "拆解"),
+            ),
+            SubTypeOption(
+                label="控件与属性",
+                value="案例分析角度：分析案例中涉及的控件形态和基础属性",
+                desc="识别控件载体类型及用到的输入维度（力、位置、角度等）",
+                keywords=("控件", "属性", "形态", "载体", "维度"),
+            ),
+            SubTypeOption(
+                label="设计评估",
+                value="案例分析角度：评估案例设计的合理性和潜在问题",
+                desc="从交互设计角度评价案例的优点、不足和改进方向",
+                keywords=("评估", "评价", "合理", "问题", "改进", "优化"),
+            ),
+        ),
+    ),
+    "mechanism_identification": ClarifyOptionSpec(
+        message="你想让我从哪个角度来识别这个操作对应的交互机制？",
+        options=(
+            SubTypeOption(
+                label="基础交互逻辑",
+                value="机制识别范围：基础交互逻辑（点击、双击、长按、拖拽、滑动、旋转、捏合等）",
+                desc="识别基本的手势和操作动作类型",
+                keywords=("基础", "基本", "简单", "点击", "滑动", "拖拽", "旋转"),
+            ),
+            SubTypeOption(
+                label="高级组合机制",
+                value="机制识别范围：高级组合和拓展机制（协同、冲突、限位、动势、向量菜单等）",
+                desc="识别组合机制、协同关系和高级交互模式",
+                keywords=("组合", "高级", "复杂", "协同", "冲突", "动势"),
+            ),
+            SubTypeOption(
+                label="输出交互表达式",
+                value="机制识别并生成表达式：识别机制后直接生成交互表达式图",
+                desc="不仅识别机制类型，还生成形式化的交互表达式",
+                keywords=("表达式", "生成", "形式化", "公式", "表达式图"),
+            ),
+        ),
+    ),
 }
 
 

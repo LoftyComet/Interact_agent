@@ -222,7 +222,7 @@ class StubIntentResolver:
     def __init__(self) -> None:
         self.calls: list[str] = []
 
-    def resolve(self, query: str, *, image_paths=None, memory_context: str = "") -> IntentResolution:
+    def resolve(self, query: str, *, image_paths=None, memory_context: str = "", clarification_history=None) -> IntentResolution:
         self.calls.append(query)
         return IntentResolution(
             intent="background_knowledge",

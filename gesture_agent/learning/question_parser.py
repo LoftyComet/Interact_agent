@@ -119,7 +119,12 @@ class QuestionParser:
             design_evaluation=design_evaluation,
         )
 
-    def resolve_intent(self, query: str, image_paths: Optional[list[str]] = None) -> IntentResolution:
+    def resolve_intent(
+        self,
+        query: str,
+        image_paths: Optional[list[str]] = None,
+        clarification_history: Optional[list[str]] = None,
+    ) -> IntentResolution:
         image_paths = image_paths or []
         terms = self.kb.find_terms(query)
         candidates = self._intent_candidates(query, image_paths, terms)
@@ -129,7 +134,9 @@ class QuestionParser:
                 confidence=0.0,
                 candidates=[],
                 needs_clarification=True,
-                clarification_question=self._build_clarification_question(query, []),
+                clarification_question=self._build_clarification_question(
+                    query, [], clarification_history=clarification_history
+                ),
             )
 
         top = candidates[0]
@@ -144,7 +151,9 @@ class QuestionParser:
             confidence=top.score,
             candidates=candidates[:4],
             needs_clarification=needs_clarification,
-            clarification_question=self._build_clarification_question(query, candidates[:4], missing_info),
+            clarification_question=self._build_clarification_question(
+                query, candidates[:4], missing_info, clarification_history=clarification_history
+            ),
             missing_info=missing_info,
         )
 
@@ -349,24 +358,55 @@ class QuestionParser:
         query: str,
         candidates: list[IntentCandidate],
         missing_info: Optional[list[str]] = None,
+        clarification_history: Optional[list[str]] = None,
     ) -> str:
         missing_info = missing_info or []
+        repeat_note = ""
+        if clarification_history and len(clarification_history) >= 2:
+            repeat_note = "（我换个方式问：）"
+
         if missing_info:
             if candidates and candidates[0].intent == "interaction_compare":
-                return "你想对比哪两个或哪几个对象？请补充具体交互机制、控件形态或属性名称。"
+                return f"{repeat_note}你想对比哪两个或哪几个对象？请补充具体交互机制、控件形态或属性名称。"
             if candidates and candidates[0].intent == "case_analysis":
-                return "这个案例信息还不够。请补充：界面/产品是什么、用户做了什么动作、系统有什么反馈；或者直接提供图片。"
+                return f"{repeat_note}这个案例信息还不够。请补充：界面/产品是什么、用户做了什么动作、系统有什么反馈；或者直接提供图片。"
             if candidates and candidates[0].intent == "design_evaluation":
-                return "要评估设计方案，还需要补充：产品/界面场景、用户目标、用户动作、控件形态、系统反馈或状态变化。"
+                return f"{repeat_note}要评估设计方案，还需要补充：产品/界面场景、用户目标、用户动作、控件形态、系统反馈或状态变化。"
 
         if not candidates:
             return (
-                "这个问题目前无法确定要按哪类任务处理。你是想问：交互机制、控件形态、基础属性、"
+                f"{repeat_note}这个问题目前无法确定要按哪类任务处理。你是想问：交互机制、控件形态、基础属性、"
                 "交互机制对比、背景知识、案例分析、设计方案评估，还是语音/多模态内容？请补充一个具体对象或场景。"
             )
 
         options = "、".join(f"{INTENT_LABELS[item.intent]}({item.reason})" for item in candidates[:3])
-        return f"这个问题可能有多种理解：{options}。你希望我按哪一种来回答？也可以补充具体对象、场景或输出形式。"
+        return f"{repeat_note}这个问题可能有多种理解：{options}。你希望我按哪一种来回答？也可以补充具体对象、场景或输出形式。"
+
+    def _is_ambiguous_call(self, candidates: list[IntentCandidate]) -> bool:
+        """Return True when the top candidates are close enough to present as options."""
+        if len(candidates) < 2:
+            return False
+        top = candidates[0]
+        second = candidates[1]
+        return (
+            top.score < HIGH_CONFIDENCE_THRESHOLD
+            and top.score - second.score < CLOSE_CALL_MARGIN
+            and second.score >= CONFIDENCE_THRESHOLD - 0.15
+        )
+
+    def _build_intent_candidate_options(
+        self,
+        query: str,
+        candidates: list[IntentCandidate],
+    ) -> list[dict[str, str]]:
+        """Build clickable options from top intent candidates for ambiguous queries."""
+        options: list[dict[str, str]] = []
+        for item in candidates[:4]:
+            label = INTENT_LABELS.get(item.intent, item.intent)
+            value = f"【intent:{item.intent}】{query}"
+            desc = item.reason
+            options.append({"label": label, "value": value, "desc": desc})
+        return options
 
     def _output_frame(self, intent: Intent) -> list[str]:
         if intent == "open_ended":

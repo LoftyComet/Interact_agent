@@ -23,17 +23,19 @@ class LLMIntentResolver:
         *,
         image_paths: Optional[list[str]] = None,
         memory_context: str = "",
+        clarification_history: Optional[list[str]] = None,
     ) -> IntentResolution:
         rule_resolution = self.parser.resolve_intent(query, image_paths=image_paths)
-        return self._resolve_with_rule(query, rule_resolution, memory_context)
+        return self._resolve_with_rule(query, rule_resolution, memory_context, clarification_history)
 
     def _resolve_with_rule(
         self,
         query: str,
         rule_resolution: IntentResolution,
         memory_context: str,
+        clarification_history: Optional[list[str]] = None,
     ) -> IntentResolution:
-        prompt = self._build_prompt(query, rule_resolution, memory_context)
+        prompt = self._build_prompt(query, rule_resolution, memory_context, clarification_history)
 
         try:
             raw = self.client.chat(
@@ -78,13 +80,30 @@ class LLMIntentResolver:
             missing_info=list(rule_resolution.missing_info),
         )
 
-    def _build_prompt(self, query: str, rule_resolution: IntentResolution, memory_context: str) -> str:
+    def _build_prompt(
+        self,
+        query: str,
+        rule_resolution: IntentResolution,
+        memory_context: str,
+        clarification_history: Optional[list[str]] = None,
+    ) -> str:
         valid_intents = "\n".join(f"- {key}: {label}" for key, label in INTENT_LABELS.items())
         candidates = [
             {"intent": item.intent, "score": item.score, "reason": item.reason}
             for item in rule_resolution.candidates
         ]
         reference_block = self._build_reference_block(query)
+
+        history_block = ""
+        if clarification_history:
+            numbered = "\n".join(
+                f"  {i}. {q}" for i, q in enumerate(clarification_history, start=1)
+            )
+            history_block = (
+                "\n之前已向用户追问过以下问题（禁止重复这些问题，应从不同角度追问）：\n"
+                f"{numbered}\n"
+            )
+
         return f"""你是手势词典 Agent 的 Intent 判定器。请根据用户当前输入、对话记忆和规则候选，判断最合适的 intent。
 
 可选 intent：
@@ -100,13 +119,13 @@ class LLMIntentResolver:
 ```json
 {json.dumps(candidates, ensure_ascii=False, indent=2)}
 ```
-
+{history_block}
 判定要求：
-1. 如果当前输入是追问，例如“它”“这个”“那它和长按有什么区别”，必须结合对话记忆补全指代。
-2. 如果上一轮是 design_evaluation，当前输入说“这个案例/这个方案/如何应用/主要风险/怎么改/微变”，通常应继续判为 design_evaluation，而不是机械判为 case_analysis。
-3. 如果用户问题与手势词典/交互设计的其他预定义类别都不沾边（例如闲聊、问编程语言、问天气、问与交互设计无关的常识等），返回 `intent="open_ended"`，并把 `needs_clarification` 设为 false。注意：只要问题与手势、控件、交互机制、设计评估、多模态/语音、词典背景知识等任何一项相关，就应优先匹配对应的预定义 intent，不要轻易判为 open_ended。
+1. 如果当前输入是追问，例如”它””这个””那它和长按有什么区别”，必须结合对话记忆补全指代。
+2. 如果上一轮是 design_evaluation，当前输入说”这个案例/这个方案/如何应用/主要风险/怎么改/微变”，通常应继续判为 design_evaluation，而不是机械判为 case_analysis。
+3. 如果用户问题与手势词典/交互设计的其他预定义类别都不沾边（例如闲聊、问编程语言、问天气、问与交互设计无关的常识等），返回 `intent=”open_ended”`，并把 `needs_clarification` 设为 false。注意：只要问题与手势、控件、交互机制、设计评估、多模态/语音、词典背景知识等任何一项相关，就应优先匹配对应的预定义 intent，不要轻易判为 open_ended。
 4. 如果能明确判断 intent，输出 needs_clarification=false。
-5. 如果仍缺少关键对象或场景，输出 needs_clarification=true，并给出一个简短反问。
+5. 如果仍缺少关键对象或场景，输出 needs_clarification=true，并给出一个简短、具体的反问（1-2句话）。禁止重复之前已问过的问题，应从不同角度追问（先问对象主体，再问具体场景，再问期望输出形式）。反问应直接引用用户输入中的具体词语，让用户感到被认真倾听。
 6. 上方“参考样例”是人工标注的优质问题及其正确 intent，请将其作为重要参考；当用户输入与某条样例高度相似时，应倾向采用该样例的 intent。
 7. 区分 control_form_compare 与 interaction_compare：若对比对象是硬件/控件载体（手表 vs 手套、头部 vs 腿部控制），判 control_form_compare；若对比的是交互机制本身（拖拽 vs 滑动），判 interaction_compare。
 8. 区分 mechanism_identification 与 basic_interaction_mechanism：若用户给一段操作描述、问“这属于什么交互机制/能不能生成表达式”（反推），判 mechanism_identification；若用户已点名某个已知机制要讲解，判 basic_interaction_mechanism。
@@ -157,11 +176,16 @@ class ClarificationIntentResolver(LLMIntentResolver):
         *,
         image_paths: Optional[list[str]] = None,
         memory_context: str = "",
+        clarification_history: Optional[list[str]] = None,
     ) -> IntentResolution:
-        rule_resolution = self.parser.resolve_intent(query, image_paths=image_paths)
+        rule_resolution = self.parser.resolve_intent(
+            query, image_paths=image_paths, clarification_history=clarification_history
+        )
         if not rule_resolution.needs_clarification and rule_resolution.intent is not None:
             return rule_resolution
-        return self._resolve_with_rule(query, rule_resolution, memory_context)
+        return self._resolve_with_rule(
+            query, rule_resolution, memory_context, clarification_history
+        )
 
 
 def _coerce_float(value: Any, default: float) -> float:

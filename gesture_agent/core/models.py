@@ -226,6 +226,7 @@ class PendingClarification:
     collected_details: list[str] = field(default_factory=list)
     attempts: int = 0
     last_question: str = ""
+    question_history: list[str] = field(default_factory=list)
     memory_context: str = ""
     original_intent: Optional[Intent] = None
     original_terms: list[str] = field(default_factory=list)

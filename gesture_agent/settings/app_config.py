@@ -49,6 +49,8 @@ class AgentConfig:
     default_interactive: bool = True
     llm_intent: bool = False
     llm_clarify: bool = True
+    llm_dynamic_clarify_question: bool = True
+    intent_candidate_options: bool = True
     llm_output_frame: str = "auto"
     llm_output_frame_confidence_threshold: float = 0.80
     prompt: PromptConfig = field(default_factory=PromptConfig)
@@ -100,6 +102,8 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
         default_interactive=bool(runtime.get("default_interactive", True)),
         llm_intent=bool(intent.get("llm_intent", False)),
         llm_clarify=bool(intent.get("llm_clarify", True)),
+        llm_dynamic_clarify_question=bool(intent.get("llm_dynamic_clarify_question", True)),
+        intent_candidate_options=bool(intent.get("intent_candidate_options", True)),
         llm_output_frame=_llm_output_frame_value(intent.get("llm_output_frame", "auto")),
         llm_output_frame_confidence_threshold=float(intent.get("llm_output_frame_confidence_threshold", 0.80)),
         prompt=PromptConfig(

@@ -17,7 +17,7 @@ from gesture_agent.core.models import (
 from .clarify_options import get_clarify_spec
 from .llm_intent import LLMIntentResolver
 from .llm_output_frame import OPEN_ENDED_FALLBACK_FRAME, LLMOutputFrameResolver
-from .question_parser import QuestionParser
+from .question_parser import INTENT_LABELS, QuestionParser
 from .turn_classifier import TurnClassifier
 
 MAX_HISTORY_TURNS = 6
@@ -31,6 +31,8 @@ class ConversationSession:
         intent_resolver: Optional[LLMIntentResolver] = None,
         output_frame_resolver: Optional[LLMOutputFrameResolver] = None,
         turn_classifier: Optional[TurnClassifier] = None,
+        dynamic_clarify_question: bool = True,
+        intent_candidate_options: bool = True,
     ) -> None:
         self.parser = parser
         self.intent_resolver = intent_resolver
@@ -38,6 +40,8 @@ class ConversationSession:
         self.classifier = turn_classifier or TurnClassifier(parser)
         self.pending: Optional[PendingClarification] = None
         self.turns: list[ConversationTurn] = []
+        self.dynamic_clarify_question = dynamic_clarify_question
+        self.intent_candidate_options = intent_candidate_options
 
     def receive(self, user_text: str, image_paths: Optional[list[str]] = None,
                 forced_intent: Optional[Intent] = None) -> SessionResult:
@@ -72,15 +76,28 @@ class ConversationSession:
                 original_query=contextual_query,
                 candidates=resolution.candidates if resolution else [],
                 last_question=result.message,
+                question_history=[result.message],
                 memory_context=memory_context,
                 original_intent=resolution.intent if resolution else None,
                 original_terms=self.parser.kb.find_terms(user_query),
             )
         return result
 
+    _INTENT_SELECTION_RE = re.compile(r"【intent:(.+?)】")
+
     def _continue_clarification(self, user_query: str, image_paths: list[str]) -> SessionResult:
         """澄清态下，把当前输入作为对澄清的补充并尝试重新解析。"""
         assert self.pending is not None
+
+        # 检测用户是否通过点击意图候选选项来选定 intent
+        intent_match = self._INTENT_SELECTION_RE.search(user_query)
+        selected_intent: Optional[Intent] = None
+        if intent_match:
+            raw_intent = intent_match.group(1)
+            if raw_intent in INTENT_LABELS:
+                selected_intent = raw_intent
+            user_query = self._INTENT_SELECTION_RE.sub("", user_query).strip()
+
         self.pending.collected_details.append(user_query)
         self.pending.attempts += 1
 
@@ -92,12 +109,15 @@ class ConversationSession:
                 user_query=user_query,
             )
 
+        clarification_history = list(self.pending.question_history)
         combined_query = self.pending.combined_query()
         result = self._try_resolve(
             combined_query,
             image_paths,
             user_query=combined_query,
             memory_context=self.pending.memory_context,
+            clarification_history=clarification_history,
+            forced_intent=selected_intent,
         )
         if result.status == "ready":
             self.pending = None
@@ -105,6 +125,7 @@ class ConversationSession:
 
         self.pending.candidates = result.resolution.candidates if result.resolution else []
         self.pending.last_question = result.message
+        self.pending.question_history.append(result.message)
         return result
 
     def reset(self) -> None:
@@ -151,6 +172,7 @@ class ConversationSession:
         user_query: str,
         memory_context: str,
         forced_intent: Optional[Intent] = None,
+        clarification_history: Optional[list[str]] = None,
     ) -> SessionResult:
         if forced_intent:
             resolution = IntentResolution(
@@ -166,9 +188,18 @@ class ConversationSession:
                 needs_clarification=False,
             )
         elif self.intent_resolver:
-            resolution = self.intent_resolver.resolve(query, image_paths=image_paths, memory_context=memory_context)
+            resolution = self.intent_resolver.resolve(
+                query,
+                image_paths=image_paths,
+                memory_context=memory_context,
+                clarification_history=clarification_history if self.dynamic_clarify_question else None,
+            )
         else:
-            resolution = self.parser.resolve_intent(query, image_paths=image_paths)
+            resolution = self.parser.resolve_intent(
+                query,
+                image_paths=image_paths,
+                clarification_history=clarification_history if self.dynamic_clarify_question else None,
+            )
         # 部分意图在作答前需要先让用户选定子类型（如语音交互的「含义识别类 / 声学控制类」）。
         # 这类意图一旦被判定为 top intent，就用选项式追问代替通用澄清：
         # - 用户已点明子类型 -> 视为意图明确，直接进入作答（忽略 needs_clarification）；
@@ -186,13 +217,35 @@ class ConversationSession:
                     options=[opt.to_dict() for opt in clarify_spec.options],
                 )
         elif resolution.needs_clarification or resolution.intent is None:
+            # 检查是否可以展示意图候选选项（仅在启用了 intent_candidate_options 且真正接近时）
+            candidate_options: list[dict[str, str]] = []
+            if (
+                self.intent_candidate_options
+                and resolution.candidates
+                and resolution.intent is not None
+                and self.parser._is_ambiguous_call(resolution.candidates)
+            ):
+                candidate_options = self.parser._build_intent_candidate_options(
+                    user_query, resolution.candidates
+                )
+
+            message = (
+                "这个问题可能有多种理解，请选择最接近的一种："
+                if candidate_options
+                else (
+                    resolution.clarification_question
+                    or "还不能确定 intent，请补充具体对象、场景或希望的输出形式。"
+                )
+            )
+
             return SessionResult(
                 status="clarify",
-                message=resolution.clarification_question or "还不能确定 intent，请补充具体对象、场景或希望的输出形式。",
+                message=message,
                 user_query=user_query,
                 resolved_query=query,
                 memory_context=memory_context,
                 resolution=resolution,
+                options=candidate_options,
             )
 
         output_frame_override = None
