@@ -9,15 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 uv sync --group dev
 cp .env.example .env   # then fill in SILICONFLOW_API_KEY
 
-# Run
-uv run python -m gesture_agent.cli                    # interactive mode
-uv run python -m gesture_agent.cli "question text"    # single question
-uv run python -m gesture_agent.cli --dry-run          # local parsing only, no API call
-uv run python -m gesture_agent.cli --stream           # streaming output
-
-# Inspect knowledge/config
-uv run python -m gesture_agent.cli --show-term-inventory
-uv run python -m gesture_agent.cli --export-structured-knowledge data/structured_knowledge.json
+# Run (Web)
+./web/run.sh                                          # start web server on http://127.0.0.1:5050
+PYTHONPATH=. python web/backend/app.py                # alternative: start with system python
 
 # Tests
 pytest
@@ -32,7 +26,7 @@ This is a structured learning agent for a gesture interaction design dictionary.
 
 ```
 User Input
-  → CLI (gesture_agent/cli.py)                    # arg parsing, config loading, loop
+  → Web Backend (web/backend/app.py)              # Flask routes, session management, SSE streaming
   → QuestionParser (learning/question_parser.py)  # regex intent + term/layer extraction
   → ConversationSession (learning/session.py)     # multi-turn clarification, memory (6 turns)
   → KnowledgeBase.search (knowledge/base.py)      # BM25 + term-boost + structured reranking

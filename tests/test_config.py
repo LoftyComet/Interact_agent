@@ -1,6 +1,5 @@
 import os
 
-from gesture_agent.cli import main
 from gesture_agent.providers import SiliconFlowClient
 from gesture_agent.settings import get_env, load_agent_config, load_env_file
 
@@ -119,38 +118,3 @@ def test_load_agent_config_reads_runtime_and_prompt(tmp_path) -> None:
     assert loaded.prompt.extra_system_prompt == "第一行\n第二行"
     assert loaded.prompt.extra_response_instructions == ["只使用 output_frame 标题"]
 
-
-def test_cli_uses_agent_config_for_dry_run(tmp_path, capsys) -> None:
-    config = tmp_path / "agent_config.json"
-    config.write_text(
-        """
-{
-  "retrieval": {
-    "top_k": 1
-  },
-  "runtime": {
-    "dry_run": true,
-    "show_structure": true,
-    "show_context": true,
-    "default_interactive": false
-  }
-}
-""".strip(),
-        encoding="utf-8",
-    )
-
-    exit_code = main(["--config", str(config), "什么是单击？"])
-    captured = capsys.readouterr()
-
-    assert exit_code == 0
-    assert "问题结构" in captured.out
-    assert "检索资料" in captured.out
-    assert captured.out.count("score=") == 1
-
-
-def test_cli_defaults_to_interactive_when_no_question(tmp_path, monkeypatch) -> None:
-    config = tmp_path / "agent_config.json"
-    config.write_text('{"runtime": {"default_interactive": true}}', encoding="utf-8")
-    monkeypatch.setattr("builtins.input", lambda _prompt="": (_ for _ in ()).throw(EOFError()))
-
-    assert main(["--config", str(config)]) == 0
