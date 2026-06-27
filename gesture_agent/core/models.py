@@ -77,6 +77,7 @@ class TermInventory:
     by_type: dict[str, list[str]] = field(default_factory=dict)
     aliases: dict[str, str] = field(default_factory=dict)
     structural_terms: list[str] = field(default_factory=list)
+    subgroup_labels: dict[str, list[str]] = field(default_factory=dict)
     source: str = "generated"
 
     def all_terms(self) -> list[str]:
@@ -90,6 +91,10 @@ class TermInventory:
                     terms.append(term)
         for type_terms in self.by_type.values():
             for term in type_terms:
+                if term not in terms:
+                    terms.append(term)
+        for subgroup_list in self.subgroup_labels.values():
+            for term in subgroup_list:
                 if term not in terms:
                     terms.append(term)
         for alias, canonical in self.aliases.items():

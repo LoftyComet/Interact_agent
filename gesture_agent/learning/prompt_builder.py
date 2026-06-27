@@ -182,6 +182,11 @@ def format_term_inventory(
     lines = [
         "结构术语：" + "、".join(term_inventory.structural_terms),
     ]
+    # 子分组标签（Excel 中的分类类别）
+    for term_type, subgroups in term_inventory.subgroup_labels.items():
+        if not subgroups:
+            continue
+        lines.append(f"术语子分类（{term_type}）：" + "、".join(subgroups))
     for term_type, terms in term_inventory.by_type.items():
         if not terms:
             continue

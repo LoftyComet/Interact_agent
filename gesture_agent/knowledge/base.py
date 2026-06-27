@@ -627,6 +627,7 @@ def _term_inventory_from_tree(raw: dict[str, Any], *, source: str) -> TermInvent
     valid_layers = set(Layer.__args__)  # type: ignore[attr-defined]
     by_layer: dict[Layer, list[str]] = {}
     by_type: dict[str, list[str]] = {}
+    subgroup_labels: dict[str, list[str]] = {}
     aliases: dict[str, str] = {}
 
     def _push(bucket: dict, key: Any, term: str) -> None:
@@ -650,6 +651,10 @@ def _term_inventory_from_tree(raw: dict[str, Any], *, source: str) -> TermInvent
                 aliases[a] = label
         children = node.get("children")
         if isinstance(children, list) and children:
+            # 中间节点（有 children 且不是根）→ 收集为子分组标签
+            label = str(node.get("label", "")).strip()
+            if label and term_type and label != raw.get("root", {}).get("label"):
+                _push(subgroup_labels, str(term_type).strip(), label)
             for child in children:
                 _walk(child, layer, term_type)
             return
@@ -674,7 +679,7 @@ def _term_inventory_from_tree(raw: dict[str, Any], *, source: str) -> TermInvent
                 if a and c:
                     aliases[a] = c
 
-    return TermInventory(by_layer=by_layer, by_type=by_type, aliases=aliases, structural_terms=structural_terms, source=source)
+    return TermInventory(by_layer=by_layer, by_type=by_type, aliases=aliases, structural_terms=structural_terms, subgroup_labels=subgroup_labels, source=source)
 
 
 def _term_inventory_from_config(raw: dict[str, Any], *, source: str) -> TermInventory:
@@ -720,11 +725,15 @@ def _merge_term_inventory(generated: TermInventory, custom: TermInventory, *, so
     by_type: dict[str, list[str]] = {}
     for term_type in set(generated.by_type) | set(custom.by_type):
         by_type[term_type] = _dedupe_terms(custom.by_type.get(term_type, []) + generated.by_type.get(term_type, []))
+    subgroup_labels: dict[str, list[str]] = {}
+    for term_type in set(generated.subgroup_labels) | set(custom.subgroup_labels):
+        subgroup_labels[term_type] = _dedupe_terms(custom.subgroup_labels.get(term_type, []) + generated.subgroup_labels.get(term_type, []))
     return TermInventory(
         by_layer=by_layer,
         by_type=by_type,
         aliases={**generated.aliases, **custom.aliases},
         structural_terms=_dedupe_terms(custom.structural_terms + generated.structural_terms),
+        subgroup_labels=subgroup_labels,
         source=source,
     )
 
