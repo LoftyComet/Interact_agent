@@ -78,39 +78,55 @@ class TurnClassifier:
                 signals=["clarify_reply"],
             )
 
-        # —— 正常态：判定追问 / 新话题 ——
+        # —— 正常态：分层判定，每层产出 decision；末尾统一 LLM fallback ——
+        decision: TurnDecision
         carried = self._carried_intent(user_text, turns)
+
         if ANAPHORA_RE.search(user_text):
-            return TurnDecision(
-                relation=TopicRelation.FOLLOW_UP,
-                confidence=0.95,
-                reason="出现显式指代词，视为延续上一话题。",
-                signals=["anaphora"],
-                carried_intent=carried,
-            )
-        if carried is not None:
-            return TurnDecision(
+            current_terms = set(self.parser.kb.find_terms(user_text))
+            if current_terms and turns and not self._shares_recent_topic(user_text, turns):
+                # 有指代词 + 有词典术语 + 但与最近轮不重叠 → 可能指代新对象
+                decision = TurnDecision(
+                    relation=TopicRelation.FOLLOW_UP,
+                    confidence=0.60,
+                    reason="出现指代词但与最近几轮无术语重合，可能指代新对象。",
+                    signals=["anaphora", "no_term_overlap"],
+                    carried_intent=carried,
+                )
+            else:
+                # 无词典术语（纯粹指代如"它怎么用？"）或术语重叠 → 标准指代词
+                decision = TurnDecision(
+                    relation=TopicRelation.FOLLOW_UP,
+                    confidence=0.95,
+                    reason="出现显式指代词，视为延续上一话题。",
+                    signals=["anaphora"],
+                    carried_intent=carried,
+                )
+        elif carried is not None:
+            decision = TurnDecision(
                 relation=TopicRelation.FOLLOW_UP,
                 confidence=0.9,
                 reason="上一轮意图可延续（如 design_evaluation 的风险/优化追问）。",
                 signals=["carried_intent"],
                 carried_intent=carried,
             )
-        if GENERIC_CUE_RE.search(user_text) and self._shares_recent_topic(user_text, turns):
-            return TurnDecision(
+        elif GENERIC_CUE_RE.search(user_text) and self._shares_recent_topic(user_text, turns):
+            decision = TurnDecision(
                 relation=TopicRelation.FOLLOW_UP,
                 confidence=0.8,
                 reason="泛化提示词且与最近几轮共享词典术语，判为追问。",
                 signals=["generic_cue", "shared_topic"],
             )
+        else:
+            # 弱信号兜底：默认新话题
+            decision = TurnDecision(
+                relation=TopicRelation.NEW_TOPIC,
+                confidence=0.5,
+                reason="无指代词、无可延续意图、无术语重合，默认新话题。",
+                signals=["default"],
+            )
 
-        # —— 弱信号兜底：默认新话题，必要时降级到 LLM ——
-        decision = TurnDecision(
-            relation=TopicRelation.NEW_TOPIC,
-            confidence=0.5,
-            reason="无指代词、无可延续意图、无术语重合，默认新话题。",
-            signals=["default"],
-        )
+        # —— 统一的 LLM fallback 检查 ——
         if self.relation_resolver is not None and decision.confidence < LLM_FALLBACK_THRESHOLD:
             llm_decision = self.relation_resolver.resolve(user_text, turns)
             if llm_decision is not None:
@@ -134,7 +150,7 @@ class TurnClassifier:
 
         保守判定，宁可继续粘合也不要误伤合法澄清：仅当
         1. 原问题没有确定意图（intent 为 None，即真正模糊的提问，
-           而不是“意图已知、仅缺对象”的提问，如“帮我对比一下”）；
+           而不是"意图已知、仅缺对象"的提问，如"帮我对比一下"）；
         2. 新输入自带词典术语；
         3. 这些术语与原问题术语无重合；
         4. 新输入不含指代词（它/这个/上述…，含则仍是延续）
@@ -177,8 +193,8 @@ _LLM_RELATION_MAP: dict[str, TopicRelation] = {
     "follow_up": TopicRelation.FOLLOW_UP,
     "new_topic": TopicRelation.NEW_TOPIC,
 }
-# 降级时只看最近几轮，prompt 尽量短。
-_LLM_CONTEXT_TURNS = 2
+# 降级时回看的轮数，与 memory_summary 一致以便 LLM 看到足够脉络。
+_LLM_CONTEXT_TURNS = 4
 
 
 class LLMTurnRelationResolver:
@@ -224,7 +240,8 @@ class LLMTurnRelationResolver:
         history_lines = []
         for index, turn in enumerate(turns[-_LLM_CONTEXT_TURNS:], start=1):
             terms = "、".join(turn.structure.terms) if turn.structure.terms else "无"
-            history_lines.append(f"{index}. 用户问：{turn.user_query}（术语：{terms}）")
+            summary = f"；回答摘要：{turn.answer_summary}" if turn.answer_summary else ""
+            history_lines.append(f"{index}. 用户问：{turn.user_query}（术语：{terms}）{summary}")
         history = "\n".join(history_lines) or "无"
         return f"""你在判断用户最新一句话与上文的关系，用于决定要不要把历史对话作为上下文带入。
 
@@ -235,8 +252,8 @@ class LLMTurnRelationResolver:
 {user_text}
 
 请二选一：
-- follow_up：在追问、延续上文同一话题（即使没有出现“它/这个”等指代词）。
-- new_topic：开启了一个与上文无关的新问题。
+- follow_up：在追问、延续上文同一话题。如果最近一轮的回答摘要和新问题高度相关，即使没有共享术语，也应判为 follow_up。
+- new_topic：开启了一个与上文无关的新问题，即使用户用了"这个/它"等指代词，若上下文术语完全无关也可能是新话题。
 
 只输出 JSON，不要解释：
 {{"relation": "follow_up 或 new_topic", "confidence": 0.0, "reason": "一句话依据"}}"""

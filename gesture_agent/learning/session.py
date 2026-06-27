@@ -18,7 +18,7 @@ from .clarify_options import get_clarify_spec
 from .llm_intent import LLMIntentResolver
 from .llm_output_frame import OPEN_ENDED_FALLBACK_FRAME, LLMOutputFrameResolver
 from .question_parser import INTENT_LABELS, QuestionParser
-from .turn_classifier import TurnClassifier
+from .turn_classifier import LLM_FALLBACK_THRESHOLD, TurnClassifier
 
 MAX_HISTORY_TURNS = 6
 MAX_CLARIFICATION_ATTEMPTS = 3
@@ -62,7 +62,9 @@ class ConversationSession:
 
         # —— 正常态：维度 A 决定是否注入记忆，维度 B 由解析层产出 ——
         memory_context = self.memory_summary()
-        contextual_query = self._contextualize_query(user_query, memory_context, decision.relation)
+        contextual_query = self._contextualize_query(
+            user_query, memory_context, decision.relation, decision.confidence
+        )
         result = self._try_resolve(
             contextual_query,
             image_paths,
@@ -150,11 +152,30 @@ class ConversationSession:
         )
         self.turns = self.turns[-MAX_HISTORY_TURNS:]
 
-    def memory_summary(self, max_turns: int = 4) -> str:
+    def memory_summary(self, max_turns: int = 4, tier: str = "full") -> str:
+        """按粒度层级生成记忆摘要。
+
+        tier:
+          - "light": 仅上一轮的 intent + 术语（最低 token 开销）
+          - "medium": 最近 N 轮的问题 + intent + 术语，不含回答摘要
+          - "full": 完整记忆，含输出框架和回答摘要（当前默认格式）
+        """
         if not self.turns:
             return ""
-        lines: list[str] = []
-        for index, turn in enumerate(self.turns[-max_turns:], start=1):
+        turns_to_use = self.turns[-max_turns:]
+        if tier == "light":
+            last = turns_to_use[-1]
+            terms = "、".join(last.structure.terms) if last.structure.terms else "无"
+            return f"上一轮：intent={last.structure.intent}；术语={terms}"
+        if tier == "medium":
+            lines: list[str] = []
+            for index, turn in enumerate(turns_to_use, start=1):
+                terms = "、".join(turn.structure.terms) if turn.structure.terms else "无"
+                lines.append(f"{index}. 用户问：{turn.user_query}；intent={turn.structure.intent}；术语={terms}")
+            return "\n".join(lines)
+        # full — 完整记忆（当前格式）
+        lines = []
+        for index, turn in enumerate(turns_to_use, start=1):
             terms = "、".join(turn.structure.terms) if turn.structure.terms else "未命中术语"
             lines.append(
                 f"{index}. 用户问：{turn.user_query}；intent={turn.structure.intent}；术语={terms}；"
@@ -271,15 +292,51 @@ class ConversationSession:
         )
 
     def _contextualize_query(
-        self, user_query: str, memory_context: str, relation: TopicRelation
+        self, user_query: str, memory_context: str, relation: TopicRelation, confidence: float = 0.0
     ) -> str:
+        """根据话题关系 + 置信度分层注入记忆。
+
+        - confidence >= 0.9: full — 完整 4 轮记忆含摘要
+        - LLM_FALLBACK_THRESHOLD <= confidence < 0.9: medium — 2 轮不含摘要
+        - confidence < LLM_FALLBACK_THRESHOLD: light — 仅上一轮意图+术语
+        - NEW_TOPIC / 无记忆：不注入
+        """
         if memory_context and relation == TopicRelation.FOLLOW_UP:
-            return f"{user_query}\n对话记忆：\n{memory_context}"
+            if confidence >= 0.9:
+                mem = self.memory_summary(max_turns=4, tier="full")
+            elif confidence >= LLM_FALLBACK_THRESHOLD:
+                mem = self.memory_summary(max_turns=2, tier="medium")
+            else:
+                mem = self.memory_summary(max_turns=1, tier="light")
+            return f"{user_query}\n对话记忆：\n{mem}"
         return user_query
 
 
 def _summarize_answer(answer: str, limit: int = 220) -> str:
+    """按句子边界截断答案摘要，优先保留开头（主题句）+ 结尾（结论）。
+
+    当前 ConversationSession 没有 LLM client，不引入额外 API 调用；
+    用句子级截断替代粗暴的字符截断，显著提升摘要的可读性。
+    """
     cleaned = re.sub(r"\s+", " ", answer).strip()
     if len(cleaned) <= limit:
         return cleaned
-    return cleaned[:limit].rstrip() + "..."
+    # 按句号/问号/叹号/换行分割句子
+    sentences = re.split(r"(?<=[。！？\n.!?])", cleaned)
+    sentences = [s for s in sentences if s.strip()]
+    if not sentences:
+        return cleaned[:limit].rstrip() + "..."
+    # 从头填充直到接近 limit
+    result = ""
+    i = 0
+    while i < len(sentences) and len(result) + len(sentences[i]) <= limit:
+        result += sentences[i]
+        i += 1
+    # 如果还有剩余句子，尝试把最后一句追加到末尾（用 "..." 连接）
+    if i < len(sentences):
+        last = sentences[-1]
+        if len(result) + 3 + len(last) <= limit:
+            result = result.rstrip() + "..." + last
+        else:
+            result = result.rstrip() + "..."
+    return result.strip() or cleaned[:limit].rstrip() + "..."
