@@ -32,6 +32,11 @@ const els = {
   papersFetch: document.getElementById("papers-fetch"),
   papersBuild: document.getElementById("papers-build"),
   papersLog: document.getElementById("papers-log"),
+  advancedToggle: document.getElementById("advanced-toggle"),
+  advancedPanel: document.getElementById("advanced-panel"),
+  intent: document.getElementById("intent"),
+  intentBadge: document.getElementById("intent-badge"),
+  background: document.getElementById("background"),
 };
 
 const state = {
@@ -42,6 +47,7 @@ const state = {
   pendingImages: [], // [{ name, dataUrl }]
   thinkingRow: null, // transient "正在思考" indicator
   mode: "dict", // "dict" | "papers"
+  intentList: [], // populated from /api/intents_list
 };
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024; // 10 MB, mirrors backend limit
@@ -123,6 +129,49 @@ async function loadProviders() {
     // Leave the dropdown empty; backend default provider will be used.
   }
 }
+
+async function loadIntents() {
+  try {
+    const res = await api("/api/intents_list");
+    const data = await res.json();
+    state.intentList = data.intents || [];
+    els.intent.innerHTML = '<option value="">自动检测</option>';
+    for (const item of state.intentList) {
+      const opt = document.createElement("option");
+      opt.value = item.value;
+      opt.textContent = item.label;
+      els.intent.appendChild(opt);
+    }
+  } catch (err) {
+    // silently fallback; dropdown stays with "自动检测" only
+  }
+}
+
+// Advanced options toggle — smooth expand/collapse
+els.advancedToggle &&
+  els.advancedToggle.addEventListener("click", () => {
+    const collapsed = els.advancedPanel.classList.contains("collapsed");
+    if (collapsed) {
+      els.advancedPanel.classList.remove("collapsed");
+      els.advancedToggle.classList.add("expanded");
+    } else {
+      els.advancedPanel.classList.add("collapsed");
+      els.advancedToggle.classList.remove("expanded");
+    }
+  });
+
+// Intent badge update
+els.intent &&
+  els.intent.addEventListener("change", () => {
+    const val = els.intent.value;
+    if (val) {
+      const match = state.intentList.find((item) => item.value === val);
+      els.intentBadge.textContent = match ? match.label : val;
+      els.intentBadge.hidden = false;
+    } else {
+      els.intentBadge.hidden = true;
+    }
+  });
 
 els.provider &&
   els.provider.addEventListener("change", () => {
@@ -730,7 +779,7 @@ async function sendOnce(question, images, style) {
   const res = await api("/api/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, session_id: sessionId, images, style, provider: els.provider.value }),
+    body: JSON.stringify({ question, session_id: sessionId, images, style, provider: els.provider.value, intent: els.intent.value || undefined, background: els.background.value.trim() || undefined }),
     signal: state.abortController.signal,
   });
   const data = await res.json();
@@ -759,7 +808,7 @@ async function sendStream(question, images, style) {
   const res = await fetch(`${API_BASE}/api/ask_stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, session_id: sessionId, images, style, provider: els.provider.value }),
+    body: JSON.stringify({ question, session_id: sessionId, images, style, provider: els.provider.value, intent: els.intent.value || undefined, background: els.background.value.trim() || undefined }),
     signal: state.abortController.signal,
   });
   if (!res.ok || !res.body) {
@@ -1141,6 +1190,7 @@ els.papersBuild &&
 
 refreshHealth();
 loadProviders();
+loadIntents();
 startFreshSession().catch((err) => {
   appendMessage({ role: "assistant", kind: "error", text: `初始化会话失败：${err.message}` });
 });

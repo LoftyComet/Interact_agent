@@ -63,6 +63,8 @@ def log_user_question(
     endpoint: str,
     image_count: int = 0,
     style: str = "",
+    intent: str = "",
+    background: bool = False,
 ) -> None:
     """Append one user question per line to a JSONL log (thread-safe)."""
     record = {
@@ -72,6 +74,8 @@ def log_user_question(
         "question": question,
         "image_count": image_count,
         "style": style,
+        "intent": intent,
+        "background": background,
     }
     try:
         with _question_log_lock:
@@ -310,6 +314,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         rt: AgentRuntime = app.config["AGENT_RUNTIME"]
         return jsonify({"frames": {k: list(v) for k, v in rt.output_frames.frames.items()}})
 
+    @app.get("/api/intents_list")
+    def intents_list() -> Response:
+        from gesture_agent.learning.question_parser import INTENT_LABELS
+        items = [{"value": k, "label": v} for k, v in INTENT_LABELS.items()]
+        return jsonify({"intents": items})
+
     @app.get("/api/providers")
     def providers() -> Response:
         return jsonify({"providers": list_providers()})
@@ -347,6 +357,9 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         image_paths = payload.get("images") or []
         style = payload.get("style") or "concise"
         provider_id = resolve_provider_id(payload.get("provider"))
+        intent_raw = payload.get("intent") or ""
+        intent = intent_raw.strip() if intent_raw.strip() and intent_raw.strip() != "auto" else None
+        background = (payload.get("background") or "").strip() or None
         if not question:
             return jsonify({"error": "missing question"}), 400
 
@@ -356,10 +369,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             endpoint="/api/ask",
             image_count=len(image_paths),
             style=style,
+            intent=intent_raw,
+            background=bool(background),
         )
 
         session = rt.get_session(session_id)
-        session_result = session.receive(question, image_paths=image_paths)
+        session_result = session.receive(question, image_paths=image_paths, forced_intent=intent)
 
         if session_result.status == "clarify":
             return jsonify(
@@ -408,6 +423,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 prompt_config=rt.config.prompt,
                 available_images=available_images,
                 style=style,
+                background=background,
             )
             client = rt.make_chat_client(use_vision=bool(image_paths), provider_id=provider_id)
             answer = client.chat(
@@ -477,6 +493,9 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         image_paths = payload.get("images") or []
         style = payload.get("style") or "concise"
         provider_id = resolve_provider_id(payload.get("provider"))
+        intent_raw = payload.get("intent") or ""
+        intent = intent_raw.strip() if intent_raw.strip() and intent_raw.strip() != "auto" else None
+        background = (payload.get("background") or "").strip() or None
         if not question:
             return jsonify({"error": "missing question"}), 400
 
@@ -486,10 +505,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             endpoint="/api/ask_stream",
             image_count=len(image_paths),
             style=style,
+            intent=intent_raw,
+            background=bool(background),
         )
 
         session = rt.get_session(session_id)
-        session_result = session.receive(question, image_paths=image_paths)
+        session_result = session.receive(question, image_paths=image_paths, forced_intent=intent)
 
         def sse(event: str, data: dict[str, Any]) -> str:
             return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -547,6 +568,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     prompt_config=rt.config.prompt,
                     available_images=available_images,
                     style=style,
+                    background=background,
                 )
                 client = rt.make_chat_client(use_vision=bool(image_paths), provider_id=provider_id)
                 for delta in client.chat_stream(

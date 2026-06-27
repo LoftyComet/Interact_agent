@@ -54,6 +54,54 @@
               <button type="submit" id="send" class="btn primary">发送</button>
             </div>
           </div>
+          <div class="composer-row advanced-toggle">
+            <button type="button" id="advanced-toggle" class="advanced-chip" title="高级选项">
+              <svg class="chip-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+              </svg>
+              <span class="chip-label">高级选项</span>
+              <svg class="chip-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <span id="intent-badge" class="intent-badge" hidden></span>
+          </div>
+          <div class="composer-row advanced-panel collapsed" id="advanced-panel">
+            <div class="advanced-panel-inner">
+              <div class="advanced-field intent-selector">
+                <div class="advanced-field-head">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+                    <line x1="12" y1="22" x2="12" y2="15.5"/>
+                    <polyline points="22 8.5 12 15.5 2 8.5"/>
+                  </svg>
+                  <span>意图</span>
+                </div>
+                <select id="intent">
+                  <option value="" selected>自动检测</option>
+                </select>
+              </div>
+              <div class="advanced-divider"></div>
+              <div class="advanced-field bg-selector">
+                <div class="advanced-field-head">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                    <polyline points="10 9 9 9 8 9"/>
+                  </svg>
+                  <span>自定义背景知识</span>
+                </div>
+                <textarea
+                  id="background"
+                  rows="2"
+                  placeholder="可选：补充场景、约束或上下文信息，会随词典资料一起提供给模型参考..."
+                ></textarea>
+              </div>
+            </div>
+          </div>
           <div class="composer-row optional">
             <input
               type="file"

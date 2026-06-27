@@ -39,7 +39,8 @@ class ConversationSession:
         self.pending: Optional[PendingClarification] = None
         self.turns: list[ConversationTurn] = []
 
-    def receive(self, user_text: str, image_paths: Optional[list[str]] = None) -> SessionResult:
+    def receive(self, user_text: str, image_paths: Optional[list[str]] = None,
+                forced_intent: Optional[Intent] = None) -> SessionResult:
         image_paths = image_paths or []
         user_query = user_text.strip()
         if not user_query:
@@ -63,7 +64,7 @@ class ConversationSession:
             image_paths,
             user_query=user_query,
             memory_context=memory_context,
-            forced_intent=decision.carried_intent,
+            forced_intent=forced_intent or decision.carried_intent,
         )
         if result.status == "clarify":
             resolution = result.resolution

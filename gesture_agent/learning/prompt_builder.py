@@ -92,12 +92,18 @@ def build_user_prompt(
     prompt_config: Optional[PromptConfig] = None,
     available_images: Optional[list["ImageEntry"]] = None,
     style: Optional[str] = None,
+    background: Optional[str] = None,
 ) -> str:
     context = "\n\n".join(format_chunk(idx + 1, chunk) for idx, chunk in enumerate(chunks))
     structure_json = json.dumps(question.to_dict(), ensure_ascii=False, indent=2)
     memory_section = (
         f"\n对话记忆（只用于理解指代和延续前文，不作为词典证据）：\n{memory_context}\n"
         if memory_context
+        else ""
+    )
+    background_section = (
+        f"\n用户补充的背景知识（辅助参考，优先级低于词典检索资料）：\n{background}\n"
+        if background
         else ""
     )
     term_section = format_term_inventory(term_inventory, question, chunks)
@@ -109,7 +115,7 @@ def build_user_prompt(
     output_skeleton = "\n".join(f"## {item}\n（这一节的内容）" for item in output_frame) if output_frame else "（按问题结构内的小节自由组织）"
     return f"""用户原问题：
 {question.raw_query}
-{memory_section}
+{memory_section}{background_section}
 
 问题结构（仅供你理解意图，**不要照抄成 JSON 输出**）：
 ```json
@@ -259,6 +265,7 @@ def build_messages(
     prompt_config: Optional[PromptConfig] = None,
     available_images: Optional[list["ImageEntry"]] = None,
     style: Optional[str] = None,
+    background: Optional[str] = None,
 ) -> list[dict]:
     user_prompt = build_user_prompt(
         question,
@@ -268,6 +275,7 @@ def build_messages(
         prompt_config=prompt_config,
         available_images=available_images,
         style=style,
+        background=background,
     )
     system_prompt = resolve_system_prompt(prompt_config)
     if not image_urls:
