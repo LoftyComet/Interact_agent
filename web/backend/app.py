@@ -87,6 +87,27 @@ def log_user_question(
         pass
 
 
+def build_retrieval_answer(
+    chunks: list[SourceChunk],
+    resolved_query: str,
+    available_images: Optional[list] = None,
+) -> str:
+    """直接返回检索资料，用于 retrieval_instruction 意图。
+    优先返回图片（有图就不给文字），没有图片时才返回文本 chunks。"""
+    # 有图片时只给图片
+    if available_images:
+        img_lines = []
+        for img in available_images:
+            img_lines.append(f"![{img.annotation}](image:{img.id})")
+        return "\n\n".join(img_lines)
+
+    # 没图片时给文本
+    if chunks:
+        return "\n\n---\n\n".join(chunk.text for chunk in chunks)
+
+    return "词典中未找到对应的表达式、图示或案例。"
+
+
 def resolve_image_refs(text: str, image_index: Optional[ImageIndex], base_url: str = "/api/images") -> str:
     if image_index is None:
         return text
@@ -412,6 +433,29 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 top_k=3,
             )
 
+        # retrieval_instruction 快速路径：跳过 LLM，直接返回检索内容
+        if structure and structure.intent == "retrieval_instruction":
+            answer = build_retrieval_answer(chunks, session_result.resolved_query, available_images)
+            if structure is not None:
+                session.record_turn(
+                    user_query=session_result.user_query,
+                    resolved_query=session_result.resolved_query,
+                    structure=structure,
+                    answer=answer,
+                )
+            answer = resolve_image_refs(answer, rt.image_index)
+            return jsonify(
+                {
+                    "session_id": session_id,
+                    "status": "ready",
+                    "answer": answer,
+                    "structure": serialize_structure(structure),
+                    "chunks": [serialize_chunk(c) for c in chunks],
+                    "memory_context": session_result.memory_context,
+                }
+            )
+        # --- 检索指令快速路径结束 ---
+
         answer = ""
         error_text: Optional[str] = None
         try:
@@ -546,6 +590,38 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 chunks,
                 top_k=3,
             )
+
+        # retrieval_instruction 快速路径：跳过 LLM，直接返回检索内容
+        if structure and structure.intent == "retrieval_instruction":
+            answer = build_retrieval_answer(chunks, session_result.resolved_query, available_images)
+
+            def retrieval_stream():
+                yield sse(
+                    "meta",
+                    {
+                        "session_id": session_id,
+                        "structure": serialize_structure(structure),
+                        "chunks": [serialize_chunk(c) for c in chunks],
+                        "memory_context": session_result.memory_context,
+                        "input_corrections": input_corrections,
+                    },
+                )
+                # 将答案按小块流式输出，模拟打字效果
+                chunk_size = 60
+                for i in range(0, len(answer), chunk_size):
+                    yield sse("delta", {"text": answer[i : i + chunk_size]})
+                if structure is not None:
+                    session.record_turn(
+                        user_query=session_result.user_query,
+                        resolved_query=session_result.resolved_query,
+                        structure=structure,
+                        answer=answer,
+                    )
+                full = resolve_image_refs(answer, rt.image_index)
+                yield sse("done", {"session_id": session_id, "answer": full, "output_issues": []})
+
+            return Response(stream_with_context(retrieval_stream()), mimetype="text/event-stream")
+        # --- 检索指令快速路径结束 ---
 
         def generate():
             yield sse(

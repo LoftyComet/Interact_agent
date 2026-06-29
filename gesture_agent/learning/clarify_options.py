@@ -74,29 +74,6 @@ CLARIFY_OPTION_SPECS: dict[Intent, ClarifyOptionSpec] = {
             ),
         ),
     ),
-    "control_form_application": ClarifyOptionSpec(
-        message="控件形态的应用需要考虑放置位置、适用人群和交互场景，你想了解哪个方面？",
-        options=(
-            SubTypeOption(
-                label="放置位置",
-                value="控件形态的放置位置：在不同身体部位（头部、手部、躯干、腿部等）放置控件的影响和考量",
-                desc="不同身体部位的控件放置策略与适用性分析",
-                keywords=("放置", "位置", "安装", "穿戴", "部位", "放在"),
-            ),
-            SubTypeOption(
-                label="适用人群",
-                value="控件形态的适用人群：针对老年人、儿童、残障人士等不同人群的控件选择与适配",
-                desc="不同用户群体的控件形态适配与无障碍设计",
-                keywords=("老年人", "儿童", "残障", "人群", "用户群体", "适用人群"),
-            ),
-            SubTypeOption(
-                label="应用场景",
-                value="控件形态的应用场景：在不同使用环境（驾驶、运动、办公、户外等）中的控件选择",
-                desc="不同使用场景下的控件形态选择与约束",
-                keywords=("场景", "环境", "驾驶", "运动", "办公", "户外"),
-            ),
-        ),
-    ),
     "case_analysis": ClarifyOptionSpec(
         message="案例分析可以从不同角度进行，你想重点了解哪方面？",
         options=(

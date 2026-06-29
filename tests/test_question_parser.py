@@ -190,16 +190,6 @@ def test_mechanism_identification_intent() -> None:
     assert "表达式" not in "".join(structure.output_frame)
 
 
-def test_control_form_compare_intent() -> None:
-    kb = KnowledgeBase.load("data")
-    parser = QuestionParser(kb)
-
-    structure = parser.parse("手表和手套在交互上有啥区别")
-
-    assert structure.intent == "control_form_compare"
-    assert "包含属性" in structure.output_frame
-
-
 def test_function_interaction_breakdown_intent() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)
@@ -230,14 +220,24 @@ def test_plain_mechanism_compare_stays_interaction_compare() -> None:
     assert structure.intent == "interaction_compare"
 
 
-def test_control_form_application_intent() -> None:
+def test_design_suggestion_intent() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)
 
-    structure = parser.parse("什么样的控件形式更适合老年人")
+    structure = parser.parse("我想设计一个VR中的键盘交互，有什么建议")
 
-    assert structure.intent == "control_form_application"
-    assert "需要澄清的信息" in structure.output_frame
+    assert structure.intent == "design_suggestion"
+    assert "设计建议（仅供参考）" in structure.output_frame
+
+
+def test_retrieval_instruction_intent() -> None:
+    kb = KnowledgeBase.load("data")
+    parser = QuestionParser(kb)
+
+    structure = parser.parse("给我向量菜单的IxDL表达式")
+
+    assert structure.intent == "retrieval_instruction"
+    assert "检索结果" in structure.output_frame
 
 
 def test_interaction_optimization_intent() -> None:

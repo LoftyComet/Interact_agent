@@ -22,11 +22,11 @@ TERM_SENSITIVE_INTENTS = {
     "case_analysis",
     "design_evaluation",
     "mechanism_identification",
-    "control_form_compare",
     "function_interaction_breakdown",
     "mechanism_parameter_compare",
-    "control_form_application",
     "interaction_optimization",
+    "design_suggestion",
+    "retrieval_instruction",
 }
 
 # 这些虚词/高频字若出现在错别字窗口的差异位，说明窗口跨了词边界，
@@ -322,11 +322,11 @@ class InputVerifier:
             "case_analysis": ["control_form", "basic_property", "interaction_mechanism"],
             "design_evaluation": ["control_form", "basic_property", "interaction_mechanism"],
             "mechanism_identification": ["interaction_mechanism"],
-            "control_form_compare": ["control_form", "interaction_mechanism"],
             "function_interaction_breakdown": ["control_form", "basic_property", "interaction_mechanism"],
             "mechanism_parameter_compare": ["interaction_mechanism"],
-            "control_form_application": ["control_form", "basic_property", "interaction_mechanism"],
             "interaction_optimization": ["control_form", "basic_property", "interaction_mechanism"],
+            "design_suggestion": ["control_form", "basic_property", "interaction_mechanism"],
+            "retrieval_instruction": ["interaction_mechanism"],
         }
         for layer in intent_layers.get(structure.intent, ["control_form", "basic_property", "interaction_mechanism"]):
             _add(layer)

@@ -35,26 +35,26 @@ VALID_INTENTS = {
     "design_evaluation": "设计方案评估（给方案提建议、推荐交互方式、优化体验、评估维度）",
     "open_ended": "开放问题（与交互设计无关的闲聊/常识）",
     "mechanism_identification": "机制识别（给操作描述反推对应哪些交互机制，先给候选再追问，暂不附表达式）",
-    "control_form_compare": "控件形态对比（硬件/控件载体之间的对比，非交互机制对比）",
     "function_interaction_breakdown": "功能交互拆解（拆解一类功能在多种情况下的交互枚举）",
     "mechanism_parameter_compare": "同机制参数对比（同一机制不同参数的取舍，先查论文再看模型确信度）",
-    "control_form_application": "控件形态延伸应用（控件与位置/人群/场景的关系，书里没有直接内容，套话+追问+用属性间接答）",
     "interaction_optimization": "交互优化（现有交互有具体问题想优化，先诊断+追问再给建议）",
     "evaluation_methodology": "评估方法论（如何评估交互/评估维度，用控件形态/属性/机制作评估单元）",
+    "design_suggestion": "设计建议（请求新交互方案的建议/推荐，输出强调仅供参考）",
+    "retrieval_instruction": "检索指令（直接请求特定表达式/图示，直接输出检索内容不展开分析）",
 }
 
 # 按序号覆盖：校对备注/校对总结明确指向了与原始意图不同的合法 intent 的个例。
 MANUAL_OVERRIDE = {
     8: "mechanism_identification",   # "属于什么交互机制"，反推机制而非讲解
     27: "mechanism_identification",  # "可以生成这个交互的交互表达式吗"，反推后给候选
-    12: "control_form_compare",      # 手表 vs 手套，硬件载体对比
-    37: "control_form_compare",      # 头部 vs 腿部控制，控件形态对比（原标 interaction_compare）
+    12: "interaction_compare",       # 手表 vs 手套，交互对比（原 control_form_compare 已删除）
+    37: "design_suggestion",         # 头部 vs 腿部控制，设计建议（原 control_form_compare 已删除）
     24: "function_interaction_breakdown",  # 英雄控制涉及哪些手势，拆解一类功能
     26: "function_interaction_breakdown",  # 掉落物品各种情况的交互逻辑系统
     10: "mechanism_parameter_compare",     # 拖拽长/短距离的应用场景
-    15: "control_form_application",  # 开关适合放置在什么位置
-    16: "control_form_application",  # 什么样的控件形式更适合老年人
-    17: "control_form_application",  # 椅子作为交互体有什么应用场景
+    15: "design_suggestion",         # 开关适合放置在什么位置（原 control_form_application 已删除）
+    16: "design_suggestion",         # 什么样的控件形式更适合老年人（原 control_form_application 已删除）
+    17: "design_suggestion",         # 椅子作为交互体有什么应用场景（原 control_form_application 已删除）
     36: "interaction_optimization",  # 优化原神切换角色释放技能、误触
     33: "evaluation_methodology",    # 如何评估交互、评估维度有哪些
 }
