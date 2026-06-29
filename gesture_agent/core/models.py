@@ -214,7 +214,6 @@ class ConversationTurn:
     user_query: str
     resolved_query: str
     structure: QuestionStructure
-    answer_summary: str = ""
 
 
 @dataclass

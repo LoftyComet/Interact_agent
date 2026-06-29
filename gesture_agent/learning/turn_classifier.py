@@ -239,9 +239,7 @@ class LLMTurnRelationResolver:
     def _build_prompt(self, user_text: str, turns: list[ConversationTurn]) -> str:
         history_lines = []
         for index, turn in enumerate(turns[-_LLM_CONTEXT_TURNS:], start=1):
-            terms = "、".join(turn.structure.terms) if turn.structure.terms else "无"
-            summary = f"；回答摘要：{turn.answer_summary}" if turn.answer_summary else ""
-            history_lines.append(f"{index}. 用户问：{turn.user_query}（术语：{terms}）{summary}")
+            history_lines.append(f"{index}. {turn.user_query}")
         history = "\n".join(history_lines) or "无"
         return f"""你在判断用户最新一句话与上文的关系，用于决定要不要把历史对话作为上下文带入。
 
@@ -252,8 +250,8 @@ class LLMTurnRelationResolver:
 {user_text}
 
 请二选一：
-- follow_up：在追问、延续上文同一话题。如果最近一轮的回答摘要和新问题高度相关，即使没有共享术语，也应判为 follow_up。
-- new_topic：开启了一个与上文无关的新问题，即使用户用了"这个/它"等指代词，若上下文术语完全无关也可能是新话题。
+- follow_up：在追问、延续上文同一话题。如果新问题与最近几轮的问题高度相关（例如追问细节、要求举例、对比、展开等），即使没有共享术语，也应判为 follow_up。
+- new_topic：开启了一个与上文无关的新问题，即使用户用了"这个/它"等指代词，若上下文问题完全无关也可能是新话题。
 
 只输出 JSON，不要解释：
 {{"relation": "follow_up 或 new_topic", "confidence": 0.0, "reason": "一句话依据"}}"""

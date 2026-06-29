@@ -140,49 +140,22 @@ class ConversationSession:
         user_query: str,
         resolved_query: str,
         structure: QuestionStructure,
-        answer: str = "",
     ) -> None:
         self.turns.append(
             ConversationTurn(
                 user_query=user_query,
                 resolved_query=resolved_query,
                 structure=structure,
-                answer_summary=_summarize_answer(answer),
             )
         )
         self.turns = self.turns[-MAX_HISTORY_TURNS:]
 
-    def memory_summary(self, max_turns: int = 4, tier: str = "full") -> str:
-        """按粒度层级生成记忆摘要。
-
-        tier:
-          - "light": 仅上一轮的 intent + 术语（最低 token 开销）
-          - "medium": 最近 N 轮的问题 + intent + 术语，不含回答摘要
-          - "full": 完整记忆，含输出框架和回答摘要（当前默认格式）
-        """
+    def memory_summary(self, max_turns: int = 4) -> str:
+        """生成记忆摘要：最近 N 轮用户问题的编号列表。"""
         if not self.turns:
             return ""
         turns_to_use = self.turns[-max_turns:]
-        if tier == "light":
-            last = turns_to_use[-1]
-            terms = "、".join(last.structure.terms) if last.structure.terms else "无"
-            return f"上一轮：intent={last.structure.intent}；术语={terms}"
-        if tier == "medium":
-            lines: list[str] = []
-            for index, turn in enumerate(turns_to_use, start=1):
-                terms = "、".join(turn.structure.terms) if turn.structure.terms else "无"
-                lines.append(f"{index}. 用户问：{turn.user_query}；intent={turn.structure.intent}；术语={terms}")
-            return "\n".join(lines)
-        # full — 完整记忆（当前格式）
-        lines = []
-        for index, turn in enumerate(turns_to_use, start=1):
-            terms = "、".join(turn.structure.terms) if turn.structure.terms else "未命中术语"
-            lines.append(
-                f"{index}. 用户问：{turn.user_query}；intent={turn.structure.intent}；术语={terms}；"
-                f"输出框架={'/'.join(turn.structure.output_frame)}"
-            )
-            if turn.answer_summary:
-                lines.append(f"   上次回答摘要：{turn.answer_summary}")
+        lines = [f"{i}. {turn.user_query}" for i, turn in enumerate(turns_to_use, start=1)]
         return "\n".join(lines)
 
     def _try_resolve(
@@ -303,40 +276,10 @@ class ConversationSession:
         """
         if memory_context and relation == TopicRelation.FOLLOW_UP:
             if confidence >= 0.9:
-                mem = self.memory_summary(max_turns=4, tier="full")
+                mem = self.memory_summary(max_turns=4)
             elif confidence >= LLM_FALLBACK_THRESHOLD:
-                mem = self.memory_summary(max_turns=2, tier="medium")
+                mem = self.memory_summary(max_turns=2)
             else:
-                mem = self.memory_summary(max_turns=1, tier="light")
+                mem = self.memory_summary(max_turns=1)
             return f"{user_query}\n对话记忆：\n{mem}"
         return user_query
-
-
-def _summarize_answer(answer: str, limit: int = 220) -> str:
-    """按句子边界截断答案摘要，优先保留开头（主题句）+ 结尾（结论）。
-
-    当前 ConversationSession 没有 LLM client，不引入额外 API 调用；
-    用句子级截断替代粗暴的字符截断，显著提升摘要的可读性。
-    """
-    cleaned = re.sub(r"\s+", " ", answer).strip()
-    if len(cleaned) <= limit:
-        return cleaned
-    # 按句号/问号/叹号/换行分割句子
-    sentences = re.split(r"(?<=[。！？\n.!?])", cleaned)
-    sentences = [s for s in sentences if s.strip()]
-    if not sentences:
-        return cleaned[:limit].rstrip() + "..."
-    # 从头填充直到接近 limit
-    result = ""
-    i = 0
-    while i < len(sentences) and len(result) + len(sentences[i]) <= limit:
-        result += sentences[i]
-        i += 1
-    # 如果还有剩余句子，尝试把最后一句追加到末尾（用 "..." 连接）
-    if i < len(sentences):
-        last = sentences[-1]
-        if len(result) + 3 + len(last) <= limit:
-            result = result.rstrip() + "..." + last
-        else:
-            result = result.rstrip() + "..."
-    return result.strip() or cleaned[:limit].rstrip() + "..."

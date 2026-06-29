@@ -94,8 +94,7 @@ def test_follow_up_uses_previous_turn_memory() -> None:
     session.record_turn(
         user_query=first.user_query,
         resolved_query=first.resolved_query,
-        structure=first.structure,
-        answer="单击是在短时间内完成按下和抬起的基础交互机制。",
+        structure=first.structure
     )
 
     second = session.receive("那它和长按有什么区别？")
@@ -121,8 +120,7 @@ def test_design_evaluation_follow_up_keeps_evaluation_intent() -> None:
     session.record_turn(
         user_query=first.user_query,
         resolved_query=first.resolved_query,
-        structure=first.structure,
-        answer="建议将长按拖拽改为更直接的旋转拖拽，并使用微变响应提供连续反馈。",
+        structure=first.structure
     )
 
     second = session.receive("如何应用微变")
@@ -147,8 +145,7 @@ def test_design_evaluation_case_word_follow_up_does_not_fall_back_to_case_analys
     session.record_turn(
         user_query=first.user_query,
         resolved_query=first.resolved_query,
-        structure=first.structure,
-        answer="评估完成。",
+        structure=first.structure
     )
 
     second = session.receive("就是刚才那个案例如何应用微变")
@@ -171,8 +168,7 @@ def test_unrelated_topic_switch_does_not_attach_memory() -> None:
     session.record_turn(
         user_query=first.user_query,
         resolved_query=first.resolved_query,
-        structure=first.structure,
-        answer="单击是在短时间内完成按下和抬起的基础交互机制。",
+        structure=first.structure
     )
 
     # 新问题命中“语音”术语，与上一轮“单击”无交集 → 不算追问。
@@ -194,8 +190,7 @@ def test_generic_cue_with_shared_term_is_follow_up() -> None:
     session.record_turn(
         user_query=first.user_query,
         resolved_query=first.resolved_query,
-        structure=first.structure,
-        answer="单击是在短时间内完成按下和抬起的基础交互机制。",
+        structure=first.structure
     )
 
     second = session.receive("单击为什么这么常用？")

@@ -441,7 +441,6 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     user_query=session_result.user_query,
                     resolved_query=session_result.resolved_query,
                     structure=structure,
-                    answer=answer,
                 )
             answer = resolve_image_refs(answer, rt.image_index)
             return jsonify(
@@ -511,7 +510,6 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 user_query=session_result.user_query,
                 resolved_query=session_result.resolved_query,
                 structure=structure,
-                answer=answer,
             )
 
         answer = resolve_image_refs(answer, rt.image_index)
@@ -615,7 +613,6 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         user_query=session_result.user_query,
                         resolved_query=session_result.resolved_query,
                         structure=structure,
-                        answer=answer,
                     )
                 full = resolve_image_refs(answer, rt.image_index)
                 yield sse("done", {"session_id": session_id, "answer": full, "output_issues": []})
@@ -700,7 +697,6 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     user_query=session_result.user_query,
                     resolved_query=session_result.resolved_query,
                     structure=structure,
-                    answer=full_answer,
                 )
             full_answer = resolve_image_refs(full_answer, rt.image_index)
             yield sse("done", {"session_id": session_id, "answer": full_answer, "output_issues": output_issues})
