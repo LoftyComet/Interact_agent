@@ -44,6 +44,15 @@ def test_control_form_intent() -> None:
     assert "可用属性" in structure.output_frame
 
 
+def test_clear_control_form_property_question_does_not_require_clarification() -> None:
+    parser = QuestionParser(KnowledgeBase.load("data"))
+
+    resolution = parser.resolve_intent("旋钮可以承载哪些属性？")
+
+    assert resolution.intent == "control_form"
+    assert resolution.needs_clarification is False
+
+
 def test_basic_property_intent() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)

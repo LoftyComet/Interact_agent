@@ -310,12 +310,13 @@ def verify_answer_quality(
     should_retry = False
     hints: list[str] = []
     descriptions: list[str] = []
+    output_issues = []
     if runtime.config.verification.verify_output:
         output_result = runtime.output_verifier.verify(answer, structure, source_count=len(chunks))
         should_retry = should_retry or output_result.should_retry
         if output_result.correction_hints:
             hints.append(output_result.correction_hints)
-        descriptions.extend(issue.description for issue in output_result.issues)
+        output_issues = list(output_result.issues)
 
     grounding = None
     if runtime.config.verification.verify_grounding:
@@ -324,12 +325,57 @@ def verify_answer_quality(
         if grounding.correction_hints:
             hints.append(grounding.correction_hints)
         descriptions.extend(grounding.issue_descriptions)
+        if grounding.status != "unavailable":
+            # The semantic judge sees the cited corpus itself and supersedes the
+            # older structured-knowledge heuristic when that heuristic only warns.
+            output_issues = [
+                issue for issue in output_issues
+                if not (issue.issue_type == "knowledge_conflict" and issue.severity == "warning")
+            ]
+    descriptions[0:0] = [issue.description for issue in output_issues]
 
     return AnswerQualityResult(
         should_retry=should_retry,
         correction_hints="\n".join(hints),
         issue_descriptions=list(dict.fromkeys(descriptions)),
         grounding=grounding,
+    )
+
+
+def apply_grounding_safety_fallback(
+    runtime: AgentRuntime,
+    answer: str,
+    structure: QuestionStructure,
+    chunks: list[SourceChunk],
+    quality: AnswerQualityResult,
+) -> tuple[str, AnswerQualityResult]:
+    """Drop claims that remain unsafe after all model correction attempts."""
+    report = quality.grounding
+    if report is None or report.status != "issues_found":
+        return answer, quality
+    sanitized, safe_report = runtime.grounding_verifier.sanitize(answer, report)
+    if sanitized == answer:
+        return answer, quality
+
+    output_issues = []
+    hints = []
+    should_retry = False
+    if runtime.config.verification.verify_output:
+        output_result = runtime.output_verifier.verify(
+            sanitized, structure, source_count=len(chunks)
+        )
+        output_issues = [
+            issue for issue in output_result.issues
+            if not (issue.issue_type == "knowledge_conflict" and issue.severity == "warning")
+        ]
+        should_retry = output_result.should_retry
+        if output_result.correction_hints:
+            hints.append(output_result.correction_hints)
+    return sanitized, AnswerQualityResult(
+        should_retry=should_retry,
+        correction_hints="\n".join(hints),
+        issue_descriptions=[issue.description for issue in output_issues],
+        grounding=safe_report,
     )
 
 
@@ -589,6 +635,9 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 except ProviderError:
                     break
                 quality_result = verify_answer_quality(rt, answer, structure, chunks)
+            answer, quality_result = apply_grounding_safety_fallback(
+                rt, answer, structure, chunks, quality_result
+            )
             output_issues = quality_result.issue_descriptions
             grounding_report = quality_result.grounding
             if rt.config.verification.verify_output:
@@ -786,6 +835,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     except ProviderError:
                         break
                     quality_result = verify_answer_quality(rt, full_answer, structure, chunks)
+                sanitized_answer, quality_result = apply_grounding_safety_fallback(
+                    rt, full_answer, structure, chunks, quality_result
+                )
+                if sanitized_answer != full_answer:
+                    full_answer = sanitized_answer
+                    yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
                 output_issues = quality_result.issue_descriptions
                 grounding_report = quality_result.grounding
                 if rt.config.verification.verify_output:

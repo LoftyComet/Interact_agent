@@ -219,6 +219,8 @@ API key 仍然放在 `.env`，也可以用 shell 环境变量覆盖：
 - `DEEPSEEK_MODEL`：默认 `deepseek-v4-flash`；质量优先可使用 `deepseek-v4-pro`。
 - `DEEPSEEK_BASE_URL`：默认 `https://api.deepseek.com`。
 
+DeepSeek V4 在本项目中默认关闭思考模式，避免推理过程耗尽 `max_tokens` 后留下空正文；需要思考模式时可把 `model.enable_thinking` 显式设为 `true`，并相应提高 `model.max_tokens`。
+
 启用 DeepSeek 生成或语料一致性校验时，当前问题检索到的语料片段会发送给 DeepSeek 官方 API。部署前应确认语料允许发送至该外部服务；敏感语料应改用本地模型或私有部署的校验 Adapter。
 
 ## 设计说明

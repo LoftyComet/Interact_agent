@@ -79,6 +79,38 @@ def test_citation_after_sentence_punctuation_stays_with_claim() -> None:
     assert [claim.citation_ids for claim in report.claims] == [(1,), (2,)]
 
 
+def test_line_ending_citation_applies_to_each_sentence_on_that_line() -> None:
+    verifier = GroundingVerifier(FakeJudge({"c1": "supported", "c2": "supported"}))
+    report = verifier.verify(
+        "旋钮可以连续调节。它通过角度变化输入。[1]",
+        [_source("旋钮可以连续调节，并通过角度变化输入。")],
+    )
+
+    assert [claim.citation_ids for claim in report.claims] == [(1,), (1,)]
+
+
+def test_markdown_table_header_is_not_treated_as_claim() -> None:
+    verifier = GroundingVerifier(FakeJudge({"c1": "supported"}))
+    report = verifier.verify(
+        "| 属性 | 说明 |\n|---|---|\n| 角度属性 | 连续旋转输入。[1] |",
+        [_source("角度属性用于连续旋转输入。")],
+    )
+
+    assert len(report.claims) == 1
+    assert report.claims[0].text == "角度属性 | 连续旋转输入。"
+
+
+def test_list_lead_in_is_not_treated_as_standalone_claim() -> None:
+    verifier = GroundingVerifier(FakeJudge({"c1": "supported"}))
+    report = verifier.verify(
+        "旋钮可以承载以下属性：\n- 角度属性用于连续旋转输入。[1]",
+        [_source("角度属性用于连续旋转输入。")],
+    )
+
+    assert len(report.claims) == 1
+    assert report.claims[0].text == "角度属性用于连续旋转输入。"
+
+
 def test_evidence_limitation_statement_does_not_require_citation() -> None:
     verifier = GroundingVerifier(FakeJudge({}))
     report = verifier.verify("当前资料没有直接证据，无法确认该结论。", [_source("无关资料。")])
@@ -96,3 +128,41 @@ def test_judge_failure_is_reported_as_unavailable() -> None:
 
     assert report.status == "unavailable"
     assert report.error
+
+
+def test_large_answer_is_judged_in_bounded_batches() -> None:
+    class CountingJudge(FakeJudge):
+        def __init__(self) -> None:
+            super().__init__({})
+            self.batch_sizes: list[int] = []
+
+        def chat(self, messages, **kwargs):
+            payload = json.loads(messages[1]["content"])
+            self.batch_sizes.append(len(payload["claims"]))
+            return json.dumps({
+                "claims": [
+                    {"id": claim["id"], "verdict": "supported", "confidence": 1, "reason": "有依据"}
+                    for claim in payload["claims"]
+                ]
+            }, ensure_ascii=False)
+
+    judge = CountingJudge()
+    answer = "\n".join(f"旋钮属性事实陈述第{i}条。[1]" for i in range(1, 26))
+    report = GroundingVerifier(judge).verify(answer, [_source("旋钮属性事实。")])
+
+    assert report.status == "pass"
+    assert len(report.claims) == 25
+    assert judge.batch_sizes == [20, 5]
+
+
+def test_sanitize_removes_only_claims_already_judged_unsafe() -> None:
+    verifier = GroundingVerifier(FakeJudge({"c1": "supported", "c2": "partially_supported"}))
+    answer = "旋钮承载角度属性。[1]\n旋钮适合所有场景。[1]"
+    report = verifier.verify(answer, [_source("旋钮承载角度属性，仅适合部分场景。")])
+
+    sanitized, safe_report = verifier.sanitize(answer, report)
+
+    assert sanitized == "旋钮承载角度属性。[1]"
+    assert safe_report.status == "pass"
+    assert safe_report.score == 1.0
+    assert [claim.text for claim in safe_report.claims] == ["旋钮承载角度属性。"]

@@ -15,7 +15,7 @@ class VerificationConfig:
     verify_input_llm: bool = False
     verify_output: bool = True
     verify_output_llm: bool = False
-    output_max_retries: int = 1
+    output_max_retries: int = 2
     verify_grounding: bool = True
     grounding_provider: str = "deepseek"
     grounding_model: Optional[str] = None
@@ -124,7 +124,7 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
             verify_input_llm=bool(verification.get("verify_input_llm", False)),
             verify_output=bool(verification.get("verify_output", True)),
             verify_output_llm=bool(verification.get("verify_output_llm", False)),
-            output_max_retries=_int_value(verification.get("output_max_retries", 1), "verification.output_max_retries"),
+            output_max_retries=_int_value(verification.get("output_max_retries", 2), "verification.output_max_retries"),
             verify_grounding=bool(verification.get("verify_grounding", True)),
             grounding_provider=str(verification.get("grounding_provider", "deepseek")),
             grounding_model=_optional_str(verification.get("grounding_model")),

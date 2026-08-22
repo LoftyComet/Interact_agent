@@ -20,7 +20,8 @@ _CITATION_RE = re.compile(r"(?<!!)\[(\d+)\](?!\()")
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)、]\s*)")
 _FENCE_RE = re.compile(r"^```")
-_EVIDENCE_LIMIT = 2200
+_EVIDENCE_LIMIT = 4000
+_JUDGE_BATCH_SIZE = 20
 _VALID_VERDICTS = {"supported", "partially_supported", "unsupported", "conflicted"}
 
 
@@ -177,7 +178,62 @@ class GroundingVerifier:
             correction_hints=_build_correction_hints(merged),
         )
 
+    def sanitize(self, answer: str, report: GroundingReport) -> tuple[str, GroundingReport]:
+        """Remove claims already judged unsafe and derive a report for the safe subset.
+
+        This is the deterministic last resort after generation retries. It never
+        upgrades an undecided claim: every retained claim must match one that the
+        judge already marked supported.
+        """
+        rejected = {
+            claim.text
+            for claim in report.claims
+            if claim.verdict in {"partially_supported", "unsupported", "conflicted"}
+        }
+        if not rejected:
+            return answer, report
+        sanitized = _remove_claim_texts(answer, rejected)
+        if sanitized == answer:
+            return answer, report
+
+        supported = {
+            (claim.section, claim.text, claim.citation_ids): claim
+            for claim in report.claims
+            if claim.verdict == "supported"
+        }
+        retained: list[GroundingClaim] = []
+        for claim in _extract_claims(sanitized)[: self._max_claims]:
+            previous = supported.get((claim.section, claim.text, claim.citation_ids))
+            if previous is None:
+                return answer, report
+            retained.append(replace(
+                claim,
+                verdict="supported",
+                confidence=previous.confidence,
+                reason=previous.reason,
+            ))
+        if not retained:
+            return answer, report
+        safe_claims = tuple(retained)
+        return sanitized, GroundingReport(
+            status="pass",
+            score=_score(safe_claims),
+            claims=safe_claims,
+            should_retry=False,
+        )
+
     def _judge_claims(
+        self,
+        claims: list[GroundingClaim],
+        sources: list[SourceChunk],
+    ) -> dict[str, GroundingClaim]:
+        decisions: dict[str, GroundingClaim] = {}
+        for start in range(0, len(claims), _JUDGE_BATCH_SIZE):
+            batch = claims[start : start + _JUDGE_BATCH_SIZE]
+            decisions.update(self._judge_claim_batch(batch, sources))
+        return decisions
+
+    def _judge_claim_batch(
         self,
         claims: list[GroundingClaim],
         sources: list[SourceChunk],
@@ -256,7 +312,8 @@ def _extract_claims(answer: str) -> list[GroundingClaim]:
     section = "直接回答"
     claims: list[GroundingClaim] = []
     in_fence = False
-    for raw_line in answer.splitlines():
+    raw_lines = answer.splitlines()
+    for line_index, raw_line in enumerate(raw_lines):
         line = raw_line.strip()
         if _FENCE_RE.match(line):
             in_fence = not in_fence
@@ -266,11 +323,21 @@ def _extract_claims(answer: str) -> list[GroundingClaim]:
         if line.startswith("## "):
             section = line[3:].strip()
             continue
-        if line.startswith("#") or line.startswith("![") or _is_table_separator(line):
+        next_line = raw_lines[line_index + 1].strip() if line_index + 1 < len(raw_lines) else ""
+        if (
+            line.startswith("#")
+            or line.startswith("![")
+            or _is_table_separator(line)
+            or _is_table_separator(next_line)
+            or line.endswith(("：", ":"))
+        ):
             continue
         line = _LIST_PREFIX_RE.sub("", line)
+        line_citations = tuple(dict.fromkeys(int(value) for value in _CITATION_RE.findall(line)))
         for sentence in _split_sentences(line):
             citation_ids = tuple(dict.fromkeys(int(value) for value in _CITATION_RE.findall(sentence)))
+            if not citation_ids:
+                citation_ids = line_citations
             text = _clean_claim_text(sentence)
             if len(text) < 8:
                 continue
@@ -354,6 +421,24 @@ def _build_correction_hints(claims: tuple[GroundingClaim, ...]) -> str:
             "请删除、缩小表述范围，或改成‘当前资料没有直接证据’，并绑定真正支持它的引用。"
         )
     return "\n".join(lines)
+
+
+def _remove_claim_texts(answer: str, rejected: set[str]) -> str:
+    lines: list[str] = []
+    for raw_line in answer.splitlines():
+        parts = _split_sentences(raw_line)
+        kept = [
+            part for part in parts
+            if _clean_claim_text(_LIST_PREFIX_RE.sub("", part.strip())) not in rejected
+        ]
+        if len(kept) == len(parts):
+            lines.append(raw_line)
+        elif kept:
+            lines.append(" ".join(part.strip() for part in kept))
+        else:
+            lines.append("")
+    sanitized = "\n".join(lines).strip()
+    return re.sub(r"\n{3,}", "\n\n", sanitized)
 
 
 def _parse_json_object(response: str) -> dict[str, Any]:

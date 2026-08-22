@@ -31,7 +31,7 @@
     "max_tokens": 1600,
     // 请求超时时间，单位秒。推理模型慢时调到 120。
     "timeout": 60,
-    // null 表示使用 Provider 默认行为；DeepSeek V4 会映射成官方 thinking 参数。
+    // true 显式启用思考；false/null 使用非思考模式，给结构化最终回答保留输出额度。
     "enable_thinking": null
   },
 
@@ -85,7 +85,7 @@
     "verify_input_llm": false,
     "verify_output": true,
     "verify_output_llm": false,
-    "output_max_retries": 1,
+    "output_max_retries": 2,
     "verify_grounding": true,
     "grounding_provider": "deepseek",
     "grounding_model": "deepseek-v4-flash",

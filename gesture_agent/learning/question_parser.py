@@ -235,6 +235,8 @@ class QuestionParser:
             add("design_suggestion", 0.99, "问题在特定人群或使用情境下请求控件选型建议。")
         if CONTROL_FORM_RE.search(query):
             add("control_form", 0.88, "问题包含控件形态或具体控件名称。")
+            if "属性" in query:
+                add("control_form", 0.96, "问题询问具体控件形态可以承载哪些属性。")
         if PROPERTY_RE.search(query):
             add("basic_property", 0.84, "问题包含基础属性或具体属性名称。")
         if VOICE_RE.search(query):

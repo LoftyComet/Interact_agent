@@ -26,7 +26,7 @@ def test_deepseek_uses_current_thinking_payload(monkeypatch) -> None:
     assert captured["extra_body"] == {"thinking": {"type": "disabled"}}
 
 
-def test_deepseek_omits_thinking_payload_when_unspecified(monkeypatch) -> None:
+def test_deepseek_defaults_to_non_thinking_payload(monkeypatch) -> None:
     captured = {}
 
     class FakeCompletions:
@@ -43,4 +43,4 @@ def test_deepseek_omits_thinking_payload_when_unspecified(monkeypatch) -> None:
     monkeypatch.setattr("openai.OpenAI", FakeOpenAI)
     DeepSeekClient(api_key="test").chat([{"role": "user", "content": "test"}])
 
-    assert captured["extra_body"] is None
+    assert captured["extra_body"] == {"thinking": {"type": "disabled"}}

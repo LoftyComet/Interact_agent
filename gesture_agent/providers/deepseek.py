@@ -102,7 +102,11 @@ class DeepSeekClient:
         except Exception as exc:
             raise DeepSeekError(f"DeepSeek request failed: {exc}") from exc
 
-        if not response.choices or response.choices[0].message.content is None:
+        if (
+            not response.choices
+            or response.choices[0].message.content is None
+            or not response.choices[0].message.content.strip()
+        ):
             raise DeepSeekError(f"Unexpected DeepSeek response: {response}")
         return response.choices[0].message.content
 
@@ -223,6 +227,9 @@ class DeepSeekClient:
 
 
 def _thinking_extra_body(enable_thinking: Optional[bool]) -> dict[str, Any]:
-    if enable_thinking is None:
-        return {}
-    return {"thinking": {"type": "enabled" if enable_thinking else "disabled"}}
+    # The chatbot needs predictable room for its structured final answer.
+    # DeepSeek V4 defaults to thinking mode, whose reasoning tokens can consume
+    # the configured max_tokens and leave an empty final content. Treat an
+    # unspecified value as non-thinking; callers can explicitly opt in with True.
+    enabled = enable_thinking is True
+    return {"thinking": {"type": "enabled" if enabled else "disabled"}}

@@ -131,6 +131,17 @@ class TestInputVerifier:
         # 关键是不能出现任何 wrong_term 误纠。
         assert not any(i.issue_type == "wrong_term" for i in result.issues)
 
+    def test_fuzzy_scan_no_false_positive_across_which_properties(self, term_inventory, structured_items):
+        # 「哪些属性」中的「些」是疑问限定词，窗口「些属性」不能被误纠为「光属性」。
+        verifier = InputVerifier(term_inventory, structured_items)
+        structure = QuestionStructure(
+            raw_query="旋钮可以承载哪些属性？", intent="control_form",
+            layers=["control_form", "basic_property"], terms=["旋钮"], focus=["属性"],
+        )
+        result = verifier.verify(structure)
+        assert result.status == "pass"
+        assert not any(i.issue_type == "wrong_term" for i in result.issues)
+
     def test_unmappable_word_passes_without_clarification(self, term_inventory, structured_items):
         # 无法映射到任一枚举的输入照常放行，不再返回 needs_clarification。
         verifier = InputVerifier(term_inventory, structured_items)

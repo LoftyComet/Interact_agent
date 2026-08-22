@@ -31,7 +31,7 @@ TERM_SENSITIVE_INTENTS = {
 
 # 这些虚词/高频字若出现在错别字窗口的差异位，说明窗口跨了词边界，
 # 属于假命中（如「和摇杆」≈「手摇杆」），直接丢弃。
-_FUNCTION_CHARS = set("的了和与跟还有是怎么吗呢啊吧把被在对从向给为would这那哪什么用要会能可不没")
+_FUNCTION_CHARS = set("的了和与跟还有是怎么吗呢啊吧把被在对从向给为would这那哪什么些用要会能可不没")
 
 
 class InputVerifier:
