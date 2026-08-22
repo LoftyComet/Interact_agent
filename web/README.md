@@ -37,7 +37,7 @@ PYTHONPATH=. python web/backend/app.py
 | `WEB_DEBUG` | `0` | 设为 `1` 启用 Flask 调试 |
 | `AGENT_CONFIG_PATH` | `agent_config.json` | 复用与 CLI 相同的 agent 配置 |
 
-API Key 仍读取项目根的 `.env`：`SILICONFLOW_API_KEY`（DeepSeek V3.2）、`KIMI_API_KEY`（Kimi）。由各 Provider 客户端的 `from_env` 处理。
+API Key 仍读取项目根的 `.env`：`DEEPSEEK_API_KEY`（DeepSeek 官方）、`SILICONFLOW_API_KEY`（SiliconFlow）、`KIMI_API_KEY`（Kimi）。由各 Provider 客户端的 `from_env` 处理。
 
 ## API
 
@@ -105,6 +105,12 @@ API Key 仍读取项目根的 `.env`：`SILICONFLOW_API_KEY`（DeepSeek V3.2）�
   "memory_context": "…",
   "input_corrections": "…",        // 输入对齐摘要，无修正时为空串
   "output_issues": [ "…" ],        // 输出校验残留问题
+  "grounding": {                    // Claim—Evidence 语料一致性报告
+    "status": "pass" | "issues_found" | "unavailable",
+    "score": 0.92,
+    "should_retry": false,
+    "claims": []
+  },
   "error": null
 }
 ```
@@ -129,6 +135,9 @@ API Key 仍读取项目根的 `.env`：`SILICONFLOW_API_KEY`（DeepSeek V3.2）�
 
 - 输入对齐：把用户口语、近义、错写的术语对齐到规范的「36+1」枚举（规则层零成本常驻，可选 LLM 语义兜底），结果通过 `input_corrections` 返回。
 - 输出校验：检查回答的章节完整性和术语合规；未通过时最多让模型重写 `output_max_retries` 次，残留问题通过 `output_issues` 返回。
+- 语料一致性校验：把回答拆成 Claim，按 `[n]` 绑定本轮检索片段，由指定 Provider 判断证据是支持、部分支持、不支持还是冲突。严格模式下后三种都会进入修正流程，完整报告通过 `grounding` 返回。
+
+语料一致性校验会把被引用的语料片段发送给 `grounding_provider`。使用 DeepSeek 官方等外部 Provider 前，必须确认语料具备相应的数据出境/第三方处理权限；敏感语料应关闭该功能或改接本地校验模型。
 
 ### 配图与引用
 

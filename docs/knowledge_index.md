@@ -81,6 +81,10 @@ uv sync --group dev
 
 回答仍以流式 Markdown 返回。完成后会经过 `AnswerDocument` 契约校验：必须先给直接结论，再按 intent 模板完整输出非空章节，引用编号不得超出本轮检索资料范围。有效回答会按模板顺序规范化渲染。
 
+启用 `verification.verify_grounding` 后，回答还会经过 Claim—Evidence 校验：每条事实陈述必须绑定 `[n]` 引用，校验模型只能根据对应检索片段判定 `supported`、`partially_supported`、`unsupported` 或 `conflicted`。不充分或矛盾的陈述会被送入现有重写流程，最终报告在 Web 响应的 `grounding` 字段中返回。
+
+该语义校验会把被引用的片段发送给配置的 `grounding_provider`。如果语料不允许交给第三方 API，应关闭该功能，或提供满足同一 `chat(messages, ...)` 接口的本地模型 Adapter。
+
 ## 更新与发布
 
 语料变更后重新执行一键构建和离线评测。部署时至少上传以下内容：

@@ -139,12 +139,12 @@ PYTHONPATH=. python web/backend/app.py
 - `WEB_PORT`：监听端口，默认 `5050`（`web/run.sh` 设定，`app.py` 直接运行时默认 `5000`）。
 - `WEB_DEBUG`：设为 `1` 启用 Flask 调试。
 - `AGENT_CONFIG_PATH`：复用与 CLI 相同的 agent 配置，默认 `agent_config.json`。
-- API Key 仍从项目根的 `.env` 读取：`SILICONFLOW_API_KEY`（DeepSeek V3.2）、`KIMI_API_KEY`（Kimi）。
+- API Key 仍从项目根的 `.env` 读取：`DEEPSEEK_API_KEY`（DeepSeek 官方）、`SILICONFLOW_API_KEY`（SiliconFlow）、`KIMI_API_KEY`（Kimi）。
 
 ### 前端功能
 
 - 多轮会话：`session_id` 写入 `localStorage`，刷新页面复用同一会话；「清空会话」调用 `/api/reset` 清掉多轮记忆。
-- 模型切换：顶部下拉框列出已配置的 Provider（DeepSeek V3.2 / Kimi），未配置 API Key 的会标注「未配置」并禁用；选择会记到 `localStorage`。
+- 模型切换：顶部下拉框列出已配置的 Provider（DeepSeek 官方 / SiliconFlow / Kimi），未配置 API Key 的会标注「未配置」并禁用；选择会记到 `localStorage`。
 - 回答风格：`简洁` / `详细` 两档，影响回答篇幅。
 - 流式输出：默认开启，逐段渲染；可随时点「停止」中断当前回答并保留已生成内容。
 - 图片案例：支持多张上传（单张上限 10MB），走视觉模型分析。
@@ -168,7 +168,7 @@ PYTHONPATH=. python web/backend/app.py
 | `POST` | `/api/ask` | `{question, session_id, images?, style?, provider?}` 一次性回答 |
 | `POST` | `/api/ask_stream` | 同上，返回 SSE 流式输出 |
 
-`/api/ask` 与 `/api/ask_stream` 在回答前会按 `agent_config.json` 的 `verification` 配置做输入对齐（把口语/近义/错写术语对齐到规范枚举）和输出校验（章节完整性、术语合规，必要时让模型重写一次）；对齐与校验结果通过 `input_corrections` / `output_issues` 返回。SSE 在重写时会额外发 `retry`（开始重写）和 `replace`（用重写结果整体替换）两类事件。
+`/api/ask` 与 `/api/ask_stream` 在回答前后会按 `agent_config.json` 的 `verification` 配置做输入对齐、输出格式校验和 Claim—Evidence 语料一致性校验。校验器逐条检查事实陈述是否被其引用片段支持，将结果分为 `supported`、`partially_supported`、`unsupported`、`conflicted`；失败时让模型重写一次。结果通过 `input_corrections`、`output_issues` 和 `grounding` 返回。SSE 在重写时会额外发 `retry` 和 `replace` 事件。
 
 所有 Web 端收到的用户问题会按行追加到 `data/logs/web_questions.jsonl`，用于后续标注和分析。
 
@@ -202,6 +202,10 @@ PYTHONPATH=. python web/backend/app.py
 - `prompt.extra_system_prompt`：追加到默认系统提示词后。
 - `prompt.response_instructions`：完整替换回答规则；为 `null` 时使用内置默认回答规则。
 - `prompt.extra_response_instructions`：追加回答规则。
+- `verification.verify_grounding`：启用逐条 Claim—Evidence 语料一致性校验。
+- `verification.grounding_provider` / `grounding_model`：校验使用的 Provider 和模型，推荐 `deepseek` / `deepseek-v4-flash`。
+- `verification.grounding_strict`：严格模式下，部分支持的陈述也需要缩小范围或重写。
+- `verification.grounding_minimum_score`：回答通过语料一致性校验的最低分数。
 
 API key 仍然放在 `.env`，也可以用 shell 环境变量覆盖：
 
@@ -211,6 +215,11 @@ API key 仍然放在 `.env`，也可以用 shell 环境变量覆盖：
 - `SILICONFLOW_BASE_URL`：默认 `https://api.siliconflow.cn/v1`。
 - `SILICONFLOW_TIMEOUT`：默认 `60` 秒。推理模型如 DeepSeek-R1 可能更慢，可适当调大；如果希望快速响应，建议换非推理模型。
 - `SILICONFLOW_MAX_RETRIES`：默认 `0`，避免网络不通时等待多次重试。
+- `DEEPSEEK_API_KEY`：DeepSeek 官方 API Key。
+- `DEEPSEEK_MODEL`：默认 `deepseek-v4-flash`；质量优先可使用 `deepseek-v4-pro`。
+- `DEEPSEEK_BASE_URL`：默认 `https://api.deepseek.com`。
+
+启用 DeepSeek 生成或语料一致性校验时，当前问题检索到的语料片段会发送给 DeepSeek 官方 API。部署前应确认语料允许发送至该外部服务；敏感语料应改用本地模型或私有部署的校验 Adapter。
 
 ## 设计说明
 

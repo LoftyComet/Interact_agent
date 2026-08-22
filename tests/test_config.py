@@ -119,3 +119,30 @@ def test_load_agent_config_reads_runtime_and_prompt(tmp_path) -> None:
     assert loaded.enable_thinking is None
     assert loaded.prompt.extra_system_prompt == "第一行\n第二行"
     assert loaded.prompt.extra_response_instructions == ["只使用 output_frame 标题"]
+    assert loaded.verification.verify_grounding is True
+    assert loaded.verification.grounding_provider == "deepseek"
+    assert loaded.verification.grounding_minimum_score == 0.85
+
+
+def test_load_agent_config_reads_grounding_settings(tmp_path) -> None:
+    config = tmp_path / "agent_config.json"
+    config.write_text(
+        """
+{
+  "verification": {
+    "verify_grounding": true,
+    "grounding_provider": "deepseek",
+    "grounding_model": "deepseek-v4-flash",
+    "grounding_strict": false,
+    "grounding_minimum_score": 0.7
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    loaded = load_agent_config(config)
+
+    assert loaded.verification.grounding_model == "deepseek-v4-flash"
+    assert loaded.verification.grounding_strict is False
+    assert loaded.verification.grounding_minimum_score == 0.7

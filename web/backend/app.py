@@ -13,7 +13,7 @@ import re
 import sys
 import threading
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -43,7 +43,7 @@ from gesture_agent.providers import (
     resolve_provider_id,
 )
 from gesture_agent.settings.app_config import load_agent_config
-from gesture_agent.verification import InputVerifier, OutputVerifier
+from gesture_agent.verification import GroundingReport, GroundingVerifier, InputVerifier, OutputVerifier
 from gesture_agent.verification.prompts import OUTPUT_CORRECTION_PROMPT
 
 
@@ -54,6 +54,14 @@ IMAGE_REF_RE = re.compile(r"!\[([^\]]*)\]\(image:([^)]+)\)")
 
 QUESTION_LOG_PATH = (PROJECT_ROOT / "data" / "logs" / "web_questions.jsonl").resolve()
 _question_log_lock = threading.Lock()
+
+
+@dataclass(frozen=True)
+class AnswerQualityResult:
+    should_retry: bool
+    correction_hints: str
+    issue_descriptions: list[str]
+    grounding: Optional[GroundingReport]
 
 
 def log_user_question(
@@ -166,6 +174,12 @@ class AgentRuntime:
             client=output_verifier_client,
             use_llm=self.config.verification.verify_output_llm,
         )
+        grounding_client = self._maybe_build_grounding_client()
+        self.grounding_verifier = GroundingVerifier(
+            grounding_client,
+            strict=self.config.verification.grounding_strict,
+            minimum_score=self.config.verification.grounding_minimum_score,
+        )
         index_path = Path(self.config.data_dir) / "pictures" / "extracted" / "image_index.json"
         self.image_index = ImageIndex.load(index_path)
 
@@ -216,6 +230,18 @@ class AgentRuntime:
                 timeout=self.config.timeout,
             )
         except SiliconFlowError:
+            return None
+
+    def _maybe_build_grounding_client(self) -> Any:
+        if not self.config.verification.verify_grounding:
+            return None
+        try:
+            return build_chat_client(
+                self.config.verification.grounding_provider,
+                model=self.config.verification.grounding_model,
+                timeout=self.config.timeout,
+            )
+        except ProviderError:
             return None
 
     def _build_intent_resolver(self):
@@ -271,6 +297,40 @@ class AgentRuntime:
             timeout=self.config.timeout,
             use_vision_model=use_vision,
         )
+
+
+def verify_answer_quality(
+    runtime: AgentRuntime,
+    answer: str,
+    structure: QuestionStructure,
+    chunks: list[SourceChunk],
+) -> AnswerQualityResult:
+    """Run format/terminology and evidence-grounding checks behind one call."""
+
+    should_retry = False
+    hints: list[str] = []
+    descriptions: list[str] = []
+    if runtime.config.verification.verify_output:
+        output_result = runtime.output_verifier.verify(answer, structure, source_count=len(chunks))
+        should_retry = should_retry or output_result.should_retry
+        if output_result.correction_hints:
+            hints.append(output_result.correction_hints)
+        descriptions.extend(issue.description for issue in output_result.issues)
+
+    grounding = None
+    if runtime.config.verification.verify_grounding:
+        grounding = runtime.grounding_verifier.verify(answer, chunks)
+        should_retry = should_retry or grounding.should_retry
+        if grounding.correction_hints:
+            hints.append(grounding.correction_hints)
+        descriptions.extend(grounding.issue_descriptions)
+
+    return AnswerQualityResult(
+        should_retry=should_retry,
+        correction_hints="\n".join(hints),
+        issue_descriptions=list(dict.fromkeys(descriptions)),
+        grounding=grounding,
+    )
 
 
 def serialize_chunk(chunk: SourceChunk) -> dict[str, Any]:
@@ -502,13 +562,19 @@ def create_app(config_path: Optional[str] = None) -> Flask:
 
         # --- 输出验证 ---
         output_issues: list[str] = []
-        if answer and not error_text and rt.config.verification.verify_output and structure:
-            ov_result = rt.output_verifier.verify(answer, structure, source_count=len(chunks))
+        grounding_report: Optional[GroundingReport] = None
+        verification_enabled = (
+            rt.config.verification.verify_output or rt.config.verification.verify_grounding
+        )
+        if answer and not error_text and verification_enabled and structure:
+            quality_result = verify_answer_quality(rt, answer, structure, chunks)
             max_retries = rt.config.verification.output_max_retries
             for _ in range(max_retries):
-                if not ov_result.should_retry:
+                if not quality_result.should_retry:
                     break
-                correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
+                correction_prompt = OUTPUT_CORRECTION_PROMPT.format(
+                    correction_hints=quality_result.correction_hints
+                )
                 retry_messages = messages + [
                     {"role": "assistant", "content": answer},
                     {"role": "user", "content": correction_prompt},
@@ -522,9 +588,11 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     )
                 except ProviderError:
                     break
-                ov_result = rt.output_verifier.verify(answer, structure, source_count=len(chunks))
-            output_issues = [i.description for i in ov_result.issues]
-            answer = rt.output_verifier.normalize(answer, structure)
+                quality_result = verify_answer_quality(rt, answer, structure, chunks)
+            output_issues = quality_result.issue_descriptions
+            grounding_report = quality_result.grounding
+            if rt.config.verification.verify_output:
+                answer = rt.output_verifier.normalize(answer, structure)
 
         if structure is not None and not error_text:
             session.record_turn(
@@ -542,6 +610,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             "error": error_text,
             "input_corrections": input_corrections,
             "output_issues": output_issues,
+            "grounding": grounding_report.to_dict() if grounding_report else None,
             "structure": serialize_structure(structure),
             "chunks": [serialize_chunk(c) for c in chunks],
             "memory_context": session_result.memory_context,
@@ -688,19 +757,25 @@ def create_app(config_path: Optional[str] = None) -> Flask:
 
             # --- 输出验证 ---
             output_issues: list[str] = []
-            if full_answer and rt.config.verification.verify_output and structure:
-                ov_result = rt.output_verifier.verify(full_answer, structure, source_count=len(chunks))
+            grounding_report: Optional[GroundingReport] = None
+            verification_enabled = (
+                rt.config.verification.verify_output or rt.config.verification.verify_grounding
+            )
+            if full_answer and verification_enabled and structure:
+                quality_result = verify_answer_quality(rt, full_answer, structure, chunks)
                 max_retries = rt.config.verification.output_max_retries
                 for _ in range(max_retries):
-                    if not ov_result.should_retry:
+                    if not quality_result.should_retry:
                         break
-                    correction_prompt = OUTPUT_CORRECTION_PROMPT.format(correction_hints=ov_result.correction_hints)
+                    correction_prompt = OUTPUT_CORRECTION_PROMPT.format(
+                        correction_hints=quality_result.correction_hints
+                    )
                     retry_messages = messages + [
                         {"role": "assistant", "content": full_answer},
                         {"role": "user", "content": correction_prompt},
                     ]
                     try:
-                        yield sse("retry", {"reason": ov_result.correction_hints})
+                        yield sse("retry", {"reason": quality_result.correction_hints})
                         full_answer = client.chat(
                             retry_messages,
                             temperature=rt.config.temperature,
@@ -710,12 +785,14 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
                     except ProviderError:
                         break
-                    ov_result = rt.output_verifier.verify(full_answer, structure, source_count=len(chunks))
-                output_issues = [i.description for i in ov_result.issues]
-                normalized_answer = rt.output_verifier.normalize(full_answer, structure)
-                if normalized_answer != full_answer:
-                    full_answer = normalized_answer
-                    yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
+                    quality_result = verify_answer_quality(rt, full_answer, structure, chunks)
+                output_issues = quality_result.issue_descriptions
+                grounding_report = quality_result.grounding
+                if rt.config.verification.verify_output:
+                    normalized_answer = rt.output_verifier.normalize(full_answer, structure)
+                    if normalized_answer != full_answer:
+                        full_answer = normalized_answer
+                        yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
 
             if structure is not None:
                 session.record_turn(
@@ -724,7 +801,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     structure=structure,
                 )
             full_answer = resolve_image_refs(full_answer, rt.image_index)
-            yield sse("done", {"session_id": session_id, "answer": full_answer, "output_issues": output_issues})
+            yield sse("done", {
+                "session_id": session_id,
+                "answer": full_answer,
+                "output_issues": output_issues,
+                "grounding": grounding_report.to_dict() if grounding_report else None,
+            })
 
         return Response(stream_with_context(generate()), mimetype="text/event-stream")
 

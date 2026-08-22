@@ -16,6 +16,11 @@ class VerificationConfig:
     verify_output: bool = True
     verify_output_llm: bool = False
     output_max_retries: int = 1
+    verify_grounding: bool = True
+    grounding_provider: str = "deepseek"
+    grounding_model: Optional[str] = None
+    grounding_strict: bool = True
+    grounding_minimum_score: float = 0.85
 
 
 @dataclass
@@ -120,6 +125,14 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
             verify_output=bool(verification.get("verify_output", True)),
             verify_output_llm=bool(verification.get("verify_output_llm", False)),
             output_max_retries=_int_value(verification.get("output_max_retries", 1), "verification.output_max_retries"),
+            verify_grounding=bool(verification.get("verify_grounding", True)),
+            grounding_provider=str(verification.get("grounding_provider", "deepseek")),
+            grounding_model=_optional_str(verification.get("grounding_model")),
+            grounding_strict=bool(verification.get("grounding_strict", True)),
+            grounding_minimum_score=_bounded_float(
+                verification.get("grounding_minimum_score", 0.85),
+                "verification.grounding_minimum_score",
+            ),
         ),
     )
 
@@ -163,6 +176,16 @@ def _int_value(value: Any, field_name: str) -> int:
         return int(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Agent config `{field_name}` must be an integer.") from exc
+
+
+def _bounded_float(value: Any, field_name: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Agent config `{field_name}` must be a number.") from exc
+    if not 0 <= parsed <= 1:
+        raise ValueError(f"Agent config `{field_name}` must be between 0 and 1.")
+    return parsed
 
 
 def _optional_bool(value: Any, field_name: str) -> Optional[bool]:

@@ -9,9 +9,9 @@ from gesture_agent.settings.env import get_env, load_env_file
 
 
 DEFAULT_BASE_URL = "https://api.deepseek.com"
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-v4-flash"
 VISION_MODEL_ENV = "DEEPSEEK_VISION_MODEL"
-DEFAULT_EMBEDDING_MODEL = "deepseek-chat"
+DEFAULT_EMBEDDING_MODEL = "deepseek-v4-flash"
 EMBEDDING_MODEL_ENV = "DEEPSEEK_EMBEDDING_MODEL"
 
 
@@ -73,9 +73,7 @@ class DeepSeekClient:
             max_retries=self.max_retries,
         )
 
-        extra_body: dict[str, Any] = {}
-        if enable_thinking is not None:
-            extra_body["enable_thinking"] = enable_thinking
+        extra_body = _thinking_extra_body(enable_thinking)
 
         try:
             response = client.chat.completions.create(
@@ -118,9 +116,7 @@ class DeepSeekClient:
         enable_thinking: Optional[bool] = None,
     ) -> Iterator[str]:
         client = self._openai_client()
-        extra_body: dict[str, Any] = {}
-        if enable_thinking is not None:
-            extra_body["enable_thinking"] = enable_thinking
+        extra_body = _thinking_extra_body(enable_thinking)
 
         finish_reason: Optional[str] = None
         try:
@@ -224,3 +220,9 @@ class DeepSeekClient:
         if isinstance(exc, APIError):
             return DeepSeekError(f"DeepSeek API error: {exc}")
         return DeepSeekError(f"DeepSeek request failed: {exc}")
+
+
+def _thinking_extra_body(enable_thinking: Optional[bool]) -> dict[str, Any]:
+    if enable_thinking is None:
+        return {}
+    return {"thinking": {"type": "enabled" if enable_thinking else "disabled"}}

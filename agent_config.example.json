@@ -19,11 +19,11 @@
     "top_k": 6
   },
 
-  // 模型调用配置。API Key 不放这里，仍然放在 .env 的 SILICONFLOW_API_KEY。
+  // 模型调用配置。API Key 不放这里，仍然放在 .env 的 Provider 对应变量中。
   "model": {
-    // 为 null 时读取 .env 里的 SILICONFLOW_MODEL；传图片时优先读取 SILICONFLOW_VISION_MODEL。
+    // 为 null 时读取当前 Provider 在 .env 里的模型变量。
     "model": null,
-    // 为 null 时读取 .env 里的 SILICONFLOW_BASE_URL。
+    // 为 null 时读取当前 Provider 的默认 Base URL。
     "base_url": null,
     // 输出随机性。学习/评估类任务建议 0.1-0.3。
     "temperature": 0.2,
@@ -31,7 +31,7 @@
     "max_tokens": 1600,
     // 请求超时时间，单位秒。推理模型慢时调到 120。
     "timeout": 60,
-    // 硅基流动部分模型支持 enable_thinking，视觉模型通常不支持。null 表示不发送该参数。
+    // null 表示使用 Provider 默认行为；DeepSeek V4 会映射成官方 thinking 参数。
     "enable_thinking": null
   },
 
@@ -77,5 +77,19 @@
       "回答标题必须尽量使用 output_frame 中的栏目名称。",
       "如果需要提出建议，先指出对应的控件形态、基础属性、交互机制或响应逻辑。"
     ]
+  },
+
+  // 回答完成后的质量校验。Grounding 会逐条核对回答与引用语料是否一致。
+  "verification": {
+    "verify_input": true,
+    "verify_input_llm": false,
+    "verify_output": true,
+    "verify_output_llm": false,
+    "output_max_retries": 1,
+    "verify_grounding": true,
+    "grounding_provider": "deepseek",
+    "grounding_model": "deepseek-v4-flash",
+    "grounding_strict": true,
+    "grounding_minimum_score": 0.85
   }
 }
