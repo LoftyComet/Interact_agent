@@ -8,7 +8,9 @@
     // 专家标注后的 Intent 输出框架；文件不存在时会使用内置默认框架。
     "output_frames": "data/output_frames.json",
     // 结构化知识库；文件不存在时会从 Markdown 自动生成一版。
-    "structured_knowledge": "data/structured_knowledge.json"
+    "structured_knowledge": "data/structured_knowledge.json",
+    // 版本化知识索引；存在时主问答链切换到 BM25/混合检索。
+    "knowledge_index": "knowledge_index"
   },
 
   // 本地检索配置。

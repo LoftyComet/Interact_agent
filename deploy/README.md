@@ -44,6 +44,16 @@ cp .env.example .env
 nano .env
 ```
 
+## 4.1 上传知识索引
+
+在本地完成构建和评测后，将整个 `knowledge_index/` 上传到服务器项目根目录：
+
+```bash
+rsync -av knowledge_index/ your-server:/opt/gesture-agent/knowledge_index/
+```
+
+服务器启动时会校验 `manifest.json` 中的文件大小和 SHA-256。没有向量目录时使用 BM25 词法检索；有向量目录且 `.env` 中的 embedding 模型与索引一致时使用混合检索。生产环境不需要安装 Office 或上传原始 DOCX/PDF，除非服务器还承担重新构建索引的任务。
+
 ## 5. 配置 Nginx
 
 ```bash
@@ -80,6 +90,8 @@ sudo journalctl -u gesture-agent -f
 
 # 测试 API
 curl http://localhost/api/health
+
+# 应看到 retrieval_mode=lexical/hybrid，index_chunk_count>0
 
 # 浏览器访问
 # http://<服务器IP>/

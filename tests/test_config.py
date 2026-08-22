@@ -87,7 +87,8 @@ def test_load_agent_config_reads_runtime_and_prompt(tmp_path) -> None:
     "top_k": 2
   },
   "data": {
-    "structured_knowledge": "data/custom_structured.json"
+    "structured_knowledge": "data/custom_structured.json",
+    "knowledge_index": "knowledge_index"
   },
   /*
     运行配置也支持块注释。
@@ -112,9 +113,9 @@ def test_load_agent_config_reads_runtime_and_prompt(tmp_path) -> None:
 
     assert loaded.top_k == 2
     assert loaded.structured_knowledge == "data/custom_structured.json"
+    assert loaded.knowledge_index == "knowledge_index"
     assert loaded.stream is True
     assert loaded.default_interactive is False
     assert loaded.enable_thinking is None
     assert loaded.prompt.extra_system_prompt == "第一行\n第二行"
     assert loaded.prompt.extra_response_instructions == ["只使用 output_frame 标题"]
-

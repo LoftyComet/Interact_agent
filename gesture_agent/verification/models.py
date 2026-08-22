@@ -24,7 +24,16 @@ class InputVerificationResult:
 
 @dataclass
 class OutputIssue:
-    issue_type: Literal["missing_section", "invalid_term", "knowledge_conflict", "format_error"]
+    issue_type: Literal[
+        "missing_section",
+        "duplicate_section",
+        "empty_section",
+        "missing_direct_answer",
+        "invalid_citation",
+        "invalid_term",
+        "knowledge_conflict",
+        "format_error",
+    ]
     location: str
     description: str
     severity: Literal["error", "warning"] = "warning"

@@ -19,26 +19,28 @@ from gesture_agent.learning.output_frames import load_output_frames
 
 
 DESIGN_EVALUATION_RE = re.compile(r"(评估|评价|评审|设计方案|这个方案|方案合理|合理吗|有什么问题|哪里有问题|改进建议|优化建议|怎么优化)")
-COMPARE_RE = re.compile(r"(对比|比较|区别|差异|不同|vs|VS|相比|哪个更|如何选择)")
+COMPARE_RE = re.compile(r"(对比|比较|区别|差异|不同|vs|VS|相比|哪个更|如何选择|什么时候.*什么时候|先.*还是.*同时|比.*更)")
 CASE_RE = re.compile(r"(案例|例子|图片|图中|截图|这个交互|这个设计|分析|拆解|应用)")
 VOICE_RE = re.compile(r"(语音交互|语音|声控|口令|唤醒词|对话式|说话|语速|声纹)")
-MULTIMODAL_RE = re.compile(r"(多模态|multimodal|跨模态|模态|视觉.*语音|语音.*手势|图像.*语音|触觉.*视觉)")
+MULTIMODAL_RE = re.compile(r"(多模态|multimodal|跨模态|模态|视觉.*语音|语音.*手势|图像.*语音|触觉.*视觉|(?:眼动|眼睛).*(?:手势|捏合)|(?:手势|捏合).*(?:眼动|眼睛))")
 BACKGROUND_RE = re.compile(r"(背景|交互的本质|操控力|虚拟操控力|IxDL|声明式|AI时代|适用人群|为什么)")
 PROPERTY_RE = re.compile(r"(基础属性|属性|二元|多级|位置|角度|力属性|声音属性|光属性|温度|形变|时间属性|生理信号|阶次控制)")
 CONTROL_FORM_RE = re.compile(r"(控件形态|控件|按钮|拨钮|滚轮|摇杆|轨迹球|指点杆|触控面|旋钮|手柄|踏板|眼睛|嘴巴|手势)")
 MECHANISM_RE = re.compile(r"(交互机制|交互方式|点击|单击|双击|长按|按下|开关|拖拽|甩动|滑动|翻动|捏合|旋转|高级|组合|拓展|多维协同|冲突|调和|限位|长按拖拽|双按拖拽|轻扫|速率式|域控|异位|向量菜单|动势|快击|缓冲|解耦|互斥|轻拨)")
 # 反推信号：给一段操作描述，问"属于什么机制/这是什么交互/能不能生成表达式"。
-MECHANISM_IDENTIFY_RE = re.compile(r"(属于什么交互机制|属于什么机制|是什么交互机制|这是什么交互|算什么交互|属于哪一?类|属于哪种|是哪种机制|对应.*交互机制|对应.*机制|生成.*交互表达式|生成.*表达式|表达式图)")
+MECHANISM_IDENTIFY_RE = re.compile(r"(属于什么交互机制|属于什么机制|属于.*哪个机制|是什么交互机制|是什么机制的组合|这是什么交互|算什么交互|属于哪一?类|属于哪种|是哪种机制|对应.*交互机制|对应.*机制|拆开.*什么机制|生成.*交互表达式|生成.*表达式|表达式图)")
 # 枚举信号：拆解"一类功能"在多种情况下的交互，而非单个案例。
-BREAKDOWN_RE = re.compile(r"(涉及哪些|有哪些手势|有哪些交互|各种情况|每种情况|哪些情况|不同情况|涉及.*哪些|都涉及了哪些|拆解.*各种|各种.*交互逻辑|交互逻辑系统)")
+BREAKDOWN_RE = re.compile(r"(涉及哪些|有哪些手势|有哪些交互|各种情况|每种情况|哪些情况|不同情况|涉及.*哪些|都涉及了哪些|拆解.*各种|拆.*看看.*还有|还有别的|各种.*交互逻辑|交互逻辑系统)")
 # 同机制不同参数对比：长/短距离、不同力度/速度/时长等参数维度。
-PARAM_RE = re.compile(r"(长距离|短距离|远距离|近距离|不同参数|参数不同|不同力度|不同速度|不同距离|不同时长|大幅.*小幅)")
+PARAM_RE = re.compile(r"(长距离|短距离|远距离|近距离|不同参数|参数不同|不同力度|不同速度|不同距离|不同时长|时间.*多少|阈值|\d+\s*ms.*\d+\s*ms|大幅.*小幅)")
 # 评估方法论：如何评估交互、好坏标准、评估维度（不是评估某个具体方案）。
-EVAL_METHODOLOGY_RE = re.compile(r"(如何评估|怎么评估|怎样评估|如何去评估|该如何评估|评估维度|评估的维度|评估方法|评估标准|什么是好的交互|怎么衡量|如何衡量)")
+EVAL_METHODOLOGY_RE = re.compile(r"(如何评估|怎么评估|怎样评估|如何去评估|该如何评估|评估维度|评估的维度|评估方法|评估标准|评价标准|客观.*标准|什么是好的交互|交互设计好不好|怎么衡量|如何衡量)")
 # 交互优化：现有交互存在具体问题、想优化提升（区别于评估完整方案）。
-OPTIMIZATION_RE = re.compile(r"(优化|提升.*体验|提升.*交互|改善.*交互|改善.*体验|误触|容易误|不顺手|卡顿)")
+OPTIMIZATION_RE = re.compile(r"(优化|提升.*体验|提升.*交互|改善.*交互|改善.*体验|经常.*误触|容易误|冲突.*怎么解决|冲突.*解决|不顺手|卡顿)")
 # 设计建议：请求新交互方案的建议/推荐（不是评估现有方案、不是优化具体问题）。
 DESIGN_SUGGESTION_RE = re.compile(r"(有什么建议|给我建议|设计建议|如何设计|怎么设计|帮我设计|给我推荐.*交互|推荐.*交互方式|建议.*交互|交互.*建议|想做.*交互|想设计.*交互|新设计|从零.*设计|有什么推荐|交互方案|帮我看看.*设计|设计.*建议)")
+CONTEXTUAL_SELECTION_RE = re.compile(r"(适老|老人|驾驶员|这种情况下选什么|选什么控件|什么控件形态.*合理|应该用.*(?:按钮|旋钮|控件|手势)|做.*界面.*应该用)")
+MECHANISM_EXPLANATION_RE = re.compile(r"(看不懂|没看懂|更直观|直观.*讲|什么含义|啥意思|细说|讲法|怎么理解)")
 # 检索指令：直接请求输出特定表达式/图示/案例等内容，不需要展开分析。
 RETRIEVAL_INSTRUCTION_RE = re.compile(
     r"(给我.*表达式|给我.*表达式图|给我.*图|给我.*示例|给我.*案例|"
@@ -185,6 +187,7 @@ class QuestionParser:
 
     def _intent_candidates(self, query: str, image_paths: list[str], terms: list[str]) -> list[IntentCandidate]:
         candidates: dict[Intent, IntentCandidate] = {}
+        comparison_signal = bool(COMPARE_RE.search(query) or ("还是" in query and len(terms) >= 2))
 
         def add(intent: Intent, score: float, reason: str) -> None:
             current = candidates.get(intent)
@@ -215,17 +218,21 @@ class QuestionParser:
             add("retrieval_instruction", 0.94, "问题直接请求输出特定表达式/图示，非反推机制，应直接输出检索内容。")
         # 功能交互拆解：拆解一类功能在多种情况下的交互枚举（与单案例 case_analysis 区分）。
         if BREAKDOWN_RE.search(query):
-            add("function_interaction_breakdown", 0.93, "拆解一类功能在多种情况下的交互枚举，而非单个案例。")
+            add("function_interaction_breakdown", 0.97, "拆解一类功能在多种情况下的交互枚举，而非单个案例。")
         # 同机制参数对比：同一机制不同参数（如拖拽长/短距离）的取舍，也放在 interaction_compare 之前。
-        if COMPARE_RE.search(query) and PARAM_RE.search(query) and MECHANISM_RE.search(query):
+        if PARAM_RE.search(query) and MECHANISM_RE.search(query) and (
+            comparison_signal or len(re.findall(r"\d+\s*ms", query, flags=re.IGNORECASE)) >= 2
+        ):
             add("mechanism_parameter_compare", 0.99, "对比同一交互机制在不同参数下的取舍（书中可能无系统研究）。")
-        if COMPARE_RE.search(query):
+        if comparison_signal:
             add("interaction_compare", 0.98, "问题包含对比/区别/差异等比较信号。")
         if MULTIMODAL_RE.search(query):
-            add("multimodal_interaction", 0.95, "问题包含多模态或跨模态分工信号。")
+            add("multimodal_interaction", 0.96, "问题包含多模态或跨模态分工信号。")
         # 设计建议：请求新交互方案的建议（不是评估现有方案、不是优化具体问题）。
         if DESIGN_SUGGESTION_RE.search(query) and not OPTIMIZATION_RE.search(query):
             add("design_suggestion", 0.91, "问题在请求新交互方案的设计建议（不是评估现有方案或优化具体问题）。")
+        if CONTEXTUAL_SELECTION_RE.search(query) and not OPTIMIZATION_RE.search(query):
+            add("design_suggestion", 0.99, "问题在特定人群或使用情境下请求控件选型建议。")
         if CONTROL_FORM_RE.search(query):
             add("control_form", 0.88, "问题包含控件形态或具体控件名称。")
         if PROPERTY_RE.search(query):
@@ -236,6 +243,8 @@ class QuestionParser:
             add("background_knowledge", 0.86, "问题包含背景知识、操控力、IxDL 或声明式等信号。")
         if MECHANISM_RE.search(query) or self._has_interaction_mechanism_match(query, terms, query_text=query):
             add("basic_interaction_mechanism", 0.86, "问题命中交互机制术语或机制章节。")
+            if MECHANISM_EXPLANATION_RE.search(query):
+                add("basic_interaction_mechanism", 0.965, "问题点名机制并请求更直观的概念解释。")
 
         if not self.example_bank.is_empty:
             best = self.example_bank.best_match(query)

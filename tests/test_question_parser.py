@@ -268,3 +268,21 @@ def test_concrete_design_evaluation_not_optimization() -> None:
     structure = parser.parse("帮我评估这本词典里旋钮+长按的方案")
 
     assert structure.intent == "design_evaluation"
+
+
+def test_real_world_intent_routing_regressions() -> None:
+    parser = QuestionParser(KnowledgeBase.load("data"))
+    cases = {
+        "书里那个缓冲式越界切换看了三遍才勉强懂，有没有更直观的讲法？最好用个生活中的例子。": "basic_interaction_mechanism",
+        "眼动追踪+手势结合时有什么要注意的吗？比如某个产品案例。": "multimodal_interaction",
+        "单击和按下什么时候该用单击，什么时候该用按下？": "interaction_compare",
+        "iPhone滑动解锁属于你们书里的哪个机制？": "mechanism_identification",
+        "拆一个播放器看看：播放是点击、进度条是拖拽，还有别的吗？": "function_interaction_breakdown",
+        "长按时间设多少合适？200ms和500ms各有什么取舍？": "mechanism_parameter_compare",
+        "侧滑返回和侧边栏菜单冲突，这个怎么解决？": "interaction_optimization",
+        "适老化设计时，用按钮还是手势好？": "design_suggestion",
+        "一个交互设计好不好，有没有客观的评价标准？": "evaluation_methodology",
+    }
+
+    for query, expected in cases.items():
+        assert parser.parse(query).intent == expected, query

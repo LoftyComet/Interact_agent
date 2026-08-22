@@ -9,6 +9,7 @@ from typing import Any, Optional, Union
 
 from gesture_agent.core.models import Layer, SourceChunk, StructuredKnowledgeItem, TermInventory
 from gesture_agent.core.text_utils import clean_text, compact_whitespace, strip_heading_prefix, tokenize
+from gesture_agent.retrieval import HybridRetriever
 
 
 MECHANISM_HEADING_RE = re.compile(r"^\d+-[a-z]\s+[^、，,]{1,80}$", re.IGNORECASE)
@@ -71,6 +72,8 @@ class KnowledgeBase:
         data_dir: Union[str, Path] = "data",
         term_inventory_path: Optional[Union[str, Path]] = None,
         structured_knowledge_path: Optional[Union[str, Path]] = None,
+        index_dir: Optional[Union[str, Path]] = None,
+        embedder: Any = None,
     ) -> None:
         self.data_dir = Path(data_dir)
         self.term_inventory_path = Path(term_inventory_path) if term_inventory_path else self.data_dir / DEFAULT_TERM_INVENTORY_FILENAME
@@ -83,6 +86,10 @@ class KnowledgeBase:
         self.terms: list[str] = []
         self.structured_items: list[StructuredKnowledgeItem] = []
         self.term_inventory = TermInventory()
+        self.retriever: Optional[HybridRetriever] = None
+        self.index_chunk_count = 0
+        self._index_dir = Path(index_dir) if index_dir else None
+        self._embedder = embedder
 
     @classmethod
     def load(
@@ -90,14 +97,27 @@ class KnowledgeBase:
         data_dir: Union[str, Path] = "data",
         term_inventory_path: Optional[Union[str, Path]] = None,
         structured_knowledge_path: Optional[Union[str, Path]] = None,
+        index_dir: Optional[Union[str, Path]] = None,
+        embedder: Any = None,
     ) -> "KnowledgeBase":
         kb = cls(
             data_dir,
             term_inventory_path=term_inventory_path,
             structured_knowledge_path=structured_knowledge_path,
+            index_dir=index_dir,
+            embedder=embedder,
         )
         kb._load()
+        if kb._index_dir is not None:
+            kb.attach_index(kb._index_dir, embedder=kb._embedder)
         return kb
+
+    def attach_index(self, index_dir: Union[str, Path], *, embedder: Any = None) -> None:
+        """Switch search to the deployable index while preserving legacy metadata."""
+
+        self.retriever = HybridRetriever.from_directory(index_dir, embedder=embedder)
+        manifest = json.loads((Path(index_dir) / "manifest.json").read_text(encoding="utf-8"))
+        self.index_chunk_count = int(manifest.get("chunk_count", 0))
 
     def _load(self) -> None:
         if not self.data_dir.exists():
@@ -388,6 +408,9 @@ class KnowledgeBase:
         return found
 
     def search(self, query: str, top_k: int = 6, prefer_terms: Optional[list[str]] = None) -> list[SourceChunk]:
+        if self.retriever is not None:
+            results = self.retriever.retrieve(query, top_k=top_k, preferred_terms=prefer_terms)
+            return [self._retrieval_result_to_source_chunk(result) for result in results]
         normalized_query = self.normalize_query(query)
         prefer_terms = _dedupe_terms((prefer_terms or []) + self.find_terms(normalized_query))
         query_clean = self.rewrite_query(normalized_query, prefer_terms=prefer_terms)
@@ -435,6 +458,38 @@ class KnowledgeBase:
 
         scored.sort(key=lambda item: item.score, reverse=True)
         return self._dedupe(scored)[:top_k]
+
+    def _retrieval_result_to_source_chunk(self, result: Any) -> SourceChunk:
+        positions: list[int] = []
+        for locator in result.source_locators:
+            for key in ("line_start", "page", "paragraph", "table"):
+                value = locator.get(key)
+                if isinstance(value, int):
+                    positions.append(value + (1 if key in {"paragraph", "table"} else 0))
+                    break
+        start = min(positions) if positions else 1
+        end = max(positions) if positions else start
+        layer: Layer = "unknown"
+        result_terms = set(result.terms)
+        heading_text = " ".join([result.title, *result.heading_path])
+        best_layer_score = 0
+        for candidate_layer, terms in self.term_inventory.by_layer.items():
+            layer_score = len(result_terms.intersection(terms))
+            layer_score += sum(3 for term in terms if term and term in heading_text)
+            if layer_score > best_layer_score:
+                layer = candidate_layer
+                best_layer_score = layer_score
+        return SourceChunk(
+            id=result.chunk_id,
+            title=result.title,
+            source=result.source_path,
+            start_line=start,
+            end_line=end,
+            text=result.context_text,
+            layer=layer,
+            terms=result.terms,
+            score=result.score,
+        )
 
     def _chunk_tokens(self, chunk: SourceChunk) -> set[str]:
         item = self._structured_item_for_chunk(chunk)

@@ -171,7 +171,7 @@ class TestInputVerifier:
 class TestOutputVerifier:
     def test_pass_complete_output(self, term_inventory, output_frames, structured_items):
         verifier = OutputVerifier(term_inventory, output_frames, structured_items)
-        output = "## 核心定义\n内容\n## 基础属性\n内容\n## 状态/变化序列\n内容\n## 响应逻辑\n内容\n## 适用与不适用\n内容\n## 关联机制\n内容"
+        output = "单击是一种离散触发机制。\n\n## 核心定义\n内容\n## 基础属性\n内容\n## 状态/变化序列\n内容\n## 响应逻辑\n内容\n## 适用与不适用\n内容\n## 关联机制\n内容"
         structure = _make_structure(["单击"])
         result = verifier.verify(output, structure)
         assert result.status == "pass"
@@ -200,3 +200,13 @@ class TestOutputVerifier:
         result = verifier.verify(output, structure)
         assert result.should_retry
         assert result.correction_hints
+
+    def test_detect_out_of_range_citation(self, term_inventory, output_frames, structured_items):
+        verifier = OutputVerifier(term_inventory, output_frames, structured_items)
+        output = "单击是离散触发机制。[7]\n\n" + "\n".join(
+            f"## {title}\n内容" for title in output_frames.frame_for("basic_interaction_mechanism")
+        )
+        result = verifier.verify(output, _make_structure(["单击"]), source_count=3)
+
+        assert result.should_retry
+        assert any(issue.issue_type == "invalid_citation" for issue in result.issues)

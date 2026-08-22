@@ -101,6 +101,17 @@ cp agent_config.example.json agent_config.json
 
 打开浏览器访问 `http://127.0.0.1:5050` 即可使用。
 
+### 构建完整语料索引
+
+```bash
+.venv/bin/python scripts/build_knowledge_index.py /path/to/corpus --output-dir knowledge_index
+
+# 可选：配置 SILICONFLOW_API_KEY 后同时构建向量索引
+.venv/bin/python scripts/build_knowledge_index.py /path/to/corpus --output-dir knowledge_index --vectors
+```
+
+Web 后端会自动发现 `knowledge_index/manifest.json`，也可以在 `agent_config.json` 的 `data.knowledge_index` 中显式指定。完整的纳入规则、索引产物、离线评测与发布说明见 [知识索引构建与评测](docs/knowledge_index.md)。
+
 `agent_config.json` 支持 `//` 单行注释和 `/* ... */` 块注释，可以直接在参数旁边写说明。该文件已加入 `.gitignore`，适合存放本机运行偏好；需要给别人参考时改 `agent_config.example.json`。
 
 交互式会话管理澄清 session 和短期对话记忆。模糊问题不会直接回答，而是先反问；用户补充信息后，系统会合并上下文重新判断 intent。已经回答过的轮次会被记录，后续追问如”那它和长按有什么区别？”会结合前文补全”它”的指代，并重新判断 intent。
@@ -178,6 +189,7 @@ PYTHONPATH=. python web/backend/app.py
 - `data.term_inventory`：术语枚举配置，默认可指向 `data/term_inventory.json`。
 - `data.output_frames`：Intent 输出框架配置，默认可指向 `data/output_frames.json`。
 - `data.structured_knowledge`：结构化知识库配置，默认可指向 `data/structured_knowledge.json`。
+- `data.knowledge_index`：可部署知识索引目录；未设置时自动发现项目根的 `knowledge_index/`。
 - `retrieval.top_k`：检索资料片段数量。
 - `model.model`：硅基流动模型名；为 `null` 时读取 `.env` 中的 `SILICONFLOW_MODEL`。
 - `model.timeout`、`model.max_tokens`、`model.temperature`：模型调用参数。

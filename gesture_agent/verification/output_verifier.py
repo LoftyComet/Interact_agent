@@ -5,6 +5,7 @@ import re
 from typing import TYPE_CHECKING, Optional
 
 from ..core.models import Intent, IntentOutputFrames, QuestionStructure, StructuredKnowledgeItem, TermInventory
+from .answer_schema import parse_answer_markdown, render_answer_markdown
 from .models import OutputIssue, OutputVerificationResult
 from .prompts import OUTPUT_VERIFICATION_PROMPT, OUTPUT_VERIFICATION_SYSTEM
 
@@ -28,10 +29,14 @@ class OutputVerifier:
         self._use_llm = use_llm and client is not None
         self._all_terms = set(term_inventory.all_terms())
 
-    def verify(self, output: str, structure: QuestionStructure) -> OutputVerificationResult:
+    def verify(
+        self,
+        output: str,
+        structure: QuestionStructure,
+        source_count: int | None = None,
+    ) -> OutputVerificationResult:
         issues: list[OutputIssue] = []
-        issues.extend(self._check_sections(output, structure.intent))
-        issues.extend(self._check_format(output))
+        issues.extend(self._check_contract(output, structure.intent, source_count))
         issues.extend(self._check_term_validity(output, structure))
         if self._use_llm and not issues:
             issues.extend(self._llm_verify(output, structure))
@@ -46,41 +51,55 @@ class OutputVerifier:
             correction_hints=hints,
         )
 
-    def _check_sections(self, output: str, intent: Intent) -> list[OutputIssue]:
-        issues: list[OutputIssue] = []
+    def normalize(self, output: str, structure: QuestionStructure) -> str:
+        """Return canonical Markdown when the answer satisfies its contract."""
+
+        try:
+            expected = self._frames.frame_for(structure.intent)
+        except KeyError:
+            return output
+        result = parse_answer_markdown(output, expected)
+        if not result.valid:
+            return output
+        return render_answer_markdown(result.document, expected)
+
+    def _check_contract(
+        self,
+        output: str,
+        intent: Intent,
+        source_count: int | None,
+    ) -> list[OutputIssue]:
         try:
             expected = self._frames.frame_for(intent)
         except KeyError:
-            return issues
-        headers = re.findall(r"^##\s+(.+)$", output, re.MULTILINE)
-        headers_normalized = [h.strip() for h in headers]
-        for section in expected:
-            if not any(section in h for h in headers_normalized):
+            return []
+        result = parse_answer_markdown(output, expected)
+        issues = [
+            OutputIssue(
+                issue_type=violation.code,
+                location=violation.location,
+                description=violation.message,
+                severity="error",
+            )
+            for violation in result.violations
+        ]
+        if source_count is not None:
+            invalid = [value for value in result.document.citation_ids if value < 1 or value > source_count]
+            if invalid:
+                refs = "、".join(f"[{value}]" for value in invalid)
                 issues.append(OutputIssue(
-                    issue_type="missing_section",
-                    location=f"## {section}",
-                    description=f"缺少章节「{section}」",
+                    issue_type="invalid_citation",
+                    location=refs,
+                    description=f"引用编号 {refs} 超出本次提供的 {source_count} 条资料范围",
                     severity="error",
                 ))
-        return issues
-
-    def _check_format(self, output: str) -> list[OutputIssue]:
-        issues: list[OutputIssue] = []
-        stripped = output.strip()
-        if stripped.startswith("```") and stripped.endswith("```"):
-            issues.append(OutputIssue(
-                issue_type="format_error",
-                location="整体",
-                description="输出被包裹在代码块中，应直接输出 Markdown",
-                severity="error",
-            ))
-        if not re.search(r"^##\s+", output, re.MULTILINE):
-            issues.append(OutputIssue(
-                issue_type="format_error",
-                location="整体",
-                description="输出缺少 ## 标题结构",
-                severity="warning",
-            ))
+            elif source_count > 0 and not result.document.citation_ids:
+                issues.append(OutputIssue(
+                    issue_type="invalid_citation",
+                    location="整体",
+                    description="回答没有标注任何检索资料引用",
+                    severity="warning",
+                ))
         return issues
 
     def _check_term_validity(self, output: str, structure: QuestionStructure) -> list[OutputIssue]:

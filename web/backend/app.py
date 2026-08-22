@@ -129,10 +129,16 @@ class AgentRuntime:
 
     def __init__(self, config_path: Optional[str] = None) -> None:
         self.config = load_agent_config(config_path)
+        index_dir = self.config.knowledge_index
+        if index_dir is None and Path("knowledge_index/manifest.json").exists():
+            index_dir = "knowledge_index"
+        index_embedder = self._maybe_build_index_embedder(index_dir)
         self.kb = KnowledgeBase.load(
             self.config.data_dir,
             term_inventory_path=self.config.term_inventory,
             structured_knowledge_path=self.config.structured_knowledge,
+            index_dir=index_dir,
+            embedder=index_embedder,
         )
         self.output_frames = load_output_frames(
             self.config.data_dir, output_frames_path=self.config.output_frames
@@ -162,6 +168,18 @@ class AgentRuntime:
         )
         index_path = Path(self.config.data_dir) / "pictures" / "extracted" / "image_index.json"
         self.image_index = ImageIndex.load(index_path)
+
+    @staticmethod
+    def _maybe_build_index_embedder(index_dir: Optional[str]) -> Optional[SiliconFlowClient]:
+        if not index_dir:
+            return None
+        try:
+            manifest = json.loads((Path(index_dir) / "manifest.json").read_text(encoding="utf-8"))
+            if manifest.get("embedding", {}).get("status") != "ready":
+                return None
+            return SiliconFlowClient.from_env()
+        except (OSError, ValueError, json.JSONDecodeError, SiliconFlowError):
+            return None
 
     def get_session(self, session_id: str) -> ConversationSession:
         with self._sessions_lock:
@@ -329,6 +347,8 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             "top_k": rt.config.top_k,
             "term_count": len(rt.kb.term_inventory.all_terms()),
             "doc_count": len(rt.kb.chunks),
+            "index_chunk_count": rt.kb.index_chunk_count,
+            "retrieval_mode": rt.kb.retriever.mode if rt.kb.retriever else "legacy",
         }
         return jsonify(info)
 
@@ -483,7 +503,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         # --- 输出验证 ---
         output_issues: list[str] = []
         if answer and not error_text and rt.config.verification.verify_output and structure:
-            ov_result = rt.output_verifier.verify(answer, structure)
+            ov_result = rt.output_verifier.verify(answer, structure, source_count=len(chunks))
             max_retries = rt.config.verification.output_max_retries
             for _ in range(max_retries):
                 if not ov_result.should_retry:
@@ -502,8 +522,9 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     )
                 except ProviderError:
                     break
-                ov_result = rt.output_verifier.verify(answer, structure)
+                ov_result = rt.output_verifier.verify(answer, structure, source_count=len(chunks))
             output_issues = [i.description for i in ov_result.issues]
+            answer = rt.output_verifier.normalize(answer, structure)
 
         if structure is not None and not error_text:
             session.record_turn(
@@ -668,7 +689,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             # --- 输出验证 ---
             output_issues: list[str] = []
             if full_answer and rt.config.verification.verify_output and structure:
-                ov_result = rt.output_verifier.verify(full_answer, structure)
+                ov_result = rt.output_verifier.verify(full_answer, structure, source_count=len(chunks))
                 max_retries = rt.config.verification.output_max_retries
                 for _ in range(max_retries):
                     if not ov_result.should_retry:
@@ -689,8 +710,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
                     except ProviderError:
                         break
-                    ov_result = rt.output_verifier.verify(full_answer, structure)
+                    ov_result = rt.output_verifier.verify(full_answer, structure, source_count=len(chunks))
                 output_issues = [i.description for i in ov_result.issues]
+                normalized_answer = rt.output_verifier.normalize(full_answer, structure)
+                if normalized_answer != full_answer:
+                    full_answer = normalized_answer
+                    yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
 
             if structure is not None:
                 session.record_turn(
