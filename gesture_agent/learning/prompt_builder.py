@@ -6,6 +6,7 @@ from typing import Optional
 from gesture_agent.core.models import Layer, QuestionStructure, SourceChunk, TermInventory
 from gesture_agent.settings.app_config import PromptConfig
 from gesture_agent.knowledge.mechanism_registry import MechanismRegistry
+from gesture_agent.learning.evidence_packet import EvidenceRecord, build_evidence_packet, truncate_verbatim
 
 from typing import TYPE_CHECKING
 
@@ -103,7 +104,8 @@ def build_user_prompt(
     background: Optional[str] = None,
     mechanism_registry: Optional[MechanismRegistry] = None,
 ) -> str:
-    context = "\n\n".join(format_chunk(idx + 1, chunk) for idx, chunk in enumerate(chunks))
+    evidence_packet = build_evidence_packet(chunks)
+    context = evidence_packet.render()
     structure_json = json.dumps(question.to_dict(), ensure_ascii=False, indent=2)
     memory_section = (
         f"\n对话记忆（只用于理解指代和延续前文，不作为词典证据）：\n{memory_context}\n"
@@ -137,7 +139,7 @@ def build_user_prompt(
 {structure_json}
 ```
 
-词典检索资料：
+词典检索资料（只读证据包；每段都是索引中原文的逐字摘录）：
 {context if context else "未检索到相关资料。"}
 
 术语枚举约束：
@@ -149,6 +151,14 @@ def build_user_prompt(
 
 输出要求：
 - 第一行必须是 `<!-- ixdl-answer-block:corpus_evidence -->`；该块只放本轮资料直接支持的内容。
+- 写语料块前，先在内部建立“事实句 → 证据编号”清单；清单只允许使用上面只读证据包的原文。不要输出这个内部清单。
+- 语料块中的每个事实句、表格数据行、案例和类比都要在同一句或同一行末尾标注支持它的 `[n]`；段末的一个引用不能替代前面多句各自的引用。没有对应证据的内容不得留在语料块。
+- 第一句直接结论也必须遵守逐句引用规则；如果资料只能支持部分结论，就缩小结论或明确资料边界，不要先写无引用的设计判断。
+- 表格只能写各列均有直接证据的完整对比行；某个单元格缺少证据时，删除整行或把有证据的内容改写成表格外的独立事实句，不要用“当前资料没有直接证据”占位。
+- 生活类比、产品案例和“属于典型模式/共同遵循/更适合”等归纳，只有证据包逐字包含时才能写入语料块；自行构造的类比或归纳必须放在设计推导块并明确“这是帮助理解的类比/待验证推导”。
+- 用户原问题中明确描述的产品行为可以作为待分析输入，但不是书中事实：用“按你的描述”复述，不给它添加语料引用；将产品行为映射到词典机制时必须放进设计推导块，并使用“可理解为/可能对应/需要验证”等措辞。
+- 任何以“按你的描述”开头的复述都必须放在设计推导块，不能出现在语料块。用户给出的数值可以作为其现状复述，但不得改写成书中阈值或推荐参数。
+- 在设计推导块中可以引用书中原事实作为推导前提，但必须明确写成“资料中的直接事实是……[n]”；随后另起一句写“基于此可以尝试……”，不要把原事实和新建议混成同一个确定性结论。
 - 如果设计类问题确需提出资料未直接支持的方案，在第一段推导前另起一行写 `<!-- ixdl-answer-block:design_reasoning -->`。词典已有案例/类比足够时，不要生成推导块。
 - 对具体方案进行复述映射、风险判断、优劣评价或给出修改建议，都属于设计推导；除非检索资料直接描述了同一方案和同一结论，否则必须把这些内容完整放在 `design_reasoning` 标记之后。不要把“问题诊断”“修改建议”等章节留在语料块中。
 - 本题推导策略：{reasoning_policy}
@@ -165,23 +175,22 @@ def build_user_prompt(
 
 
 def format_chunk(index: int, chunk: SourceChunk, max_chars: int = 3600) -> str:
-    text = _truncate_at_sentence(chunk.text, max_chars)
-    return (
-        f"[{index}] {chunk.title}\n"
-        f"来源：{chunk.citation()}；层级：{chunk.layer}；匹配分：{chunk.score}\n"
-        f"{text}"
-    )
+    packet = build_evidence_packet([chunk], max_chars=max_chars)
+    record = packet.records[0]
+    return EvidenceRecord(
+        citation_id=index,
+        chunk_id=record.chunk_id,
+        title=record.title,
+        citation=record.citation,
+        layer=record.layer,
+        score=record.score,
+        excerpt=record.excerpt,
+        excerpt_sha256=record.excerpt_sha256,
+    ).render()
 
 
 def _truncate_at_sentence(text: str, limit: int) -> str:
-    if len(text) <= limit:
-        return text
-    # Try to cut at a sentence boundary (Chinese or Latin punctuation)
-    for sep in ("。", "；", "\n", ".", ";"):
-        pos = text.rfind(sep, 0, limit)
-        if pos >= limit // 2:
-            return text[: pos + 1]
-    return text[:limit]
+    return truncate_verbatim(text, limit)
 
 
 def format_term_inventory(

@@ -119,6 +119,16 @@ def test_evidence_limitation_statement_does_not_require_citation() -> None:
     assert report.claims[0].verdict == "supported"
 
 
+def test_topic_prefixed_evidence_limitation_does_not_require_citation() -> None:
+    verifier = GroundingVerifier(FakeJudge({}))
+    answer = "至于是否影响实际使用，当前资料没有直接证据。\n词典资料未给出具体毫秒数值。"
+
+    report = verifier.verify(answer, [_source("无关资料。")])
+
+    assert report.status == "pass"
+    assert all(claim.verdict == "supported" for claim in report.claims)
+
+
 def test_claim_cannot_hide_unsupported_detail_behind_limitation_suffix() -> None:
     verifier = GroundingVerifier(FakeJudge({}))
     report = verifier.verify(
@@ -192,7 +202,7 @@ def test_large_answer_is_judged_in_bounded_batches() -> None:
 
     assert report.status == "pass"
     assert len(report.claims) == 25
-    assert judge.batch_sizes == [10, 10, 5]
+    assert judge.batch_sizes == [6, 6, 6, 6, 1]
 
 
 def test_clarification_questions_are_not_treated_as_corpus_claims() -> None:

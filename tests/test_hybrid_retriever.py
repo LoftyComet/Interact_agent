@@ -155,3 +155,53 @@ def test_closest_heading_match_beats_shared_distant_ancestor(tmp_path) -> None:
     results = retriever.retrieve("语音", top_k=2, expand_neighbors=0)
 
     assert results[0].chunk_id == "direct"
+
+
+def test_terminology_channel_recovers_exact_multi_term_comparison_from_noisy_query(tmp_path) -> None:
+    target = _chunk(
+        "comparison",
+        "单击 VS 按下",
+        "单击在抬起后触发，按下在状态变化时触发。",
+        "comparison",
+    )
+    noise = _chunk(
+        "noise",
+        "常见问题",
+        "书里讲了很多内容，什么时候使用还是容易糊涂。",
+        "noise",
+    )
+    lexical = LexicalIndex.build(
+        tmp_path / "knowledge.sqlite",
+        [noise, target],
+        {"noise": [], "comparison": ["单击", "按下"]},
+    )
+    retriever = HybridRetriever(lexical, canonical_terms=["单击", "按下"])
+
+    results = retriever.retrieve(
+        "书里讲得很糊涂，到底什么时候应该使用它们",
+        preferred_terms=["单击", "按下"],
+        top_k=1,
+        recall_k=1,
+        expand_neighbors=0,
+    )
+
+    assert results[0].chunk_id == "comparison"
+    assert "terminology" in results[0].channels
+
+
+def test_retrieval_exposes_only_inventory_backed_taxonomy_terms(tmp_path) -> None:
+    target = _chunk("click", "单击", "单击是离散触发。", "click")
+    lexical = LexicalIndex.build(
+        tmp_path / "knowledge.sqlite",
+        [target],
+        {"click": ["单击"]},
+    )
+    retriever = HybridRetriever(
+        lexical,
+        canonical_terms=["单击", "点击类"],
+        term_groups={"单击": ["点击类"]},
+    )
+
+    result = retriever.retrieve("单击", top_k=1, expand_neighbors=0)[0]
+
+    assert result.terms == ["单击", "点击类"]

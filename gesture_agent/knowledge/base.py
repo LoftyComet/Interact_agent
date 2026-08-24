@@ -412,7 +412,15 @@ class KnowledgeBase:
 
     def search(self, query: str, top_k: int = 6, prefer_terms: Optional[list[str]] = None) -> list[SourceChunk]:
         if self.retriever is not None:
-            results = self.retriever.retrieve(query, top_k=top_k, preferred_terms=prefer_terms)
+            # Keep one citation bound to exactly one indexed chunk. Neighbor
+            # expansion is useful for discovery but contaminates answer evidence
+            # because the neighbor has a different chunk id and locator.
+            results = self.retriever.retrieve(
+                query,
+                top_k=top_k,
+                preferred_terms=prefer_terms,
+                expand_neighbors=0,
+            )
             return [self._retrieval_result_to_source_chunk(result) for result in results]
         normalized_query = self.normalize_query(query)
         prefer_terms = _dedupe_terms((prefer_terms or []) + self.find_terms(normalized_query))

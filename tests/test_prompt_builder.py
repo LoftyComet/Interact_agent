@@ -28,6 +28,7 @@ def test_prompt_includes_term_inventory_constraints() -> None:
     assert "旋钮" in prompt
     assert "1-a 开关（Switch）" in prompt
     assert "4-i 捏合解耦（Pinch Decoupling）" in prompt
+    assert "不要用“当前资料没有直接证据”占位" in prompt
 
 
 def test_prompt_config_can_override_system_and_append_instructions() -> None:

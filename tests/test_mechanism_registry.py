@@ -113,6 +113,33 @@ def test_normalizer_repairs_mismatched_existing_code() -> None:
     assert normalized == "采用 2-a 拖拽来移动对象。"
 
 
+def test_normalizer_expands_known_bare_code_and_removes_unknown_code() -> None:
+    registry = MechanismRegistry.load("data/term_inventory.json")
+
+    normalized = registry.normalize_answer(
+        "它属于 2-b 条目，也可参考起始选择机制（6-b）。"
+    )
+
+    assert "2-b 甩动（Flick） 条目" in normalized
+    assert "起始选择机制。" in normalized
+    assert "6-b" not in normalized
+    assert registry.validate_answer(normalized) == ()
+
+
+def test_normalizer_repairs_table_code_and_duplicate_parenthetical_code() -> None:
+    registry = MechanismRegistry.load("data/term_inventory.json")
+    answer = (
+        "| 翻动（Swipe） | 2-c | 锚点归位 |\n"
+        "可使用 **1-i 多点同时点击**（1-i）组合输入。"
+    )
+
+    normalized = registry.normalize_answer(answer)
+
+    assert "2-c 翻动（Swipe）" in normalized
+    assert normalized.count("1-i") == 1
+    assert registry.validate_answer(normalized) == ()
+
+
 def test_normalizer_repairs_noncanonical_double_press_name_and_code() -> None:
     registry = MechanismRegistry.load("data/term_inventory.json")
 

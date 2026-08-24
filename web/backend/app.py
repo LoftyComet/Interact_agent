@@ -55,7 +55,9 @@ from gesture_agent.verification import (
     ReasoningVerifier,
     parse_answer_blocks,
     parse_answer_markdown,
+    quality_snapshot,
     render_answer_markdown,
+    text_change_metrics,
 )
 from gesture_agent.verification.prompts import OUTPUT_CORRECTION_PROMPT
 
@@ -393,7 +395,11 @@ def verify_answer_quality(
             f"设计推导：{issue.text}（{issue.reason}）" for issue in reasoning.issues
         )
     elif reasoning_answer and reasoning_verifier is not None:
-        reasoning = reasoning_verifier.verify(reasoning_answer, chunks)
+        reasoning = reasoning_verifier.verify(
+            reasoning_answer,
+            chunks,
+            user_context=structure.raw_query,
+        )
         should_retry = should_retry or reasoning.should_retry
         if reasoning.correction_hints:
             hints.append(reasoning.correction_hints)
@@ -428,14 +434,32 @@ def normalize_mechanism_codes(
     )
 
 
+def generation_temperature(
+    runtime: AgentRuntime,
+    structure: Optional[QuestionStructure],
+) -> float:
+    """Use near-deterministic generation when design inference is forbidden."""
+
+    configured = float(runtime.config.temperature)
+    if structure is not None and not structure.reasoning_allowed:
+        return min(configured, 0.05)
+    return configured
+
+
 _DESIGN_BOUNDARY_INTENTS = {
+    "case_analysis",
     "design_evaluation",
     "design_suggestion",
+    "evaluation_methodology",
+    "function_interaction_breakdown",
     "interaction_optimization",
+    "mechanism_identification",
+    "mechanism_parameter_compare",
 }
 _UNLABELED_DESIGN_RE = re.compile(
-    r"(?:^|\n)##\s*(?:问题诊断|修改建议|优化建议|初步建议|选择建议)\s*$"
+    r"(?:^|\n)##\s*(?:问题诊断|修改建议|优化建议|初步建议|选择建议|评估维度与检查点|评估方法建议)\s*$"
     r"|(?:这个|该|你的)?方案[^。\n]{0,32}(?:可行|风险|建议|适合)"
+    r"|(?:按你的描述|按你的拆法|你拆的是|你的方案|你提出的)"
     r"|(?:^|\n)\s*(?:[-*]|\d+[.)、])?\s*(?:建议|可以尝试|考虑用|需要优化)",
     re.MULTILINE,
 )
@@ -459,16 +483,16 @@ def repair_unlabeled_design_reasoning(
     ):
         return answer
     document = parse_answer_blocks(answer)
-    if document.markdown_for("design_reasoning"):
-        return answer
     corpus = document.corpus_markdown
     if not _UNLABELED_DESIGN_RE.search(corpus):
         return answer
-    limitation = "当前资料没有直接证据支持对这一具体方案作确定判断。"
+    existing_reasoning = document.markdown_for("design_reasoning")
+    limitation = "当前资料没有直接证据支持对这一具体产品或方案作确定判断。"
     reasoning = (
         "以下内容是结合用户方案与检索资料形成的设计推导，需要通过实际场景验证，"
         "并非语料中的既有结论：\n\n"
         + corpus
+        + (f"\n\n{existing_reasoning}" if existing_reasoning else "")
     )
     return (
         document.replace_corpus_markdown(limitation)
@@ -623,10 +647,15 @@ def apply_reasoning_safety_fallback(
             reasoning_markdown,
             report,
         )
-    sanitized = document.replace_type_markdown(
-        "design_reasoning",
-        sanitized_reasoning,
-    ).render_markdown()
+    content_changed = sanitized_reasoning != reasoning_markdown
+    sanitized = (
+        document.replace_type_markdown(
+            "design_reasoning",
+            sanitized_reasoning,
+        ).render_markdown()
+        if content_changed
+        else answer
+    )
     output_issues = []
     hints: list[str] = []
     should_retry = False
@@ -655,7 +684,9 @@ def apply_reasoning_safety_fallback(
         ],
         grounding=quality.grounding,
         reasoning=safe_reasoning_report,
-        safety_fallback_applied=True,
+        safety_fallback_applied=(
+            getattr(quality, "safety_fallback_applied", False) or content_changed
+        ),
     )
 
 
@@ -794,6 +825,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         image_paths = payload.get("images") or []
         style = payload.get("style") or "concise"
         provider_id = resolve_provider_id(payload.get("provider"))
+        trace_requested = bool(payload.get("include_verification_trace")) and app.testing
         intent_raw = payload.get("intent") or ""
         intent = intent_raw.strip() if intent_raw.strip() and intent_raw.strip() != "auto" else None
         background = (payload.get("background") or "").strip() or None
@@ -889,7 +921,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             client = rt.make_chat_client(use_vision=bool(image_paths), provider_id=provider_id)
             answer = client.chat(
                 messages,
-                temperature=rt.config.temperature,
+                temperature=generation_temperature(rt, structure),
                 max_tokens=rt.config.max_tokens,
                 enable_thinking=rt.config.enable_thinking,
             )
@@ -903,13 +935,20 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         grounding_report: Optional[GroundingReport] = None
         reasoning_report: Optional[ReasoningReport] = None
         safety_fallback_applied = False
+        verification_trace: Optional[dict[str, Any]] = (
+            {"attempts": [], "fallbacks": []} if trace_requested else None
+        )
         verification_enabled = (
             rt.config.verification.verify_output or rt.config.verification.verify_grounding
         )
         if answer and not error_text and verification_enabled and structure:
             quality_result = verify_answer_quality(rt, answer, structure, chunks)
+            if verification_trace is not None:
+                verification_trace["attempts"].append(
+                    quality_snapshot("initial", answer, quality_result)
+                )
             max_retries = rt.config.verification.output_max_retries
-            for _ in range(max_retries):
+            for retry_index in range(max_retries):
                 if not quality_result.should_retry:
                     break
                 correction_prompt = OUTPUT_CORRECTION_PROMPT.format(
@@ -922,7 +961,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 try:
                     answer = client.chat(
                         retry_messages,
-                        temperature=rt.config.temperature,
+                        temperature=generation_temperature(rt, structure),
                         max_tokens=rt.config.max_tokens,
                         enable_thinking=rt.config.enable_thinking,
                     )
@@ -931,12 +970,46 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 except ProviderError:
                     break
                 quality_result = verify_answer_quality(rt, answer, structure, chunks)
+                if verification_trace is not None:
+                    verification_trace["attempts"].append(
+                        quality_snapshot(
+                            f"retry_{retry_index + 1}", answer, quality_result
+                        )
+                    )
+            before_grounding_fallback = answer
+            before_grounding_quality = quality_result
             answer, quality_result = apply_grounding_safety_fallback(
                 rt, answer, structure, chunks, quality_result
             )
+            if verification_trace is not None and answer != before_grounding_fallback:
+                rejected = []
+                if before_grounding_quality.grounding is not None:
+                    rejected = [
+                        claim.to_dict() if hasattr(claim, "to_dict") else asdict(claim)
+                        for claim in before_grounding_quality.grounding.claims
+                        if claim.verdict in {
+                            "partially_supported", "unsupported", "conflicted"
+                        }
+                    ]
+                verification_trace["fallbacks"].append({
+                    "kind": "grounding",
+                    **text_change_metrics(before_grounding_fallback, answer),
+                    "rejected_claims": rejected,
+                })
+            before_reasoning_fallback = answer
+            before_reasoning_quality = quality_result
             answer, quality_result = apply_reasoning_safety_fallback(
                 rt, answer, structure, chunks, quality_result
             )
+            if verification_trace is not None and answer != before_reasoning_fallback:
+                issues = []
+                if before_reasoning_quality.reasoning is not None:
+                    issues = [asdict(issue) for issue in before_reasoning_quality.reasoning.issues]
+                verification_trace["fallbacks"].append({
+                    "kind": "reasoning",
+                    **text_change_metrics(before_reasoning_fallback, answer),
+                    "rejected_claims": issues,
+                })
             answer = normalize_mechanism_codes(rt, answer, structure)
             quality_result = refresh_output_quality(
                 rt, answer, structure, chunks, quality_result
@@ -945,6 +1018,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             grounding_report = quality_result.grounding
             reasoning_report = quality_result.reasoning
             safety_fallback_applied = quality_result.safety_fallback_applied
+            if verification_trace is not None:
+                verification_trace["final"] = quality_snapshot(
+                    "final", answer, quality_result
+                )
             if rt.config.verification.verify_output:
                 answer = rt.output_verifier.normalize(answer, structure)
 
@@ -968,6 +1045,11 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             "grounding": grounding_report.to_dict() if grounding_report else None,
             "reasoning_audit": reasoning_report.to_dict() if reasoning_report else None,
             "safety_fallback_applied": safety_fallback_applied,
+            **(
+                {"verification_trace": verification_trace}
+                if verification_trace is not None
+                else {}
+            ),
             "structure": serialize_structure(structure),
             "chunks": [serialize_chunk(c) for c in chunks],
             "memory_context": session_result.memory_context,
@@ -1101,7 +1183,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 client = rt.make_chat_client(use_vision=bool(image_paths), provider_id=provider_id)
                 for delta in client.chat_stream(
                     messages,
-                    temperature=rt.config.temperature,
+                    temperature=generation_temperature(rt, structure),
                     max_tokens=rt.config.max_tokens,
                     enable_thinking=rt.config.enable_thinking,
                 ):
@@ -1148,7 +1230,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         yield sse("retry", {"reason": quality_result.correction_hints})
                         full_answer = client.chat(
                             retry_messages,
-                            temperature=rt.config.temperature,
+                            temperature=generation_temperature(rt, structure),
                             max_tokens=rt.config.max_tokens,
                             enable_thinking=rt.config.enable_thinking,
                         )

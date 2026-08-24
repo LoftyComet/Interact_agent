@@ -47,7 +47,13 @@ class ReasoningVerifier:
     def __init__(self, judge: Optional[ReasoningJudge]) -> None:
         self._judge = judge
 
-    def verify(self, reasoning: str, sources: list[SourceChunk]) -> ReasoningReport:
+    def verify(
+        self,
+        reasoning: str,
+        sources: list[SourceChunk],
+        *,
+        user_context: str = "",
+    ) -> ReasoningReport:
         if not reasoning.strip():
             return ReasoningReport(status="pass")
         if self._judge is None:
@@ -55,9 +61,14 @@ class ReasoningVerifier:
                 status="unavailable",
                 error="设计推导审计器未配置",
             )
-        deterministic_issues = _deterministic_policy_issues(reasoning, sources)
+        deterministic_issues = _deterministic_policy_issues(
+            reasoning,
+            sources,
+            user_context=user_context,
+        )
         payload = {
             "design_reasoning": reasoning[:8000],
+            "user_provided_context": user_context[:3000],
             "evidence": [
                 {
                     "id": index,
@@ -96,6 +107,11 @@ class ReasoningVerifier:
                     text=str(row.get("text", "")).strip()[:500],
                     reason=str(row.get("reason", "")).strip()[:500],
                 )
+                if (
+                    candidate.issue_type == "external_fact"
+                    and _provided_by_user(candidate.text, user_context)
+                ):
+                    continue
                 if candidate not in issues:
                     issues.append(candidate)
         except Exception as exc:
@@ -148,13 +164,21 @@ class ReasoningVerifier:
         return sanitized, ReasoningReport(status="pass")
 
 
-_REASONING_AUDIT_PROMPT = """你是严格的 IxDL 设计推导审计器。输入包含已明确标注的 design_reasoning 和本轮 evidence。
+_REASONING_AUDIT_PROMPT = """你是严格的 IxDL 设计推导审计器。输入包含已明确标注的 design_reasoning、用户原始描述 user_provided_context 和本轮 evidence。
 
 设计推导可以提出新的方案与待验证假设，不要求被 evidence 直接支持；但必须使用“可以尝试、可能、需要验证”等推导措辞，且不得：
 1. 写入 evidence 中没有的外部产品事实、平台行为、研究结论、时间、比例、尺寸、阈值或其他具体参数；
 2. 与 evidence 明确冲突；
 3. 声称某个推导“来自书中/词典明确指出”；
 4. 把推测写成确定事实或唯一/最佳答案。
+
+证据边界必须按以下规则判断：
+- user_provided_context 中由用户明确给出的产品行为、功能和现状，是本轮分析输入，可以用“按你的描述”复述，也可以在 design_reasoning 中映射到 IxDL 机制；不要把它误判为模型编造的 external_fact，但不得声称它来自书中。
+- user_provided_context 中用户明确给出的测试值（例如用户说自己试过 200ms 和 500ms）也属于分析输入；仅复述这些值或比较用户报告的现象时不要判 external_fact。只有模型把它们宣称为书中阈值、行业标准或推荐参数时才报告。
+- 将用户描述映射到某个机制属于允许的设计分析，只要使用“可理解为、可能对应、需要验证”等推导措辞，并且机制名称与编号正确。
+- design_reasoning 可以引用 evidence 中的书中原事实作为推导前提。若句子有准确引用且 evidence 直接支持，不要仅因它位于推导块而判 unlabeled_assertion。
+- 只有既不在 user_provided_context、也不受 evidence 支持的产品行为、研究结论、具体参数或平台事实，才判 external_fact。
+- 不要因为一句话同时包含“书中前提 [n]”与保守的“可以尝试”建议就自动判错；只有混淆来源、扩大范围或使用确定性结论时才报告。
 
 仅报告实质问题。只输出 JSON：
 {"issues":[{"issue_type":"external_fact|corpus_conflict|book_misattribution|unlabeled_assertion","text":"问题原文","reason":"简短理由"}]}
@@ -181,6 +205,8 @@ def _parse_json_object(text: str) -> dict[str, Any]:
 def _deterministic_policy_issues(
     reasoning: str,
     sources: list[SourceChunk],
+    *,
+    user_context: str = "",
 ) -> tuple[ReasoningIssue, ...]:
     issues: list[ReasoningIssue] = []
     evidence_text = "\n".join(source.text for source in sources).lower()
@@ -192,7 +218,7 @@ def _deterministic_policy_issues(
     )
     for match in parameter_re.finditer(cleaned):
         value = match.group().strip()
-        if value.lower() not in evidence_text:
+        if value.lower() not in evidence_text and not _provided_by_user(value, user_context):
             issues.append(ReasoningIssue(
                 issue_type="external_fact",
                 text=value,
@@ -214,6 +240,14 @@ def _deterministic_policy_issues(
                 reason="设计推导使用了确定性或强度过高的表述，应改为待验证假设",
             ))
     return tuple(issues)
+
+
+def _provided_by_user(fragment: str, user_context: str) -> bool:
+    """Return true only when the audited fragment is visibly present in input."""
+
+    needle = _plain_text(fragment).lower()
+    context = _plain_text(user_context).lower()
+    return len(needle) >= 3 and needle in context
 
 
 def _plain_text(text: str) -> str:

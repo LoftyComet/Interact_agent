@@ -21,7 +21,9 @@ _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)、]\s*)")
 _FENCE_RE = re.compile(r"^```")
 _EVIDENCE_LIMIT = 4000
-_JUDGE_BATCH_SIZE = 10
+# Keep semantic-audit responses short enough that OpenAI-compatible providers
+# reliably return complete, valid JSON even when claim reasons contain quotes.
+_JUDGE_BATCH_SIZE = 6
 _VALID_VERDICTS = {"supported", "partially_supported", "unsupported", "conflicted"}
 
 
@@ -295,13 +297,12 @@ class GroundingVerifier:
             response = self._judge.chat(
                 [
                     *messages,
-                    {"role": "assistant", "content": response[:5000]},
                     {
                         "role": "user",
                         "content": (
                             "上一条结果不是可解析的完整 JSON。请重新审计同一批 claims，"
                             "不要省略任何 id，只输出符合系统消息 schema 的 JSON 对象；"
-                            "字符串中的引号必须正确转义。"
+                            "reason 限 20 个汉字且不要使用任何引号，字符串中的引号必须正确转义。"
                         ),
                     },
                 ],
@@ -440,13 +441,23 @@ def _is_table_separator(line: str) -> bool:
 
 def _is_evidence_limitation(text: str) -> bool:
     normalized = text.strip(" -*_：:|（）()")
-    return any(normalized.startswith(marker) for marker in (
+    if any(normalized.startswith(marker) for marker in (
         "当前资料没有直接证据",
         "当前语料没有直接证据",
         "现有资料无法确认",
         "现有语料无法确认",
         "资料不足以判断",
         "语料不足以判断",
+    )):
+        return True
+    # Topic-prefixed limitation statements still make no positive factual
+    # assertion. Keep this deliberately narrow so an unsupported proposal
+    # cannot hide behind a parenthetical disclaimer at the end.
+    return bool(re.match(
+        r"^(?:(?:关于|至于).{0,80})?"
+        r"(?:(?:当前|现有|词典)(?:资料|语料)|(?:词典)?资料)"
+        r".{0,50}(?:没有直接证据|无法确认|未提供|未给出)",
+        normalized,
     ))
 
 

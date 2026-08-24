@@ -10,12 +10,14 @@ from gesture_agent.verification import (
     ReasoningIssue,
     ReasoningReport,
     ReasoningVerifier,
+    parse_answer_blocks,
 )
 from gesture_agent.verification.models import OutputIssue, OutputVerificationResult
 from gesture_agent.core.models import IntentOutputFrames
 from web.backend.app import (
     apply_grounding_safety_fallback,
     apply_reasoning_safety_fallback,
+    generation_temperature,
     normalize_mechanism_codes,
     repair_unlabeled_design_reasoning,
     refresh_output_quality,
@@ -258,6 +260,44 @@ def test_reasoning_fallback_preserves_safe_ideas_instead_of_dropping_block() -> 
     assert result.safety_fallback_applied is True
 
 
+def test_reasoning_audit_noop_does_not_count_as_safety_fallback() -> None:
+    runtime = SimpleNamespace(
+        config=SimpleNamespace(verification=SimpleNamespace(verify_output=True)),
+        output_verifier=PassOutputVerifier(),
+        reasoning_verifier=ReasoningVerifier(None),
+    )
+    structure = QuestionStructure(
+        raw_query="测试", intent="design_suggestion",
+        layers=["design_evaluation"], terms=[], focus=["设计建议"], reasoning_allowed=True,
+    )
+    answer = """<!-- ixdl-answer-block:corpus_evidence -->
+当前资料没有直接证据支持该方案。
+<!-- ixdl-answer-block:design_reasoning -->
+可以尝试把这个方案作为待验证假设。"""
+    report = ReasoningReport(
+        status="issues_found",
+        issues=(ReasoningIssue(
+            issue_type="unlabeled_assertion",
+            text="可以尝试把这个方案作为待验证假设。",
+            reason="模型误报",
+        ),),
+        should_retry=True,
+    )
+    quality = SimpleNamespace(
+        grounding=GroundingReport(status="pass", score=1.0),
+        reasoning=report,
+        safety_fallback_applied=False,
+    )
+
+    sanitized, result = apply_reasoning_safety_fallback(
+        runtime, answer, structure, [], quality
+    )
+
+    assert sanitized == answer
+    assert result.reasoning.status == "pass"
+    assert result.safety_fallback_applied is False
+
+
 def test_post_fallback_normalization_refreshes_stale_output_issues() -> None:
     runtime = SimpleNamespace(
         kb=SimpleNamespace(
@@ -323,3 +363,54 @@ def test_direct_book_guidance_without_design_markers_stays_in_corpus() -> None:
     answer = "<!-- ixdl-answer-block:corpus_evidence -->\n书中案例直接采用了这一结构。[1]"
 
     assert repair_unlabeled_design_reasoning(answer, structure) == answer
+
+
+def test_product_mapping_leaked_before_existing_reasoning_marker_is_moved() -> None:
+    structure = QuestionStructure(
+        raw_query="我把播放器的进度条理解成拖拽",
+        intent="function_interaction_breakdown",
+        layers=["interaction_mechanism"],
+        terms=["拖拽"],
+        focus=["逻辑关系"],
+        reasoning_allowed=True,
+    )
+    answer = """<!-- ixdl-answer-block:corpus_evidence -->
+按你的描述，播放器进度条可能对应2-a 拖拽。
+
+## 功能概述
+
+你拆的是视频播放器功能。
+
+<!-- ixdl-answer-block:design_reasoning -->
+可以尝试继续验证音量映射。"""
+
+    repaired = repair_unlabeled_design_reasoning(answer, structure)
+    document = parse_answer_blocks(repaired)
+
+    assert "按你的描述" not in document.corpus_markdown
+    assert document.corpus_markdown.startswith("当前资料没有直接证据")
+    assert "按你的描述" in document.markdown_for("design_reasoning")
+    assert "继续验证音量映射" in document.markdown_for("design_reasoning")
+
+
+def test_corpus_only_generation_uses_near_deterministic_temperature() -> None:
+    runtime = SimpleNamespace(config=SimpleNamespace(temperature=0.2))
+    factual = QuestionStructure(
+        raw_query="范畴论在书里有什么用",
+        intent="background_knowledge",
+        layers=["background_knowledge"],
+        terms=[],
+        focus=["定义"],
+        reasoning_allowed=False,
+    )
+    design = QuestionStructure(
+        raw_query="帮我设计方案",
+        intent="design_suggestion",
+        layers=["design_evaluation"],
+        terms=[],
+        focus=["设计建议"],
+        reasoning_allowed=True,
+    )
+
+    assert generation_temperature(runtime, factual) == 0.05
+    assert generation_temperature(runtime, design) == 0.2

@@ -495,6 +495,7 @@ class QuestionParser:
         query: str,
     ) -> bool:
         if intent in {
+            "case_analysis",
             "design_evaluation",
             "mechanism_identification",
             "function_interaction_breakdown",
@@ -504,7 +505,7 @@ class QuestionParser:
             "design_suggestion",
         }:
             return True
-        if intent == "voice_interaction":
+        if intent in {"background_knowledge", "voice_interaction"}:
             return False
         if subtype in {"control_form_compare", "control_form_application"}:
             return True

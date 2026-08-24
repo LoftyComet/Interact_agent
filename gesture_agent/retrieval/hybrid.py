@@ -51,6 +51,7 @@ class HybridRetriever:
         *,
         aliases: Optional[dict[str, str]] = None,
         canonical_terms: Optional[list[str]] = None,
+        term_groups: Optional[dict[str, list[str]]] = None,
         vectors: Optional[ChunkVectorIndex] = None,
         embedder: Optional[Embedder] = None,
         reranker: Optional[Reranker] = None,
@@ -62,6 +63,7 @@ class HybridRetriever:
         self.lexical = lexical
         self.aliases = aliases or {}
         self.canonical_terms = canonical_terms or []
+        self.term_groups = term_groups or {}
         self.vectors = vectors
         self.embedder = embedder
         self.reranker = reranker
@@ -85,10 +87,20 @@ class HybridRetriever:
         vectors = None
         if manifest.get("embedding", {}).get("status") == "ready" and embedder is not None:
             vectors = ChunkVectorIndex.load(root / "vectors")
+        canonical_terms = [str(item["label"]) for item in terminology.get("terms", [])]
+        canonical_term_set = set(canonical_terms)
         return cls(
             LexicalIndex(root / "knowledge.sqlite"),
             aliases=dict(terminology.get("aliases", {})),
-            canonical_terms=[str(item["label"]) for item in terminology.get("terms", [])],
+            canonical_terms=canonical_terms,
+            term_groups={
+                str(item["label"]): [
+                    str(group)
+                    for group in item.get("group_path", [])
+                    if str(group) in canonical_term_set
+                ]
+                for item in terminology.get("terms", [])
+            },
             vectors=vectors,
             embedder=embedder if vectors is not None else None,
             reranker=reranker,
@@ -115,8 +127,26 @@ class HybridRetriever:
         lexical_hits = self.lexical.search(normalized, limit=max(recall_k, top_k), roles=roles)
         candidates: dict[str, dict] = {hit["id"]: hit for hit in lexical_hits}
         ranks: dict[str, dict[str, int]] = {}
+        candidate_channels: dict[str, set[str]] = {}
         for rank, hit in enumerate(lexical_hits, start=1):
             ranks.setdefault(hit["id"], {})["lexical"] = rank
+            candidate_channels.setdefault(hit["id"], set()).add("lexical")
+
+        # Natural-language questions can bury short canonical terms under BM25
+        # query noise. Add a terminology-only recall channel without changing
+        # or enriching any corpus text.
+        if len(query_terms) >= 2:
+            terminology_hits = self.lexical.search(
+                " ".join(query_terms),
+                limit=max(top_k, min(recall_k, PRIMARY_RECALL_LIMIT)),
+                roles=roles,
+            )
+            for hit in terminology_hits:
+                candidates[hit["id"]] = hit
+                # This channel exists to expand the candidate set. It carries no
+                # reciprocal-rank weight: exact headings and indexed terminology
+                # decide whether the recovered row is strong enough to surface.
+                candidate_channels.setdefault(hit["id"], set()).add("terminology")
 
         # A large secondary corpus can otherwise occupy the entire global BM25
         # recall window.  When the parser has recognized domain terminology,
@@ -133,6 +163,7 @@ class HybridRetriever:
                 candidates[hit["id"]] = hit
                 channel_ranks = ranks.setdefault(hit["id"], {})
                 channel_ranks["lexical"] = min(channel_ranks.get("lexical", rank), rank)
+                candidate_channels.setdefault(hit["id"], set()).add("lexical")
 
         if self.vectors is not None and self.embedder is not None:
             query_vectors = self.embedder.embed([normalized], batch_size=1)
@@ -143,6 +174,7 @@ class HybridRetriever:
                     if row is not None and (not roles or row["role"] in roles):
                         candidates[chunk_id] = row
                         ranks.setdefault(chunk_id, {})["vector"] = rank
+                        candidate_channels.setdefault(chunk_id, set()).add("vector")
 
         scored: list[tuple[dict, float, list[str]]] = []
         for chunk_id, row in candidates.items():
@@ -154,7 +186,7 @@ class HybridRetriever:
             )
             score += sum(0.008 for term in query_terms if term in row.get("terms", []))
             score *= 1.0 + max(int(row.get("authority", 0)), 0) / 2000.0
-            scored.append((row, score, sorted(channel_ranks)))
+            scored.append((row, score, sorted(candidate_channels.get(chunk_id, set()))))
 
         if self.reranker and scored:
             rerank_scores = self.reranker.score(normalized, [row["retrieval_text"] for row, _, _ in scored])
@@ -254,6 +286,12 @@ class HybridRetriever:
                     context_rows.append(following)
         else:
             context_rows = [row]
+        indexed_terms = [str(term) for term in row["terms"]]
+        taxonomy_terms = {
+            group
+            for term in indexed_terms
+            for group in self.term_groups.get(term, [])
+        }
         return RetrievalResult(
             chunk_id=row["id"],
             title=row["title"],
@@ -263,7 +301,11 @@ class HybridRetriever:
             source_path=row["source_path"],
             source_locators=row["source_locators"],
             heading_path=row["heading_path"],
-            terms=row["terms"],
+            # Taxonomy labels come from the immutable terminology inventory,
+            # not generated text. Exposing them here preserves the factual
+            # parent category of a retrieved mechanism without editing either
+            # the corpus or the persisted index.
+            terms=[*indexed_terms, *sorted(taxonomy_terms - set(indexed_terms))],
             role=row["role"],
             authority=int(row["authority"]),
             score=round(score, 8),

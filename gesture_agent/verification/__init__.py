@@ -25,6 +25,8 @@ __all__ = [
     "ReasoningIssue",
     "ReasoningReport",
     "ReasoningVerifier",
+    "quality_snapshot",
+    "text_change_metrics",
 ]
 from .answer_schema import (
     AnswerDocument,
@@ -40,3 +42,4 @@ from .answer_blocks import (
     parse_answer_blocks,
 )
 from .reasoning_verifier import ReasoningIssue, ReasoningReport, ReasoningVerifier
+from .trace import quality_snapshot, text_change_metrics

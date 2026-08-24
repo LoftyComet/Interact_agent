@@ -161,6 +161,8 @@ class MechanismRegistry:
         for pattern, replacement in _COMMON_NAME_NORMALIZATIONS:
             normalized = pattern.sub(replacement, normalized)
         normalized = self._normalize_existing_codes(normalized)
+        normalized = self._remove_unknown_codes(normalized)
+        normalized = self._expand_bare_codes(normalized)
         edits: list[tuple[int, str]] = []
         handled: set[str] = set()
         for start, end, _mention, entry in self._find_mentions(normalized):
@@ -176,6 +178,50 @@ class MechanismRegistry:
             edits.append((start, f"{entry.code} "))
         for start, insertion in sorted(edits, reverse=True):
             normalized = normalized[:start] + insertion + normalized[start:]
+        return self._remove_duplicate_named_codes(normalized)
+
+    def _remove_unknown_codes(self, text: str) -> str:
+        """Drop invented codes while preserving the surrounding prose."""
+
+        def replace(match: re.Match[str]) -> str:
+            return match.group(0) if match.group(1).lower() in self.by_code else ""
+
+        normalized = _CODE_IN_TEXT_RE.sub(replace, text)
+        normalized = re.sub(r"[（(]\s*[）)]", "", normalized)
+        return re.sub(r" {2,}", " ", normalized)
+
+    def _expand_bare_codes(self, text: str) -> str:
+        """Attach the immutable registry name to otherwise bare known codes."""
+
+        edits: list[tuple[int, int, str]] = []
+        for match in _CODE_IN_TEXT_RE.finditer(text):
+            entry = self.by_code.get(match.group(1).lower())
+            if entry is None:
+                continue
+            nearby = _nearby_text(text, match.start(), match.end(), radius=8)
+            if any(_contains_name(nearby, name) for name in entry.names):
+                continue
+            edits.append((
+                match.start(1),
+                match.end(1),
+                f"{entry.code} {entry.label}（{entry.label_en}）",
+            ))
+        normalized = text
+        for start, end, replacement in sorted(edits, reverse=True):
+            normalized = normalized[:start] + replacement + normalized[end:]
+        return normalized
+
+    def _remove_duplicate_named_codes(self, text: str) -> str:
+        normalized = text
+        for entry in self.entries:
+            english = rf"(?:（{re.escape(entry.label_en)}）)?" if entry.label_en else ""
+            pattern = re.compile(
+                rf"({re.escape(entry.code)}\s+{re.escape(entry.label)}{english}(?:\*\*)?)"
+                rf"\s*[（(]\s*{re.escape(entry.code)}"
+                rf"(?:\s+{re.escape(entry.label)}{english})?\s*[）)]",
+                re.IGNORECASE,
+            )
+            normalized = pattern.sub(r"\1", normalized)
         return normalized
 
     def _normalize_existing_codes(self, text: str) -> str:

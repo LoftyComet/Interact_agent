@@ -102,6 +102,7 @@ def test_background_knowledge_intent() -> None:
 
     assert structure.intent == "background_knowledge"
     assert "背景回答" in structure.output_frame
+    assert structure.reasoning_allowed is False
 
 
 def test_case_question_detects_case_intent() -> None:
@@ -114,6 +115,7 @@ def test_case_question_detects_case_intent() -> None:
     assert "text" in structure.case_modality
     assert "案例理解" in structure.focus
     assert "控件形态" in structure.output_frame
+    assert structure.reasoning_allowed is True
 
 
 def test_design_evaluation_intent_extracts_structure() -> None:

@@ -32,6 +32,19 @@ def test_reasoning_hypothesis_passes_when_auditor_finds_no_policy_issue() -> Non
     assert judge.payload["evidence"][0]["id"] == 1
 
 
+def test_reasoning_auditor_receives_user_product_description_as_input_not_evidence() -> None:
+    judge = FakeJudge([])
+    report = ReasoningVerifier(judge).verify(
+        "按你的描述，播放/暂停可能对应点击类机制，需要验证。",
+        [_source()],
+        user_context="我观察到播放器点击后会播放或暂停",
+    )
+
+    assert report.status == "pass"
+    assert judge.payload["user_provided_context"] == "我观察到播放器点击后会播放或暂停"
+    assert judge.payload["evidence"][0]["text"] == "旋钮可以提供固定旋转轴。"
+
+
 def test_external_parameter_requires_retry() -> None:
     report = ReasoningVerifier(FakeJudge([{
         "issue_type": "external_fact",
@@ -42,6 +55,20 @@ def test_external_parameter_requires_retry() -> None:
     assert report.status == "issues_found"
     assert report.should_retry
     assert "external_fact" in report.correction_hints
+
+
+def test_user_provided_parameter_is_analysis_input_not_external_fact() -> None:
+    report = ReasoningVerifier(FakeJudge([{
+        "issue_type": "external_fact",
+        "text": "200ms",
+        "reason": "资料没有该参数",
+    }])).verify(
+        "按你的描述，你试过 200ms，但仍需要测试确定阈值。",
+        [_source()],
+        user_context="我做 App 时试过 200ms，容易和单击冲突。",
+    )
+
+    assert report.status == "pass"
 
 
 def test_missing_judge_is_reported_without_claiming_pass() -> None:

@@ -62,6 +62,7 @@ def main() -> None:
             "session_id": f"eval-{case['id']}-{uuid.uuid4().hex}",
             "provider": args.provider,
             "style": args.style,
+            "include_verification_trace": True,
         })
         payload = response.get_json(silent=True) or {"status": "http_error"}
         score = score_api_response(case, payload, registry)
@@ -97,6 +98,7 @@ def main() -> None:
         "safety_fallback_rate": _ratio(fallback_count, len(results)),
         "provider": args.provider,
         "style": args.style,
+        **_summarize_verification_traces(results),
     }
     output = {
         "schema_version": "1.0",
@@ -128,6 +130,55 @@ def _select_case(case: dict[str, Any], ids: list[str], include_feedback: bool) -
 
 def _ratio(numerator: int, denominator: int) -> float:
     return round(numerator / denominator, 4) if denominator else 0.0
+
+
+def _summarize_verification_traces(results: list[dict[str, Any]]) -> dict[str, Any]:
+    traced = [
+        result["response"].get("verification_trace")
+        for result in results
+        if result["response"].get("verification_trace")
+    ]
+    initial_passes = 0
+    retry_recoveries = 0
+    fallback_events: list[dict[str, Any]] = []
+    fallback_kinds: dict[str, int] = {}
+    rejected_verdicts: dict[str, int] = {}
+    for trace in traced:
+        attempts = trace.get("attempts") or []
+        if attempts and not attempts[0].get("should_retry"):
+            initial_passes += 1
+        if (
+            len(attempts) > 1
+            and attempts[0].get("should_retry")
+            and not attempts[-1].get("should_retry")
+        ):
+            retry_recoveries += 1
+        for fallback in trace.get("fallbacks") or []:
+            fallback_events.append(fallback)
+            kind = str(fallback.get("kind") or "unknown")
+            fallback_kinds[kind] = fallback_kinds.get(kind, 0) + 1
+            for claim in fallback.get("rejected_claims") or []:
+                verdict = str(claim.get("verdict") or claim.get("issue_type") or "unknown")
+                rejected_verdicts[verdict] = rejected_verdicts.get(verdict, 0) + 1
+    mean_deletion = (
+        round(
+            sum(float(event.get("deletion_ratio") or 0.0) for event in fallback_events)
+            / len(fallback_events),
+            4,
+        )
+        if fallback_events else 0.0
+    )
+    return {
+        "trace_count": len(traced),
+        "first_pass_count": initial_passes,
+        "first_pass_rate": _ratio(initial_passes, len(traced)),
+        "retry_recovery_count": retry_recoveries,
+        "retry_recovery_rate": _ratio(retry_recoveries, len(traced)),
+        "fallback_event_count": len(fallback_events),
+        "fallback_kind_counts": fallback_kinds,
+        "rejected_claim_counts": rejected_verdicts,
+        "mean_fallback_deletion_ratio": mean_deletion,
+    }
 
 
 if __name__ == "__main__":
