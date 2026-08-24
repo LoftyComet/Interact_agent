@@ -207,3 +207,14 @@ def test_sanitize_removes_only_claims_already_judged_unsafe() -> None:
     assert safe_report.status == "pass"
     assert safe_report.score == 1.0
     assert [claim.text for claim in safe_report.claims] == ["旋钮承载角度属性。"]
+
+
+def test_sanitize_iteratively_removes_fragments_created_by_partial_line_deletion() -> None:
+    verifier = GroundingVerifier(FakeJudge({"c1": "supported", "c2": "partially_supported"}))
+    answer = "旋钮承载角度属性。[1]；适合所有场景。[1]"
+    report = verifier.verify(answer, [_source("旋钮承载角度属性。")])
+
+    sanitized, safe_report = verifier.sanitize(answer, report)
+
+    assert "适合所有场景" not in sanitized
+    assert safe_report.status == "pass"

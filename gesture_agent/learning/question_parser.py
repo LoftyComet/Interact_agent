@@ -32,6 +32,7 @@ CASE_RE = re.compile(r"(案例|例子|图片|图中|截图|这个交互|这个�
 VOICE_RE = re.compile(r"(语音交互|语音|声控|口令|唤醒词|对话式|说话|语速|声纹)")
 MULTIMODAL_RE = re.compile(r"(多模态|multimodal|跨模态|模态|视觉.*语音|语音.*手势|图像.*语音|触觉.*视觉|(?:眼动|眼睛).*(?:手势|捏合)|(?:手势|捏合).*(?:眼动|眼睛))")
 BACKGROUND_RE = re.compile(r"(背景|交互的本质|操控力|虚拟操控力|IxDL|声明式|AI时代|适用人群|为什么)")
+FRAMEWORK_RELATION_RE = re.compile(r"(Norman|诺曼|设计心理学).*(框架|关系|相通|区别|差异)", re.IGNORECASE)
 PROPERTY_RE = re.compile(r"(基础属性|属性|二元|多级|位置|角度|力属性|声音属性|光属性|温度|形变|时间属性|生理信号|阶次控制)")
 CONTROL_FORM_RE = re.compile(r"(控件形态|控件|按钮|拨钮|滚轮|摇杆|轨迹球|指点杆|触控面|旋钮|手柄|踏板|眼睛|嘴巴|手势)")
 MECHANISM_RE = re.compile(r"(交互机制|交互方式|点击|单击|双击|长按|按下|开关|拖拽|甩动|滑动|翻动|捏合|旋转|高级|组合|拓展|多维协同|冲突|调和|限位|长按拖拽|双按拖拽|轻扫|速率式|域控|异位|向量菜单|动势|快击|缓冲|解耦|互斥|轻拨)")
@@ -259,6 +260,8 @@ class QuestionParser:
             add("voice_interaction", 0.86, "问题包含语音交互、声控或口令等信号。")
         if BACKGROUND_RE.search(query):
             add("background_knowledge", 0.86, "问题包含背景知识、操控力、IxDL 或声明式等信号。")
+        if FRAMEWORK_RELATION_RE.search(query):
+            add("background_knowledge", 0.99, "问题在比较 IxDL 与外部设计理论框架的关系。")
         if MECHANISM_RE.search(query) or self._has_interaction_mechanism_match(query, terms, query_text=query):
             add("basic_interaction_mechanism", 0.86, "问题命中交互机制术语或机制章节。")
             if MECHANISM_EXPLANATION_RE.search(query):
@@ -390,6 +393,14 @@ class QuestionParser:
                 or item.startswith("缺少用户目标")
                 or item.startswith("缺少明确的交互机制")
             ]
+            if evaluation.mechanisms and re.search(
+                r"(触发|松手|抬起|变成|进入|显示|反馈|切换|执行|拍照|对焦)",
+                query,
+            ):
+                critical_missing = [
+                    item for item in critical_missing
+                    if not item.startswith("缺少用户目标")
+                ]
             if not image_paths and not evaluation.control_forms and not evaluation.mechanisms:
                 critical_missing.append("缺少可拆解的控件形态和交互机制。")
             missing.extend(critical_missing)

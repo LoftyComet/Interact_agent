@@ -1,4 +1,4 @@
-from gesture_agent.verification import parse_answer_blocks
+from gesture_agent.verification import is_limitation_only_corpus, parse_answer_blocks
 
 
 def test_unmarked_answer_is_legacy_corpus_evidence() -> None:
@@ -45,3 +45,13 @@ def test_replacing_corpus_preserves_design_reasoning() -> None:
     assert "旧的无依据结论" not in rendered
     assert "安全结论。[1]" in rendered
     assert "可以尝试另一种布局" in rendered
+
+
+def test_limitation_only_detection_does_not_hide_mixed_unsupported_claims() -> None:
+    assert is_limitation_only_corpus("当前资料不足以支持更具体的结论。")
+    assert is_limitation_only_corpus(
+        "## 修改建议\n\n当前资料没有直接证据，无法在不进行额外推导的情况下展开这一部分。"
+    )
+    assert not is_limitation_only_corpus(
+        "当前资料不足，但这个方案一定能减少误触。"
+    )

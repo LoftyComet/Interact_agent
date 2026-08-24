@@ -101,3 +101,20 @@ def test_evaluator_requires_audit_for_reasoning_block() -> None:
         check.name == "reasoning_audit" and not check.passed
         for check in score.checks
     )
+
+
+def test_evaluator_accepts_honest_limitation_without_fake_citation() -> None:
+    response = _response()
+    response["answer"] = "当前资料没有直接证据支持更具体的结论。"
+    response["answer_blocks"][0]["markdown"] = response["answer"]
+    response["answer_blocks"][0]["citations"] = []
+
+    score = score_api_response(
+        _case(),
+        response,
+        MechanismRegistry.load("data/term_inventory.json"),
+    )
+
+    assert next(
+        check for check in score.checks if check.name == "corpus_citation_present"
+    ).passed

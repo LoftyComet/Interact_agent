@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from gesture_agent.core.models import QuestionStructure
+from gesture_agent.knowledge import MechanismRegistry
 from gesture_agent.verification import (
     GroundingClaim,
     GroundingReport,
@@ -10,11 +11,14 @@ from gesture_agent.verification import (
     ReasoningReport,
     ReasoningVerifier,
 )
-from gesture_agent.verification.models import OutputVerificationResult
+from gesture_agent.verification.models import OutputIssue, OutputVerificationResult
 from gesture_agent.core.models import IntentOutputFrames
 from web.backend.app import (
     apply_grounding_safety_fallback,
     apply_reasoning_safety_fallback,
+    normalize_mechanism_codes,
+    repair_unlabeled_design_reasoning,
+    refresh_output_quality,
     repair_safe_answer_contract,
     verify_answer_quality,
 )
@@ -23,6 +27,24 @@ from web.backend.app import (
 class PassOutputVerifier:
     def verify(self, answer, structure, source_count=None):
         return OutputVerificationResult(status="pass")
+
+
+class RequirePressCodeOutputVerifier:
+    def verify(self, answer, structure, source_count=None):
+        if "1-c 按下" in answer:
+            return OutputVerificationResult(status="pass")
+        issue = OutputIssue(
+            issue_type="missing_mechanism_code",
+            location="按下",
+            description="按下缺少编号",
+            severity="error",
+        )
+        return OutputVerificationResult(
+            status="issues_found",
+            issues=(issue,),
+            should_retry=True,
+            correction_hints="补上编号",
+        )
 
 
 class FailingGroundingVerifier:
@@ -234,3 +256,70 @@ def test_reasoning_fallback_preserves_safe_ideas_instead_of_dropping_block() -> 
     assert "ixdl-answer-block:design_reasoning" in sanitized
     assert result.reasoning.status == "pass"
     assert result.safety_fallback_applied is True
+
+
+def test_post_fallback_normalization_refreshes_stale_output_issues() -> None:
+    runtime = SimpleNamespace(
+        kb=SimpleNamespace(
+            mechanism_registry=MechanismRegistry.load("data/term_inventory.json")
+        ),
+        config=SimpleNamespace(verification=SimpleNamespace(verify_output=True)),
+        output_verifier=RequirePressCodeOutputVerifier(),
+    )
+    structure = QuestionStructure(
+        raw_query="按下是什么", intent="basic_interaction_mechanism",
+        layers=["interaction_mechanism"], terms=["按下"], focus=["定义"],
+    )
+    stale = SimpleNamespace(
+        grounding=GroundingReport(status="pass", score=1.0),
+        reasoning=None,
+        safety_fallback_applied=True,
+    )
+
+    answer = normalize_mechanism_codes(runtime, "按下是一种交互机制。", structure)
+    refreshed = refresh_output_quality(runtime, answer, structure, [], stale)
+
+    assert answer == "1-c 按下是一种交互机制。"
+    assert refreshed.issue_descriptions == []
+    assert refreshed.should_retry is False
+
+
+def test_unlabeled_design_assessment_is_moved_out_of_corpus_block() -> None:
+    structure = QuestionStructure(
+        raw_query="长按对焦松手拍照是否可行",
+        intent="design_evaluation",
+        layers=["design_evaluation"],
+        terms=["长按"],
+        focus=["设计评估"],
+        reasoning_allowed=True,
+    )
+    answer = """<!-- ixdl-answer-block:corpus_evidence -->
+这个方案可行但有风险。
+
+## 问题诊断
+
+松手触发可能误操作。
+
+## 修改建议
+
+建议增加状态反馈。"""
+
+    repaired = repair_unlabeled_design_reasoning(answer, structure)
+
+    assert "当前资料没有直接证据支持" in repaired
+    assert "<!-- ixdl-answer-block:design_reasoning -->" in repaired
+    assert repaired.index("design_reasoning") < repaired.index("这个方案可行但有风险")
+
+
+def test_direct_book_guidance_without_design_markers_stays_in_corpus() -> None:
+    structure = QuestionStructure(
+        raw_query="这个方案如何",
+        intent="design_evaluation",
+        layers=["design_evaluation"],
+        terms=[],
+        focus=["设计评估"],
+        reasoning_allowed=True,
+    )
+    answer = "<!-- ixdl-answer-block:corpus_evidence -->\n书中案例直接采用了这一结构。[1]"
+
+    assert repair_unlabeled_design_reasoning(answer, structure) == answer

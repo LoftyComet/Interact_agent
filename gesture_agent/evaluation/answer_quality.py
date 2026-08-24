@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from gesture_agent.knowledge import MechanismRegistry
+from gesture_agent.verification.answer_blocks import is_limitation_only_corpus
 
 
 _CITATION_RE = re.compile(r"(?<!!)\[(\d+)\](?!\()")
@@ -123,10 +124,16 @@ def score_api_response(
         "; ".join(citation_errors),
     ))
     if chunks and "corpus_evidence" in block_types:
+        corpus_markdown = "\n\n".join(
+            str(block.get("markdown") or "")
+            for block in blocks
+            if block.get("type") == "corpus_evidence"
+        )
+        limitation_only = is_limitation_only_corpus(corpus_markdown)
         checks.append(QualityCheck(
             "corpus_citation_present",
-            bool(corpus_citations),
-            f"citations={corpus_citations}",
+            bool(corpus_citations) or limitation_only,
+            f"citations={corpus_citations}; limitation_only={limitation_only}",
         ))
 
     answer = str(response.get("answer") or "")

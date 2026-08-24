@@ -428,6 +428,97 @@ def normalize_mechanism_codes(
     )
 
 
+_DESIGN_BOUNDARY_INTENTS = {
+    "design_evaluation",
+    "design_suggestion",
+    "interaction_optimization",
+}
+_UNLABELED_DESIGN_RE = re.compile(
+    r"(?:^|\n)##\s*(?:问题诊断|修改建议|优化建议|初步建议|选择建议)\s*$"
+    r"|(?:这个|该|你的)?方案[^。\n]{0,32}(?:可行|风险|建议|适合)"
+    r"|(?:^|\n)\s*(?:[-*]|\d+[.)、])?\s*(?:建议|可以尝试|考虑用|需要优化)",
+    re.MULTILINE,
+)
+
+
+def repair_unlabeled_design_reasoning(
+    answer: str,
+    structure: QuestionStructure,
+) -> str:
+    """Conservatively separate an entirely unlabeled design assessment.
+
+    Semantic grounding normally performs finer-grained separation. This guard
+    keeps the frontend provenance contract intact when a model omits the
+    reasoning marker or the semantic judge is temporarily unavailable.
+    """
+
+    if (
+        not answer
+        or not structure.reasoning_allowed
+        or structure.intent not in _DESIGN_BOUNDARY_INTENTS
+    ):
+        return answer
+    document = parse_answer_blocks(answer)
+    if document.markdown_for("design_reasoning"):
+        return answer
+    corpus = document.corpus_markdown
+    if not _UNLABELED_DESIGN_RE.search(corpus):
+        return answer
+    limitation = "当前资料没有直接证据支持对这一具体方案作确定判断。"
+    reasoning = (
+        "以下内容是结合用户方案与检索资料形成的设计推导，需要通过实际场景验证，"
+        "并非语料中的既有结论：\n\n"
+        + corpus
+    )
+    return (
+        document.replace_corpus_markdown(limitation)
+        .replace_type_markdown("design_reasoning", reasoning)
+        .render_markdown()
+    )
+
+
+def refresh_output_quality(
+    runtime: AgentRuntime,
+    answer: str,
+    structure: QuestionStructure,
+    chunks: list[SourceChunk],
+    quality: AnswerQualityResult,
+) -> AnswerQualityResult:
+    """Refresh deterministic output checks after safety sanitization rewrites."""
+
+    if not runtime.config.verification.verify_output:
+        return quality
+    result = runtime.output_verifier.verify(answer, structure, source_count=len(chunks))
+    output_issues = [
+        issue for issue in result.issues
+        if not (issue.issue_type == "knowledge_conflict" and issue.severity == "warning")
+    ]
+    descriptions = [issue.description for issue in output_issues]
+    hints = [result.correction_hints] if result.correction_hints else []
+    should_retry = result.should_retry
+    if quality.grounding is not None and quality.grounding.status == "issues_found":
+        descriptions.extend(quality.grounding.issue_descriptions)
+        should_retry = should_retry or quality.grounding.should_retry
+        if quality.grounding.correction_hints:
+            hints.append(quality.grounding.correction_hints)
+    if quality.reasoning is not None and quality.reasoning.status == "issues_found":
+        descriptions.extend(
+            f"设计推导：{issue.text}（{issue.reason}）"
+            for issue in quality.reasoning.issues
+        )
+        should_retry = should_retry or quality.reasoning.should_retry
+        if quality.reasoning.correction_hints:
+            hints.append(quality.reasoning.correction_hints)
+    return AnswerQualityResult(
+        should_retry=should_retry,
+        correction_hints="\n".join(hints),
+        issue_descriptions=list(dict.fromkeys(descriptions)),
+        grounding=quality.grounding,
+        reasoning=quality.reasoning,
+        safety_fallback_applied=quality.safety_fallback_applied,
+    )
+
+
 def repair_safe_answer_contract(
     answer: str,
     structure: QuestionStructure,
@@ -802,6 +893,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 max_tokens=rt.config.max_tokens,
                 enable_thinking=rt.config.enable_thinking,
             )
+            answer = repair_unlabeled_design_reasoning(answer, structure)
             answer = normalize_mechanism_codes(rt, answer, structure)
         except ProviderError as exc:
             error_text = str(exc)
@@ -834,6 +926,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         max_tokens=rt.config.max_tokens,
                         enable_thinking=rt.config.enable_thinking,
                     )
+                    answer = repair_unlabeled_design_reasoning(answer, structure)
                     answer = normalize_mechanism_codes(rt, answer, structure)
                 except ProviderError:
                     break
@@ -842,6 +935,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 rt, answer, structure, chunks, quality_result
             )
             answer, quality_result = apply_reasoning_safety_fallback(
+                rt, answer, structure, chunks, quality_result
+            )
+            answer = normalize_mechanism_codes(rt, answer, structure)
+            quality_result = refresh_output_quality(
                 rt, answer, structure, chunks, quality_result
             )
             output_issues = quality_result.issue_descriptions
@@ -1020,6 +1117,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 return
 
             full_answer = "".join(answer_parts)
+            full_answer = repair_unlabeled_design_reasoning(full_answer, structure)
             normalized_mechanisms = normalize_mechanism_codes(rt, full_answer, structure)
             if normalized_mechanisms != full_answer:
                 full_answer = normalized_mechanisms
@@ -1054,6 +1152,9 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                             max_tokens=rt.config.max_tokens,
                             enable_thinking=rt.config.enable_thinking,
                         )
+                        full_answer = repair_unlabeled_design_reasoning(
+                            full_answer, structure
+                        )
                         full_answer = normalize_mechanism_codes(rt, full_answer, structure)
                         yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
                     except ProviderError:
@@ -1063,6 +1164,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     rt, full_answer, structure, chunks, quality_result
                 )
                 sanitized_answer, quality_result = apply_reasoning_safety_fallback(
+                    rt, sanitized_answer, structure, chunks, quality_result
+                )
+                sanitized_answer = normalize_mechanism_codes(
+                    rt, sanitized_answer, structure
+                )
+                quality_result = refresh_output_quality(
                     rt, sanitized_answer, structure, chunks, quality_result
                 )
                 if sanitized_answer != full_answer:

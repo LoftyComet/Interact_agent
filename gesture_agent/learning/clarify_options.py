@@ -80,6 +80,7 @@ CLARIFY_OPTION_SPECS: dict[Intent, ClarifyOptionSpec] = {
     ),
     "case_analysis": ClarifyOptionSpec(
         message="案例分析可以从不同角度进行，你想重点了解哪方面？",
+        broad_query_keywords=("为什么", "顺手", "优点", "缺点", "整体分析", "分析一下"),
         options=(
             SubTypeOption(
                 label="交互机制拆解",

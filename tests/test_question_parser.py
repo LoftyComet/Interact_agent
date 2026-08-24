@@ -329,3 +329,25 @@ def test_real_world_intent_routing_regressions() -> None:
 
     for query, expected in cases.items():
         assert parser.parse(query).intent == expected, query
+
+
+def test_external_framework_relationship_routes_to_background_knowledge() -> None:
+    parser = QuestionParser(KnowledgeBase.load("data"))
+
+    resolution = parser.resolve_intent(
+        "IxDL 和 Norman 的设计心理学框架有什么相通和不同？"
+    )
+
+    assert resolution.intent == "background_knowledge"
+    assert resolution.needs_clarification is False
+
+
+def test_design_evaluation_with_action_and_result_does_not_force_clarification() -> None:
+    parser = QuestionParser(KnowledgeBase.load("data"))
+
+    resolution = parser.resolve_intent(
+        "我想做拍照功能：屏幕下半部分长按对焦，松手就拍照，这个方案行不行？"
+    )
+
+    assert resolution.intent == "design_evaluation"
+    assert resolution.needs_clarification is False

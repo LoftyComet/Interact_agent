@@ -232,6 +232,18 @@ def test_session_can_use_llm_intent_resolver() -> None:
     assert resolver.calls == ["这个是什么意思？"]
 
 
+def test_case_analysis_with_explicit_why_question_does_not_force_subtype_choice() -> None:
+    session = ConversationSession(QuestionParser(KnowledgeBase.load("data")))
+
+    result = session.receive(
+        "抖音上下滑切换视频属于什么交互？分析一下为什么用起来顺手。"
+    )
+
+    assert result.status == "ready"
+    assert result.structure is not None
+    assert result.structure.intent == "case_analysis"
+
+
 class StubIntentResolver:
     def __init__(self) -> None:
         self.calls: list[str] = []

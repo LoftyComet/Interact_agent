@@ -20,6 +20,7 @@ __all__ = [
     "render_answer_markdown",
     "AnswerBlock",
     "AnswerBlockDocument",
+    "is_limitation_only_corpus",
     "parse_answer_blocks",
     "ReasoningIssue",
     "ReasoningReport",
@@ -35,6 +36,7 @@ from .answer_schema import (
 from .answer_blocks import (
     AnswerBlock,
     AnswerBlockDocument,
+    is_limitation_only_corpus,
     parse_answer_blocks,
 )
 from .reasoning_verifier import ReasoningIssue, ReasoningReport, ReasoningVerifier

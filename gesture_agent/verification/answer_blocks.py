@@ -22,6 +22,14 @@ _MARKER_RE = re.compile(
     re.IGNORECASE,
 )
 _CITATION_RE = re.compile(r"(?<!!)\[(\d+)\](?!\()")
+_LIMITATION_PREFIXES = (
+    "当前资料没有直接证据",
+    "当前语料没有直接证据",
+    "当前资料不足",
+    "当前语料不足",
+    "现有资料无法确认",
+    "资料不足以判断",
+)
 
 
 @dataclass(frozen=True)
@@ -151,6 +159,30 @@ def parse_answer_blocks(
         blocks.append(_make_block(block_type, body))  # type: ignore[arg-type]
 
     return AnswerBlockDocument(blocks=tuple(_merge_adjacent(blocks)), explicit_markers=True)
+
+
+def is_limitation_only_corpus(markdown: str) -> bool:
+    """Return true only when every substantive corpus sentence states a boundary."""
+
+    cleaned = _MARKER_RE.sub("", markdown)
+    cleaned = _CITATION_RE.sub("", cleaned)
+    statements: list[str] = []
+    for line in cleaned.splitlines():
+        if re.match(r"^\s*#{1,6}\s+", line):
+            continue
+        line = re.sub(r"^\s*(?:[-*+]\s+|\d+[.)、]\s*)", "", line).strip()
+        if not line or line.startswith("|"):
+            continue
+        statements.extend(
+            part.strip(" ：:；;，,")
+            for part in re.split(r"[。！？!?；;，,\n]", line)
+            if part.strip(" ：:；;，,")
+        )
+    return bool(statements) and all(
+        any(statement.startswith(prefix) for prefix in _LIMITATION_PREFIXES)
+        or "无法在不进行额外推导的情况下展开" in statement
+        for statement in statements
+    )
 
 
 def _make_block(block_type: AnswerBlockType, markdown: str) -> AnswerBlock:

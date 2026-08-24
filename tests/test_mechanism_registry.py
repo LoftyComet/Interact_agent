@@ -45,6 +45,18 @@ def test_registry_rejects_code_outside_registry() -> None:
     assert any(issue.issue_type == "unknown_mechanism_code" for issue in issues)
 
 
+def test_registry_rejects_known_code_without_its_canonical_name() -> None:
+    registry = MechanismRegistry.load("data/term_inventory.json")
+
+    issues = registry.validate_answer("这里使用 4-i 含义识别来处理语音。")
+
+    assert any(
+        issue.issue_type == "mechanism_name_mismatch"
+        and issue.expected.startswith("4-i 捏合解耦")
+        for issue in issues
+    )
+
+
 def test_short_english_name_does_not_match_inside_another_word() -> None:
     registry = MechanismRegistry.load("data/term_inventory.json")
 
@@ -99,6 +111,17 @@ def test_normalizer_repairs_mismatched_existing_code() -> None:
     normalized = registry.normalize_answer("采用 1-b 拖拽来移动对象。")
 
     assert normalized == "采用 2-a 拖拽来移动对象。"
+
+
+def test_normalizer_repairs_noncanonical_double_press_name_and_code() -> None:
+    registry = MechanismRegistry.load("data/term_inventory.json")
+
+    normalized = registry.normalize_answer(
+        "避免双按（1-i），但可以研究双按拖拽（3-d）。"
+    )
+
+    assert normalized == "避免双击（1-f），但可以研究双按拖拽（3-c）。"
+    assert registry.validate_answer(normalized) == ()
 
 
 def test_normalizer_repairs_comma_separated_candidate_codes() -> None:

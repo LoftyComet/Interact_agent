@@ -10,6 +10,11 @@ from typing import Any, Iterable
 _MECHANISM_CODE_RE = re.compile(r"^[1-4]-[a-i]$", re.IGNORECASE)
 _CODE_IN_TEXT_RE = re.compile(r"(?<![0-9A-Za-z-])(\d+-[a-z])(?![0-9A-Za-z-])", re.IGNORECASE)
 _CLAUSE_BOUNDARY_RE = re.compile(r"[。！？；;\n]")
+_COMMON_NAME_NORMALIZATIONS = (
+    # The workbook's canonical 1-f name is ``双击``. Models sometimes shorten
+    # it to ``双按``; keep the distinct 3-c ``双按拖拽`` mechanism untouched.
+    (re.compile(r"双按(?!拖拽)"), "双击"),
+)
 
 
 @dataclass(frozen=True)
@@ -134,13 +139,13 @@ class MechanismRegistry:
                     for other in self.entries
                     if other.code != code and any(_contains_name(clause, name) for name in other.names)
                 ]
-                if other_names:
-                    issues.append(MechanismNamingIssue(
-                        issue_type="mechanism_name_mismatch",
-                        mention=f"{code}+{other_names[0]}",
-                        expected=f"{entry.code} {entry.label}（{entry.label_en}）",
-                        found_codes=(code,),
-                    ))
+                mention = f"{code}+{other_names[0]}" if other_names else code
+                issues.append(MechanismNamingIssue(
+                    issue_type="mechanism_name_mismatch",
+                    mention=mention,
+                    expected=f"{entry.code} {entry.label}（{entry.label_en}）",
+                    found_codes=(code,),
+                ))
         return tuple(_dedupe_issues(issues))
 
     def normalize_answer(
@@ -152,7 +157,10 @@ class MechanismRegistry:
         """Canonicalize unambiguous codes and insert missing first-use codes."""
 
         required = {str(value) for value in required_labels}
-        normalized = self._normalize_existing_codes(text)
+        normalized = text
+        for pattern, replacement in _COMMON_NAME_NORMALIZATIONS:
+            normalized = pattern.sub(replacement, normalized)
+        normalized = self._normalize_existing_codes(normalized)
         edits: list[tuple[int, str]] = []
         handled: set[str] = set()
         for start, end, _mention, entry in self._find_mentions(normalized):

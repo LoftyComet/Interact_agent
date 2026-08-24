@@ -17,6 +17,7 @@ class Reranker(Protocol):
 
 PRIMARY_ROLE = "primary"
 PRIMARY_RECALL_LIMIT = 30
+PRIMARY_RESULT_SCORE_RATIO = 0.65
 
 
 @dataclass(frozen=True)
@@ -147,8 +148,10 @@ class HybridRetriever:
         for chunk_id, row in candidates.items():
             channel_ranks = ranks.get(chunk_id, {})
             score = sum(1.0 / (60 + rank) for rank in channel_ranks.values())
-            heading_text = " ".join([row.get("title", ""), *row.get("heading_path", [])])
-            score += sum(0.03 for term in query_terms if term in heading_text)
+            score += sum(
+                self._heading_term_bonus(row, term)
+                for term in query_terms
+            )
             score += sum(0.008 for term in query_terms if term in row.get("terms", []))
             score *= 1.0 + max(int(row.get("authority", 0)), 0) / 2000.0
             scored.append((row, score, sorted(channel_ranks)))
@@ -163,7 +166,10 @@ class HybridRetriever:
             ]
 
         scored.sort(key=lambda item: (item[1], int(item[0]["authority"])), reverse=True)
-        selected = self._dedupe_by_content(scored)[:top_k]
+        deduped = self._dedupe_by_content(scored)
+        selected = deduped[:top_k]
+        if query_terms and (roles is None or PRIMARY_ROLE in roles):
+            selected = self._ensure_primary_result(selected, deduped, top_k)
         return [self._to_result(row, score, channels, expand_neighbors) for row, score, channels in selected]
 
     def _normalize_query(self, query: str, preferred_terms: list[str]) -> str:
@@ -182,6 +188,18 @@ class HybridRetriever:
         return found
 
     @staticmethod
+    def _heading_term_bonus(row: dict, term: str) -> float:
+        """Favor the closest heading and avoid broad ancestor-title leakage."""
+
+        if term in str(row.get("title", "")):
+            return 0.03
+        headings = [str(value) for value in row.get("heading_path", [])]
+        for distance, heading in enumerate(reversed(headings)):
+            if term in heading:
+                return 0.024 / (distance + 1)
+        return 0.0
+
+    @staticmethod
     def _dedupe_by_content(scored: list[tuple[dict, float, list[str]]]) -> list[tuple[dict, float, list[str]]]:
         canonical: dict[str, tuple[dict, float, list[str]]] = {}
         for item in scored:
@@ -195,6 +213,27 @@ class HybridRetriever:
                 canonical[digest] = item
         return sorted(
             canonical.values(),
+            key=lambda item: (item[1], int(item[0].get("authority", 0))),
+            reverse=True,
+        )
+
+    @staticmethod
+    def _ensure_primary_result(
+        selected: list[tuple[dict, float, list[str]]],
+        candidates: list[tuple[dict, float, list[str]]],
+        top_k: int,
+    ) -> list[tuple[dict, float, list[str]]]:
+        if not selected or any(item[0].get("role") == PRIMARY_ROLE for item in selected):
+            return selected
+        primary = next(
+            (item for item in candidates if item[0].get("role") == PRIMARY_ROLE),
+            None,
+        )
+        if primary is None or primary[1] < selected[-1][1] * PRIMARY_RESULT_SCORE_RATIO:
+            return selected
+        replacement = [*selected[: max(top_k - 1, 0)], primary]
+        return sorted(
+            replacement,
             key=lambda item: (item[1], int(item[0].get("authority", 0))),
             reverse=True,
         )

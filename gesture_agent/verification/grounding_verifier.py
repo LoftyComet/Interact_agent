@@ -202,18 +202,35 @@ class GroundingVerifier:
             if claim.verdict == "supported"
         }
         retained: list[GroundingClaim] = []
-        for claim in _extract_claims(sanitized)[: self._max_claims]:
-            previous = supported.get((claim.section, claim.text, claim.citation_ids))
-            if previous is None:
+        for _ in range(3):
+            retained = []
+            unknown: set[str] = set()
+            for claim in _extract_claims(sanitized)[: self._max_claims]:
+                previous = supported.get((claim.section, claim.text, claim.citation_ids))
+                if previous is None:
+                    unknown.add(claim.text)
+                    continue
+                retained.append(replace(
+                    claim,
+                    verdict="supported",
+                    confidence=previous.confidence,
+                    reason=previous.reason,
+                ))
+            if not unknown:
+                break
+            narrowed = _remove_claim_texts(sanitized, unknown)
+            if narrowed == sanitized:
                 return answer, report
-            retained.append(replace(
-                claim,
-                verdict="supported",
-                confidence=previous.confidence,
-                reason=previous.reason,
-            ))
-        if not retained:
+            sanitized = narrowed
+        else:
             return answer, report
+        if not retained:
+            return sanitized, GroundingReport(
+                status="pass",
+                score=1.0,
+                claims=(),
+                should_retry=False,
+            )
         safe_claims = tuple(retained)
         return sanitized, GroundingReport(
             status="pass",
@@ -344,7 +361,7 @@ def _extract_claims(answer: str) -> list[GroundingClaim]:
             if not citation_ids:
                 citation_ids = line_citations
             text = _clean_claim_text(sentence)
-            if len(text) < 8 or _is_clarification_question(text):
+            if len(text) < 5 or _is_clarification_question(text, section):
                 continue
             claims.append(GroundingClaim(
                 id=f"c{len(claims) + 1}",
@@ -404,10 +421,12 @@ def _is_evidence_limitation(text: str) -> bool:
     ))
 
 
-def _is_clarification_question(text: str) -> bool:
+def _is_clarification_question(text: str, section: str = "") -> bool:
     normalized = text.strip(" -*_：:|（）()")
     if not normalized.endswith(("？", "?")):
         return False
+    if "澄清" in section or "补充的信息" in section:
+        return True
     return bool(re.search(
         r"(?:^|[：:])(是否|能否|可否|有没有|有无|谁|什么|哪|几|多少|为何|为什么|怎么|如何)|"
         r"还是|需不需要|要不要|请确认|请问",

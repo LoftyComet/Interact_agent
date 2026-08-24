@@ -139,3 +139,19 @@ def test_retriever_uses_authoritative_source_for_duplicate_content(tmp_path) -> 
     results = retriever.retrieve("旋钮操作", top_k=2, expand_neighbors=0)
 
     assert [result.chunk_id for result in results] == ["primary"]
+
+
+def test_closest_heading_match_beats_shared_distant_ancestor(tmp_path) -> None:
+    direct = _chunk("direct", "语音交互", "语音定义。", "direct")
+    distant = _chunk("distant", "无关案例", "语音案例背景。", "distant")
+    distant["heading_path"] = ["语音交互", "创新案例", "无关案例"]
+    lexical = LexicalIndex.build(
+        tmp_path / "knowledge.sqlite",
+        [distant, direct],
+        {"direct": ["语音"], "distant": ["语音"]},
+    )
+    retriever = HybridRetriever(lexical, canonical_terms=["语音"])
+
+    results = retriever.retrieve("语音", top_k=2, expand_neighbors=0)
+
+    assert results[0].chunk_id == "direct"

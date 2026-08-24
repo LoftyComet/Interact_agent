@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Optional
 from ..core.models import IntentOutputFrames, QuestionStructure, StructuredKnowledgeItem, TermInventory
 from ..knowledge.mechanism_registry import MechanismRegistry
 from .answer_schema import parse_answer_markdown, render_answer_markdown
-from .answer_blocks import parse_answer_blocks
+from .answer_blocks import is_limitation_only_corpus, parse_answer_blocks
 from .models import OutputIssue, OutputVerificationResult
 from .prompts import OUTPUT_VERIFICATION_PROMPT, OUTPUT_VERIFICATION_SYSTEM
 
@@ -104,7 +104,11 @@ class OutputVerifier:
                     description=f"引用编号 {refs} 超出本次提供的 {source_count} 条资料范围",
                     severity="error",
                 ))
-            elif source_count > 0 and not result.document.citation_ids:
+            elif (
+                source_count > 0
+                and not result.document.citation_ids
+                and not is_limitation_only_corpus(parse_answer_blocks(output).corpus_markdown)
+            ):
                 issues.append(OutputIssue(
                     issue_type="invalid_citation",
                     location="整体",
