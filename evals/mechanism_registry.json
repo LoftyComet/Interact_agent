@@ -1,0 +1,419 @@
+{
+  "schema_version": "1.0",
+  "source": {
+    "workbook": "手势词典大纲定稿.xlsx",
+    "sheet": "第一章_交互方式汇总 (2026)",
+    "range": "D3:K21",
+    "term_inventory": "data/term_inventory.json"
+  },
+  "count": 36,
+  "mechanisms": [
+    {
+      "code": "1-a",
+      "label": "开关",
+      "label_en": "Switch",
+      "aliases": [],
+      "workbook_raw_name": "开关（01状态）",
+      "source_cells": {
+        "code": "D4",
+        "name": "E4"
+      }
+    },
+    {
+      "code": "1-b",
+      "label": "单击",
+      "label_en": "Single Tap",
+      "aliases": [],
+      "workbook_raw_name": "单击（010变化）",
+      "source_cells": {
+        "code": "D5",
+        "name": "E5"
+      }
+    },
+    {
+      "code": "1-c",
+      "label": "按下",
+      "label_en": "Press",
+      "aliases": [],
+      "workbook_raw_name": "按下（01变化）",
+      "source_cells": {
+        "code": "D6",
+        "name": "E6"
+      }
+    },
+    {
+      "code": "1-d",
+      "label": "持续触发",
+      "label_en": "Continuous Trigger",
+      "aliases": [],
+      "workbook_raw_name": "持续触发（01状态×时间）",
+      "source_cells": {
+        "code": "D7",
+        "name": "E7"
+      }
+    },
+    {
+      "code": "1-e",
+      "label": "长按",
+      "label_en": "Long Press",
+      "aliases": [],
+      "workbook_raw_name": "长按（01状态×时间）",
+      "source_cells": {
+        "code": "D8",
+        "name": "E8"
+      }
+    },
+    {
+      "code": "1-f",
+      "label": "双击",
+      "label_en": "Double Tap",
+      "aliases": [],
+      "workbook_raw_name": "双击（0101/时间）",
+      "source_cells": {
+        "code": "D9",
+        "name": "E9"
+      }
+    },
+    {
+      "code": "1-g",
+      "label": "多点开关",
+      "label_en": "Multi-Switch",
+      "aliases": [],
+      "workbook_raw_name": "多点开关（Multi-Switch）",
+      "source_cells": {
+        "code": "D11",
+        "name": "E11"
+      }
+    },
+    {
+      "code": "1-h",
+      "label": "多点有序点击",
+      "label_en": "Ordered Multi-Click",
+      "aliases": [],
+      "workbook_raw_name": "多点有序点击（Ordered Multi-Click）",
+      "source_cells": {
+        "code": "D12",
+        "name": "E12"
+      }
+    },
+    {
+      "code": "1-i",
+      "label": "多点同时点击",
+      "label_en": "Synced Multi-Click",
+      "aliases": [],
+      "workbook_raw_name": "多点同时点击（Synced Multi-Click）",
+      "source_cells": {
+        "code": "D14",
+        "name": "E14"
+      }
+    },
+    {
+      "code": "2-a",
+      "label": "拖拽",
+      "label_en": "Drag",
+      "aliases": [],
+      "workbook_raw_name": "拖拽（Drag，有位置、无速度）",
+      "source_cells": {
+        "code": "F4",
+        "name": "G4"
+      }
+    },
+    {
+      "code": "2-b",
+      "label": "甩动",
+      "label_en": "Flick",
+      "aliases": [],
+      "workbook_raw_name": "甩动（Flick，有位置、有速度）",
+      "source_cells": {
+        "code": "F6",
+        "name": "G6"
+      }
+    },
+    {
+      "code": "2-c",
+      "label": "翻动",
+      "label_en": "Swipe",
+      "aliases": [],
+      "workbook_raw_name": "翻动（Swipe，位置/速度/归位）",
+      "source_cells": {
+        "code": "F8",
+        "name": "G8"
+      }
+    },
+    {
+      "code": "2-d",
+      "label": "滑动切换",
+      "label_en": "Slide-Switch",
+      "aliases": [],
+      "workbook_raw_name": "滑动切换（Slide-Switch）",
+      "source_cells": {
+        "code": "F10",
+        "name": "G10"
+      }
+    },
+    {
+      "code": "2-e",
+      "label": "越界切换",
+      "label_en": "Crossing-Switch",
+      "aliases": [],
+      "workbook_raw_name": "越界切换（Crossing-Switch）",
+      "source_cells": {
+        "code": "F13",
+        "name": "G13"
+      }
+    },
+    {
+      "code": "2-f",
+      "label": "晃动·震动",
+      "label_en": "Shake/Vibrate",
+      "aliases": [
+        "晃动/震动",
+        "晃动",
+        "震动"
+      ],
+      "workbook_raw_name": "晃动/震动（Shake/Vibrate）",
+      "source_cells": {
+        "code": "F16",
+        "name": "G16"
+      }
+    },
+    {
+      "code": "2-g",
+      "label": "捏合缩放",
+      "label_en": "Pinch Zoom",
+      "aliases": [],
+      "workbook_raw_name": "捏合缩放（Pinch Zoom）",
+      "source_cells": {
+        "code": "F20",
+        "name": "G20"
+      }
+    },
+    {
+      "code": "2-h",
+      "label": "环绕旋转",
+      "label_en": "Pinch Rotate",
+      "aliases": [],
+      "workbook_raw_name": "环绕旋转（Pinch Rotate）",
+      "source_cells": {
+        "code": "F21",
+        "name": "G21"
+      }
+    },
+    {
+      "code": "2-i",
+      "label": "整体移动",
+      "label_en": "Bodily Move",
+      "aliases": [],
+      "workbook_raw_name": "整体移动（Bodily Move）",
+      "source_cells": {
+        "code": "F22",
+        "name": "G22"
+      }
+    },
+    {
+      "code": "3-a",
+      "label": "限位点击",
+      "label_en": "Slop Click",
+      "aliases": [],
+      "workbook_raw_name": "限位点击（Slop Click）",
+      "source_cells": {
+        "code": "H3",
+        "name": "I3"
+      }
+    },
+    {
+      "code": "3-b",
+      "label": "长按拖拽",
+      "label_en": "Long-Press Drag",
+      "aliases": [],
+      "workbook_raw_name": "长按拖拽（Long-Press Drag）",
+      "source_cells": {
+        "code": "H4",
+        "name": "I4"
+      }
+    },
+    {
+      "code": "3-c",
+      "label": "双按拖拽",
+      "label_en": "Double-Press Drag",
+      "aliases": [],
+      "workbook_raw_name": "双按拖拽（Double-Press Drag）",
+      "source_cells": {
+        "code": "H5",
+        "name": "I5"
+      }
+    },
+    {
+      "code": "3-d",
+      "label": "轻扫切换",
+      "label_en": "Stroke-Switch",
+      "aliases": [],
+      "workbook_raw_name": "轻扫切换（Stroke-Switch）",
+      "source_cells": {
+        "code": "H6",
+        "name": "I6"
+      }
+    },
+    {
+      "code": "3-e",
+      "label": "速率式滑动",
+      "label_en": "Speed-Slide",
+      "aliases": [],
+      "workbook_raw_name": "速率式滑动（Speed-Slide）",
+      "source_cells": {
+        "code": "H7",
+        "name": "I7"
+      }
+    },
+    {
+      "code": "3-f",
+      "label": "域控式移动",
+      "label_en": "Domain-Controlled Move",
+      "aliases": [],
+      "workbook_raw_name": "域控式移动",
+      "source_cells": {
+        "code": "H8",
+        "name": "I8"
+      }
+    },
+    {
+      "code": "3-g",
+      "label": "异位连触",
+      "label_en": "Positional Multi-Tap",
+      "aliases": [],
+      "workbook_raw_name": "异位连触（Positional Multi-Tap）",
+      "source_cells": {
+        "code": "H11",
+        "name": "I11"
+      }
+    },
+    {
+      "code": "3-h",
+      "label": "向量菜单",
+      "label_en": "Vector Menu",
+      "aliases": [],
+      "workbook_raw_name": "向量菜单（Vector Menu）",
+      "source_cells": {
+        "code": "H14",
+        "name": "I14"
+      }
+    },
+    {
+      "code": "3-i",
+      "label": "动势点选",
+      "label_en": "Magic-Tap",
+      "aliases": [],
+      "workbook_raw_name": "动势点选（Magic-Tap）",
+      "source_cells": {
+        "code": "H18",
+        "name": "I18"
+      }
+    },
+    {
+      "code": "4-a",
+      "label": "快击·快抬",
+      "label_en": "Quick Tap/Lift",
+      "aliases": [
+        "快击-快抬",
+        "快击"
+      ],
+      "workbook_raw_name": "单击 🆚 长按：快击/快抬（010变化/时间）",
+      "source_cells": {
+        "code": "J4",
+        "name": "K4"
+      }
+    },
+    {
+      "code": "4-b",
+      "label": "点击缓冲",
+      "label_en": "Click Buffer",
+      "aliases": [],
+      "workbook_raw_name": "单击 🆚 双击：点击缓冲（010变化+延时）",
+      "source_cells": {
+        "code": "J5",
+        "name": "K5"
+      }
+    },
+    {
+      "code": "4-c",
+      "label": "缓冲连发",
+      "label_en": "Buffered Repeat",
+      "aliases": [
+        "按键连发"
+      ],
+      "workbook_raw_name": "一次性 🆚 持续性 点击：缓冲连发",
+      "source_cells": {
+        "code": "J6",
+        "name": "K6"
+      }
+    },
+    {
+      "code": "4-d",
+      "label": "边缘滑入",
+      "label_en": "Edge Swipe-In",
+      "aliases": [],
+      "workbook_raw_name": "同向拖拽：边缘滑入（起始选择机制）",
+      "source_cells": {
+        "code": "J8",
+        "name": "K8"
+      }
+    },
+    {
+      "code": "4-e",
+      "label": "滑入停留",
+      "label_en": "Swipe-In Hold",
+      "aliases": [],
+      "workbook_raw_name": "多个边缘滑入功能：滑入停留",
+      "source_cells": {
+        "code": "J9",
+        "name": "K9"
+      }
+    },
+    {
+      "code": "4-f",
+      "label": "方向解耦",
+      "label_en": "Directional Decoupling",
+      "aliases": [],
+      "workbook_raw_name": "交叉拖拽：方向解耦（起始/过程ADF）",
+      "source_cells": {
+        "code": "J10",
+        "name": "K10"
+      }
+    },
+    {
+      "code": "4-g",
+      "label": "轻拨",
+      "label_en": "Light Flick",
+      "aliases": [],
+      "workbook_raw_name": "一次性 🆚 持续性 拖动：轻拨",
+      "source_cells": {
+        "code": "J11",
+        "name": "K11"
+      }
+    },
+    {
+      "code": "4-h",
+      "label": "点拖互斥",
+      "label_en": "Tap-Drag Exclusion",
+      "aliases": [],
+      "workbook_raw_name": "单击 🆚 拖拽：点拖互斥（Tap-Drag Exclusion）",
+      "source_cells": {
+        "code": "J13",
+        "name": "K13"
+      }
+    },
+    {
+      "code": "4-i",
+      "label": "捏合解耦",
+      "label_en": "Pinch Decoupling",
+      "aliases": [
+        "圆规旋转"
+      ],
+      "workbook_raw_name": "多点捏合 🆚 圆规旋转：捏合解耦（T map）",
+      "source_cells": {
+        "code": "J14",
+        "name": "K14"
+      }
+    }
+  ]
+}

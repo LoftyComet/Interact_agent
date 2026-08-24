@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0",
+  "source_workbooks": [
+    "用户输入.xlsx",
+    "output_frames_标注.xlsx"
+  ],
+  "case_count": 33,
+  "response_modes": {
+    "corpus_only": "所有事实、案例和类比都必须直接来自 IxDL 语料，并使用有效的本轮 [n] 引用。",
+    "corpus_plus_labeled_reasoning": "先使用语料中的现有案例/类比；语料不足时，才允许输出单独标注的设计推导块。",
+    "conversation_feedback": "多轮对话行为评测；需要前置 assistant 回答作为 fixture。"
+  },
+  "ui_contract": {
+    "api_field": "answer_blocks",
+    "block_schema": {
+      "type": "corpus_evidence | design_reasoning | conversation_response",
+      "title": "string",
+      "markdown": "string",
+      "citations": "number[]"
+    },
+    "corpus_evidence": {
+      "label": "语料依据",
+      "required_for_answerable_questions": true,
+      "citation_required": true
+    },
+    "design_reasoning": {
+      "label": "设计推导（仅供参考）",
+      "required": false,
+      "allowed_only_when_corpus_is_insufficient": true,
+      "citation_required": false,
+      "corpus_contradiction_forbidden": true
+    }
+  },
+  "citation_contract": {
+    "syntax": "[n]",
+    "scope": "current_response_chunks",
+    "valid_range": "1..len(chunks)",
+    "semantic_requirement": "引用片段必须直接支持主体、关系、条件、范围和强度。"
+  },
+  "terminology_contract": {
+    "canonical_registry": "knowledge_index/terminology.json",
+    "mechanism_registry": "evals/mechanism_registry.json",
+    "mechanism_registry_source": "手势词典大纲定稿.xlsx",
+    "english_and_mechanism_code_source": "evals/mechanism_registry.json",
+    "invented_translation_forbidden": true,
+    "mismatched_mechanism_code_forbidden": true
+  },
+  "proposed_scoring_weights": {
+    "intent_accuracy": 0.1,
+    "retrieval_relevance": 0.15,
+    "corpus_grounding": 0.25,
+    "citation_integrity": 0.15,
+    "terminology_integrity": 0.1,
+    "content_coverage": 0.15,
+    "format_and_ui_separation": 0.1
+  },
+  "policy_status": "confirmed",
+  "inference_precedence": [
+    "检索书中已有案例或生活类比",
+    "直接采用并引用书中内容",
+    "仅在语料不足时生成设计推导块"
+  ],
+  "external_fact_policy": "无独立来源时省略外部产品事实和具体参数；不得把它们包装成合理推导。",
+  "mechanism_contract": {
+    "registry": "evals/mechanism_registry.json",
+    "source_workbook": "手势词典大纲定稿.xlsx",
+    "mechanism_count": 36,
+    "display_rule": "回答正文每次首次提到某个交互机制时，使用“编号 中文名”；英文名出现时也必须与注册表一致。"
+  },
+  "subtype_contract": {
+    "strategy": "保留当前主 intent，并使用 subtype 选择专用输出框架。",
+    "mappings": {
+      "control_form_compare": {
+        "intent": "interaction_compare",
+        "subtype": "control_form_compare"
+      },
+      "control_form_application": {
+        "intent": "design_suggestion",
+        "subtype": "control_form_application"
+      }
+    }
+  },
+  "confirmed_decisions": [
+    "书中已有案例/类比优先于模型推导。",
+    "无来源的外部事实省略。",
+    "前端采用 answer_blocks 语义块协议。",
+    "不要求页码；交互机制必须携带手势词典大纲中的正确编号。",
+    "合并后的主意图保留，通过 subtype 恢复专用输出结构。"
+  ]
+}
