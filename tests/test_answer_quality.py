@@ -5,7 +5,12 @@ from types import SimpleNamespace
 from gesture_agent.core.models import QuestionStructure
 from gesture_agent.verification import GroundingClaim, GroundingReport
 from gesture_agent.verification.models import OutputVerificationResult
-from web.backend.app import apply_grounding_safety_fallback, verify_answer_quality
+from gesture_agent.core.models import IntentOutputFrames
+from web.backend.app import (
+    apply_grounding_safety_fallback,
+    repair_safe_answer_contract,
+    verify_answer_quality,
+)
 
 
 class PassOutputVerifier:
@@ -93,6 +98,7 @@ def test_safety_fallback_replaces_failed_grounding_with_supported_subset() -> No
     assert answer == "有依据的结论。[1]"
     assert result.grounding.status == "pass"
     assert result.issue_descriptions == []
+    assert result.safety_fallback_applied is True
 
 
 def test_grounding_checks_only_corpus_evidence_block() -> None:
@@ -141,3 +147,24 @@ def test_safety_fallback_preserves_labeled_reasoning_block() -> None:
     assert "没有依据的结论" not in sanitized
     assert "可以尝试一个待验证的方案" in sanitized
     assert result.grounding.status == "pass"
+
+
+def test_safe_contract_repair_fills_deleted_direct_answer_and_empty_section() -> None:
+    structure = QuestionStructure(
+        raw_query="测试", intent="interaction_optimization",
+        layers=["design_evaluation"], terms=[], focus=["设计评估"],
+    )
+    frames = IntentOutputFrames(frames={
+        "interaction_optimization": ["现状复述", "优化建议"],
+    })
+    broken = """<!-- ixdl-answer-block:corpus_evidence -->
+## 现状复述
+有依据的诊断。[1]
+## 优化建议
+以下建议供参考："""
+
+    repaired = repair_safe_answer_contract(broken, structure, frames)
+
+    assert "当前资料不足以支持更具体的结论" in repaired
+    assert "## 优化建议\n\n当前资料没有直接证据" in repaired
+    assert "有依据的诊断。[1]" in repaired

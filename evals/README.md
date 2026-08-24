@@ -26,4 +26,17 @@
 4. API 使用 `answer_blocks[]` 返回“语料依据”和可选的“设计推导（仅供参考）”，前端按 block type 区分样式。
 5. 外部产品事实和具体参数不是“合理推导”，在没有独立来源时不能作为确定事实输出。
 
-下一步应补齐每条问题的期望证据 chunk、审核标注中的事实与编号，并实现自动评分器。
+下一步应补齐每条问题的期望证据 chunk，并审核 Excel 标注中的事实与编号；当前硬约束评分器不把未经审计的内容标准当作事实金标准。
+
+## 运行硬约束评测
+
+配置好 DeepSeek 后，可对指定样本运行本地完整链路：
+
+```bash
+.venv/bin/python scripts/evaluate_answer_quality.py \
+  --ids ixdl-ui-001 ixdl-ui-014 ixdl-ui-015 \
+  --output evals/results/smoke.json
+```
+
+评分器检查意图/subtype、`answer_blocks`、引用范围、机制注册表、输出验证器和
+grounding 状态。内容覆盖度与“推导是否确有必要”仍需在语料审计完成后加入语义评分。

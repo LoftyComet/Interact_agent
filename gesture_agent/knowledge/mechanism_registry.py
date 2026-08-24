@@ -80,17 +80,31 @@ class MechanismRegistry:
             for entry in self.entries
         )
 
-    def validate_answer(self, text: str) -> tuple[MechanismNamingIssue, ...]:
-        """Require every mechanism mention to share a clause with its code.
+    def validate_answer(
+        self,
+        text: str,
+        *,
+        required_labels: Iterable[str] = (),
+    ) -> tuple[MechanismNamingIssue, ...]:
+        """Require the first formal mechanism mention to carry its code.
 
         Longest-name matching avoids reporting ``开关`` again inside
-        ``多点开关``. Codes found in the same clause are also checked against
-        the mentioned Chinese alias or English name.
+        ``多点开关``. Ordinary verb usage such as ``按下按钮`` is not treated
+        as a named mechanism unless the question itself targets that mechanism.
+        Codes found anywhere are still checked against names in their clause.
         """
 
         mentions = self._find_mentions(text)
+        required = {str(value) for value in required_labels}
         issues: list[MechanismNamingIssue] = []
+        checked_entries: set[str] = set()
         for start, end, mention, entry in mentions:
+            if entry.code in checked_entries:
+                continue
+            is_required = bool(required.intersection({entry.label, *entry.aliases}))
+            if not is_required and not _is_formal_mention(text, start, end, entry):
+                continue
+            checked_entries.add(entry.code)
             clause = _surrounding_clause(text, start, end)
             found_codes = tuple(dict.fromkeys(
                 match.group(1).lower() for match in _CODE_IN_TEXT_RE.finditer(clause)
@@ -132,6 +146,40 @@ class MechanismRegistry:
                     ))
         return tuple(_dedupe_issues(issues))
 
+    def normalize_answer(
+        self,
+        text: str,
+        *,
+        required_labels: Iterable[str] = (),
+    ) -> str:
+        """Insert a missing code before first formal mentions when unambiguous.
+
+        Mismatched existing codes are intentionally left untouched so the
+        verifier can reject them instead of silently changing semantics.
+        """
+
+        required = {str(value) for value in required_labels}
+        edits: list[tuple[int, str]] = []
+        handled: set[str] = set()
+        for start, end, _mention, entry in self._find_mentions(text):
+            if entry.code in handled:
+                continue
+            is_required = bool(required.intersection({entry.label, *entry.aliases}))
+            if not is_required and not _is_formal_mention(text, start, end, entry):
+                continue
+            handled.add(entry.code)
+            clause = _surrounding_clause(text, start, end)
+            found_codes = {
+                match.group(1).lower() for match in _CODE_IN_TEXT_RE.finditer(clause)
+            }
+            if entry.code in found_codes or found_codes:
+                continue
+            edits.append((start, f"{entry.code} "))
+        normalized = text
+        for start, insertion in sorted(edits, reverse=True):
+            normalized = normalized[:start] + insertion + normalized[start:]
+        return normalized
+
     def _find_mentions(self, text: str) -> list[tuple[int, int, str, MechanismEntry]]:
         candidates: list[tuple[int, int, str, MechanismEntry]] = []
         for entry in self.entries:
@@ -171,6 +219,20 @@ def _contains_name(text: str, name: str) -> bool:
     if not name:
         return False
     return name.lower() in text.lower()
+
+
+def _is_formal_mention(text: str, start: int, end: int, entry: MechanismEntry) -> bool:
+    clause = _surrounding_clause(text, start, end)
+    if _CODE_IN_TEXT_RE.search(clause):
+        return True
+    if entry.label_en and _contains_name(clause, entry.label_en):
+        return True
+    before = text[max(0, start - 32):start]
+    after = text[end:min(len(text), end + 32)]
+    context = before + text[start:end] + after
+    return any(marker in context for marker in (
+        "交互机制", "机制", "交互逻辑", "采用", "对应", "属于", "组合", "冲突调和",
+    ))
 
 
 def _dedupe_issues(issues: list[MechanismNamingIssue]) -> list[MechanismNamingIssue]:

@@ -33,6 +33,10 @@ class OutputIssue:
         "invalid_term",
         "knowledge_conflict",
         "format_error",
+        "missing_mechanism_code",
+        "mechanism_code_mismatch",
+        "mechanism_name_mismatch",
+        "unknown_mechanism_code",
     ]
     location: str
     description: str

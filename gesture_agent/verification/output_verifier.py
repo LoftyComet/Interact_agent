@@ -42,7 +42,7 @@ class OutputVerifier:
         issues: list[OutputIssue] = []
         issues.extend(self._check_contract(output, structure, source_count))
         issues.extend(self._check_term_validity(output, structure))
-        issues.extend(self._check_mechanism_naming(output))
+        issues.extend(self._check_mechanism_naming(output, structure))
         if self._use_llm and not issues:
             issues.extend(self._llm_verify(output, structure))
         if not issues:
@@ -137,11 +137,18 @@ class OutputVerifier:
                     break
         return issues
 
-    def _check_mechanism_naming(self, output: str) -> list[OutputIssue]:
+    def _check_mechanism_naming(
+        self,
+        output: str,
+        structure: QuestionStructure,
+    ) -> list[OutputIssue]:
         if self._mechanism_registry is None:
             return []
         issues: list[OutputIssue] = []
-        for issue in self._mechanism_registry.validate_answer(output):
+        for issue in self._mechanism_registry.validate_answer(
+            output,
+            required_labels=structure.terms,
+        ):
             found = "、".join(issue.found_codes)
             if issue.issue_type == "missing_mechanism_code":
                 description = f"交互机制「{issue.mention}」缺少编号；应写为「{issue.expected}」"

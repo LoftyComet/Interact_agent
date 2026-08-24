@@ -119,6 +119,17 @@ def test_evidence_limitation_statement_does_not_require_citation() -> None:
     assert report.claims[0].verdict == "supported"
 
 
+def test_claim_cannot_hide_unsupported_detail_behind_limitation_suffix() -> None:
+    verifier = GroundingVerifier(FakeJudge({}))
+    report = verifier.verify(
+        "把菜单热区缩小到屏幕左上角（当前资料没有直接证据）。",
+        [_source("边缘滑入通过空间分区避免冲突。")],
+    )
+
+    assert report.status == "issues_found"
+    assert report.claims[0].verdict == "unsupported"
+
+
 def test_judge_failure_is_reported_as_unavailable() -> None:
     class BrokenJudge:
         def chat(self, messages, **kwargs):

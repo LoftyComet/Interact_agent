@@ -44,11 +44,17 @@ from gesture_agent.providers import (
 )
 from gesture_agent.settings.app_config import load_agent_config
 from gesture_agent.verification import (
+    AnswerDocument,
+    AnswerSection,
     GroundingReport,
     GroundingVerifier,
     InputVerifier,
     OutputVerifier,
+    ReasoningReport,
+    ReasoningVerifier,
     parse_answer_blocks,
+    parse_answer_markdown,
+    render_answer_markdown,
 )
 from gesture_agent.verification.prompts import OUTPUT_CORRECTION_PROMPT
 
@@ -68,6 +74,8 @@ class AnswerQualityResult:
     correction_hints: str
     issue_descriptions: list[str]
     grounding: Optional[GroundingReport]
+    reasoning: Optional[ReasoningReport] = None
+    safety_fallback_applied: bool = False
 
 
 def log_user_question(
@@ -187,6 +195,7 @@ class AgentRuntime:
             strict=self.config.verification.grounding_strict,
             minimum_score=self.config.verification.grounding_minimum_score,
         )
+        self.reasoning_verifier = ReasoningVerifier(grounding_client)
         index_path = Path(self.config.data_dir) / "pictures" / "extracted" / "image_index.json"
         self.image_index = ImageIndex.load(index_path)
 
@@ -323,16 +332,34 @@ def verify_answer_quality(
         should_retry = should_retry or output_result.should_retry
         if output_result.correction_hints:
             hints.append(output_result.correction_hints)
-        output_issues = list(output_result.issues)
+        output_issues = [
+            issue for issue in output_result.issues
+            if not (issue.issue_type == "knowledge_conflict" and issue.severity == "warning")
+        ]
 
     grounding = None
+    answer_document = parse_answer_blocks(answer)
     if runtime.config.verification.verify_grounding:
-        answer_document = parse_answer_blocks(answer)
         corpus_answer = answer_document.corpus_markdown
         grounding = runtime.grounding_verifier.verify(corpus_answer, chunks)
         should_retry = should_retry or grounding.should_retry
         if grounding.correction_hints:
             hints.append(grounding.correction_hints)
+        if grounding.should_retry and structure.intent in {
+            "design_evaluation",
+            "interaction_compare",
+            "mechanism_parameter_compare",
+            "interaction_optimization",
+            "evaluation_methodology",
+            "design_suggestion",
+        }:
+            hints.append(
+                "若被判定为无直接证据的内容是合理的设计假设，不要给它强行添加引用；"
+                "请把每一条具体建议完整移动到 `<!-- ixdl-answer-block:design_reasoning -->` 标记之后，"
+                "标记必须放在第一条推导之前，不能只在建议末尾补一个标记。"
+                "移动后检查语料块不再残留建议，且不要出现“思路二/上述方案”等指向已删除内容的残句。"
+                "推导使用“可以尝试/需要验证”等措辞，并删除无来源的外部产品事实或具体参数。"
+            )
         descriptions.extend(grounding.issue_descriptions)
         if grounding.status != "unavailable":
             # The semantic judge sees the cited corpus itself and supersedes the
@@ -341,6 +368,20 @@ def verify_answer_quality(
                 issue for issue in output_issues
                 if not (issue.issue_type == "knowledge_conflict" and issue.severity == "warning")
             ]
+    reasoning = None
+    reasoning_answer = answer_document.markdown_for("design_reasoning")
+    reasoning_verifier = getattr(runtime, "reasoning_verifier", None)
+    if reasoning_answer and reasoning_verifier is not None:
+        reasoning = reasoning_verifier.verify(reasoning_answer, chunks)
+        should_retry = should_retry or reasoning.should_retry
+        if reasoning.correction_hints:
+            hints.append(reasoning.correction_hints)
+        descriptions.extend(
+            f"设计推导：{issue.text}（{issue.reason}）"
+            for issue in reasoning.issues
+        )
+        if reasoning.error:
+            descriptions.append(reasoning.error)
     descriptions[0:0] = [issue.description for issue in output_issues]
 
     return AnswerQualityResult(
@@ -348,7 +389,52 @@ def verify_answer_quality(
         correction_hints="\n".join(hints),
         issue_descriptions=list(dict.fromkeys(descriptions)),
         grounding=grounding,
+        reasoning=reasoning,
+        safety_fallback_applied=False,
     )
+
+
+def normalize_mechanism_codes(
+    runtime: AgentRuntime,
+    answer: str,
+    structure: Optional[QuestionStructure],
+) -> str:
+    if not answer or structure is None:
+        return answer
+    return runtime.kb.mechanism_registry.normalize_answer(
+        answer,
+        required_labels=structure.terms,
+    )
+
+
+def repair_safe_answer_contract(
+    answer: str,
+    structure: QuestionStructure,
+    output_frames: Any,
+) -> str:
+    """Keep a safety-sanitized answer readable without inventing new facts."""
+
+    try:
+        expected = output_frames.frame_for(structure.intent, structure.subtype)
+    except KeyError:
+        return answer
+    document = parse_answer_blocks(answer)
+    parsed = parse_answer_markdown(document.corpus_markdown, expected).document
+    fallback = "当前资料没有直接证据，无法在不进行额外推导的情况下展开这一部分。"
+    direct_answer = parsed.direct_answer.strip() or "当前资料不足以支持更具体的结论。"
+    sections_by_title = {section.title: section for section in parsed.sections}
+    repaired_sections: list[AnswerSection] = []
+    for title in expected:
+        section = sections_by_title.get(title)
+        body = section.body.strip() if section else ""
+        if not body or body.endswith(("：", ":")):
+            body = fallback
+        repaired_sections.append(AnswerSection(title=title, body=body))
+    repaired_corpus = render_answer_markdown(
+        AnswerDocument(direct_answer=direct_answer, sections=tuple(repaired_sections)),
+        expected,
+    )
+    return document.replace_corpus_markdown(repaired_corpus).render_markdown()
 
 
 def apply_grounding_safety_fallback(
@@ -368,6 +454,9 @@ def apply_grounding_safety_fallback(
     if sanitized_corpus == corpus_answer:
         return answer, quality
     sanitized = answer_document.replace_corpus_markdown(sanitized_corpus).render_markdown()
+    output_frames = getattr(runtime, "output_frames", None)
+    if output_frames is not None:
+        sanitized = repair_safe_answer_contract(sanitized, structure, output_frames)
 
     output_issues = []
     hints = []
@@ -388,6 +477,52 @@ def apply_grounding_safety_fallback(
         correction_hints="\n".join(hints),
         issue_descriptions=[issue.description for issue in output_issues],
         grounding=safe_report,
+        reasoning=getattr(quality, "reasoning", None),
+        safety_fallback_applied=True,
+    )
+
+
+def apply_reasoning_safety_fallback(
+    runtime: AgentRuntime,
+    answer: str,
+    structure: QuestionStructure,
+    chunks: list[SourceChunk],
+    quality: AnswerQualityResult,
+) -> tuple[str, AnswerQualityResult]:
+    report = quality.reasoning
+    if report is None or report.status != "issues_found":
+        return answer, quality
+    document = parse_answer_blocks(answer)
+    sanitized = document.without_type("design_reasoning").render_markdown()
+    output_issues = []
+    hints: list[str] = []
+    should_retry = False
+    if runtime.config.verification.verify_output:
+        output_result = runtime.output_verifier.verify(
+            sanitized, structure, source_count=len(chunks)
+        )
+        output_issues = [
+            issue for issue in output_result.issues
+            if not (issue.issue_type == "knowledge_conflict" and issue.severity == "warning")
+        ]
+        should_retry = output_result.should_retry
+        if output_result.correction_hints:
+            hints.append(output_result.correction_hints)
+    grounding_descriptions = (
+        quality.grounding.issue_descriptions
+        if quality.grounding is not None and quality.grounding.status == "issues_found"
+        else []
+    )
+    return sanitized, AnswerQualityResult(
+        should_retry=should_retry,
+        correction_hints="\n".join(hints),
+        issue_descriptions=[
+            *[issue.description for issue in output_issues],
+            *grounding_descriptions,
+        ],
+        grounding=quality.grounding,
+        reasoning=ReasoningReport(status="pass"),
+        safety_fallback_applied=True,
     )
 
 
@@ -625,12 +760,15 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 max_tokens=rt.config.max_tokens,
                 enable_thinking=rt.config.enable_thinking,
             )
+            answer = normalize_mechanism_codes(rt, answer, structure)
         except ProviderError as exc:
             error_text = str(exc)
 
         # --- 输出验证 ---
         output_issues: list[str] = []
         grounding_report: Optional[GroundingReport] = None
+        reasoning_report: Optional[ReasoningReport] = None
+        safety_fallback_applied = False
         verification_enabled = (
             rt.config.verification.verify_output or rt.config.verification.verify_grounding
         )
@@ -654,14 +792,20 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         max_tokens=rt.config.max_tokens,
                         enable_thinking=rt.config.enable_thinking,
                     )
+                    answer = normalize_mechanism_codes(rt, answer, structure)
                 except ProviderError:
                     break
                 quality_result = verify_answer_quality(rt, answer, structure, chunks)
             answer, quality_result = apply_grounding_safety_fallback(
                 rt, answer, structure, chunks, quality_result
             )
+            answer, quality_result = apply_reasoning_safety_fallback(
+                rt, answer, structure, chunks, quality_result
+            )
             output_issues = quality_result.issue_descriptions
             grounding_report = quality_result.grounding
+            reasoning_report = quality_result.reasoning
+            safety_fallback_applied = quality_result.safety_fallback_applied
             if rt.config.verification.verify_output:
                 answer = rt.output_verifier.normalize(answer, structure)
 
@@ -683,6 +827,8 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             "input_corrections": input_corrections,
             "output_issues": output_issues,
             "grounding": grounding_report.to_dict() if grounding_report else None,
+            "reasoning_audit": reasoning_report.to_dict() if reasoning_report else None,
+            "safety_fallback_applied": safety_fallback_applied,
             "structure": serialize_structure(structure),
             "chunks": [serialize_chunk(c) for c in chunks],
             "memory_context": session_result.memory_context,
@@ -832,10 +978,16 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 return
 
             full_answer = "".join(answer_parts)
+            normalized_mechanisms = normalize_mechanism_codes(rt, full_answer, structure)
+            if normalized_mechanisms != full_answer:
+                full_answer = normalized_mechanisms
+                yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
 
             # --- 输出验证 ---
             output_issues: list[str] = []
             grounding_report: Optional[GroundingReport] = None
+            reasoning_report: Optional[ReasoningReport] = None
+            safety_fallback_applied = False
             verification_enabled = (
                 rt.config.verification.verify_output or rt.config.verification.verify_grounding
             )
@@ -860,6 +1012,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                             max_tokens=rt.config.max_tokens,
                             enable_thinking=rt.config.enable_thinking,
                         )
+                        full_answer = normalize_mechanism_codes(rt, full_answer, structure)
                         yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
                     except ProviderError:
                         break
@@ -867,11 +1020,16 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 sanitized_answer, quality_result = apply_grounding_safety_fallback(
                     rt, full_answer, structure, chunks, quality_result
                 )
+                sanitized_answer, quality_result = apply_reasoning_safety_fallback(
+                    rt, sanitized_answer, structure, chunks, quality_result
+                )
                 if sanitized_answer != full_answer:
                     full_answer = sanitized_answer
                     yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
                 output_issues = quality_result.issue_descriptions
                 grounding_report = quality_result.grounding
+                reasoning_report = quality_result.reasoning
+                safety_fallback_applied = quality_result.safety_fallback_applied
                 if rt.config.verification.verify_output:
                     normalized_answer = rt.output_verifier.normalize(full_answer, structure)
                     if normalized_answer != full_answer:
@@ -891,6 +1049,8 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 "answer_blocks": serialize_answer_blocks(full_answer, rt.image_index),
                 "output_issues": output_issues,
                 "grounding": grounding_report.to_dict() if grounding_report else None,
+                "reasoning_audit": reasoning_report.to_dict() if reasoning_report else None,
+                "safety_fallback_applied": safety_fallback_applied,
             })
 
         return Response(stream_with_context(generate()), mimetype="text/event-stream")

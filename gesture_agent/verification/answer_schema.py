@@ -7,6 +7,10 @@ from typing import Literal
 
 _HEADING_RE = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
 _CITATION_RE = re.compile(r"(?<!!)\[(\d+)\](?!\()")
+_BLOCK_MARKER_RE = re.compile(
+    r"<!--\s*ixdl-answer-block:(?:corpus_evidence|design_reasoning|conversation_response)\s*-->",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -58,6 +62,7 @@ def parse_answer_markdown(markdown: str, expected_sections: list[str]) -> Answer
     """
 
     stripped = markdown.strip()
+    visible_markdown = _BLOCK_MARKER_RE.sub("", markdown)
     violations: list[AnswerContractViolation] = []
     if _is_whole_code_fence(stripped):
         violations.append(AnswerContractViolation(
@@ -72,8 +77,8 @@ def parse_answer_markdown(markdown: str, expected_sections: list[str]) -> Answer
             message="输出是 JSON 对象，应输出面向阅读的 Markdown",
         ))
 
-    matches = list(_HEADING_RE.finditer(markdown))
-    direct_answer = markdown[: matches[0].start() if matches else len(markdown)].strip()
+    matches = list(_HEADING_RE.finditer(visible_markdown))
+    direct_answer = visible_markdown[: matches[0].start() if matches else len(visible_markdown)].strip()
     if not direct_answer or direct_answer.startswith("##"):
         violations.append(AnswerContractViolation(
             code="missing_direct_answer",
@@ -85,8 +90,8 @@ def parse_answer_markdown(markdown: str, expected_sections: list[str]) -> Answer
     canonical_counts = {title: 0 for title in expected_sections}
     for index, match in enumerate(matches):
         raw_title = match.group(1).strip()
-        body_end = matches[index + 1].start() if index + 1 < len(matches) else len(markdown)
-        body = markdown[match.end():body_end].strip()
+        body_end = matches[index + 1].start() if index + 1 < len(matches) else len(visible_markdown)
+        body = visible_markdown[match.end():body_end].strip()
         canonical_title = _canonical_heading(raw_title, expected_sections)
         parsed_sections.append(AnswerSection(title=canonical_title or raw_title, body=body))
         if canonical_title is None:
@@ -98,7 +103,7 @@ def parse_answer_markdown(markdown: str, expected_sections: list[str]) -> Answer
                 location=f"## {canonical_title}",
                 message=f"章节「{canonical_title}」重复出现",
             ))
-        if not body:
+        if not body or _is_placeholder_body(body):
             violations.append(AnswerContractViolation(
                 code="empty_section",
                 location=f"## {canonical_title}",
@@ -156,3 +161,8 @@ def _is_whole_code_fence(markdown: str) -> bool:
         return False
     lines = markdown.splitlines()
     return len(lines) >= 2 and lines[-1].strip() == "```"
+
+
+def _is_placeholder_body(body: str) -> bool:
+    visible = body.strip()
+    return visible.endswith(("：", ":"))

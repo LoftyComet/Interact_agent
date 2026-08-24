@@ -304,6 +304,11 @@ _GROUNDING_SYSTEM_PROMPT = """你是严格的语料一致性审计器。你只�
 
 设计建议只有在证据能够直接推出时才算 supported。证据说“可能/通常/部分场景”，Claim 说“必然/所有场景”时必须判 partially_supported。引用编号存在不等于证据支持。
 
+特别严格区分“资料事实”和“设计推导”：
+- 证据只描述控件/机制的属性，Claim 把该属性进一步转换成某个新场景的选型建议、优先级或具体方案时，除非证据明确提到该场景与建议，否则判 partially_supported。
+- 证据只说可以空间分区，Claim 自行指定左上角、热区宽度、替代手势、平台行为等新增设计细节时，判 partially_supported 或 unsupported。
+- Claim 在末尾附上“当前资料没有直接证据”不能让前面的无依据内容变成 supported。
+
 只输出 JSON，不要 Markdown，不要解释 JSON 以外的内容：
 {"claims":[{"id":"c1","verdict":"supported|partially_supported|unsupported|conflicted","confidence":0.0,"reason":"简短依据"}]}"""
 
@@ -388,7 +393,8 @@ def _is_table_separator(line: str) -> bool:
 
 
 def _is_evidence_limitation(text: str) -> bool:
-    return any(marker in text for marker in (
+    normalized = text.strip(" -*_：:|（）()")
+    return any(normalized.startswith(marker) for marker in (
         "当前资料没有直接证据",
         "当前语料没有直接证据",
         "现有资料无法确认",

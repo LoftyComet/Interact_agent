@@ -36,3 +36,21 @@ def test_rejects_whole_code_fence_and_json() -> None:
 
     assert any(v.code == "format_error" for v in fenced.violations)
     assert any(v.code == "format_error" for v in json_result.violations)
+
+
+def test_block_marker_is_not_a_direct_answer() -> None:
+    result = parse_answer_markdown(
+        "<!-- ixdl-answer-block:corpus_evidence -->\n\n## 核心定义\n\n内容足够长。",
+        ["核心定义"],
+    )
+
+    assert any(v.code == "missing_direct_answer" for v in result.violations)
+
+
+def test_lead_in_without_content_is_an_empty_section() -> None:
+    result = parse_answer_markdown(
+        "直接结论。\n\n## 核心定义\n\n以下内容需要确认：",
+        ["核心定义"],
+    )
+
+    assert any(v.code == "empty_section" for v in result.violations)

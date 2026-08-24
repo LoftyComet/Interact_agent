@@ -21,6 +21,9 @@ __all__ = [
     "AnswerBlock",
     "AnswerBlockDocument",
     "parse_answer_blocks",
+    "ReasoningIssue",
+    "ReasoningReport",
+    "ReasoningVerifier",
 ]
 from .answer_schema import (
     AnswerDocument,
@@ -34,3 +37,4 @@ from .answer_blocks import (
     AnswerBlockDocument,
     parse_answer_blocks,
 )
+from .reasoning_verifier import ReasoningIssue, ReasoningReport, ReasoningVerifier

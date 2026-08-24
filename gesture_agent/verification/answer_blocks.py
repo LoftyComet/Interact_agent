@@ -81,6 +81,12 @@ class AnswerBlockDocument:
             updated.insert(0, replacement)
         return replace(self, blocks=tuple(updated))
 
+    def without_type(self, block_type: AnswerBlockType) -> "AnswerBlockDocument":
+        return replace(
+            self,
+            blocks=tuple(block for block in self.blocks if block.type != block_type),
+        )
+
     def render_markdown(self) -> str:
         if not self.explicit_markers and len(self.blocks) == 1:
             return self.blocks[0].markdown.strip()
