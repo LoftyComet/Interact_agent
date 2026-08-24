@@ -87,6 +87,25 @@ class AnswerBlockDocument:
             blocks=tuple(block for block in self.blocks if block.type != block_type),
         )
 
+    def replace_type_markdown(
+        self,
+        block_type: AnswerBlockType,
+        markdown: str,
+    ) -> "AnswerBlockDocument":
+        replacement = _make_block(block_type, markdown)
+        updated: list[AnswerBlock] = []
+        inserted = False
+        for block in self.blocks:
+            if block.type != block_type:
+                updated.append(block)
+                continue
+            if not inserted and replacement.markdown:
+                updated.append(replacement)
+                inserted = True
+        if not inserted and replacement.markdown:
+            updated.append(replacement)
+        return replace(self, blocks=tuple(updated))
+
     def render_markdown(self) -> str:
         if not self.explicit_markers and len(self.blocks) == 1:
             return self.blocks[0].markdown.strip()

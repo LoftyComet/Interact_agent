@@ -15,6 +15,10 @@ class Reranker(Protocol):
     def score(self, query: str, texts: list[str]) -> list[float]: ...
 
 
+PRIMARY_ROLE = "primary"
+PRIMARY_RECALL_LIMIT = 30
+
+
 @dataclass(frozen=True)
 class RetrievalResult:
     chunk_id: str
@@ -113,6 +117,22 @@ class HybridRetriever:
         for rank, hit in enumerate(lexical_hits, start=1):
             ranks.setdefault(hit["id"], {})["lexical"] = rank
 
+        # A large secondary corpus can otherwise occupy the entire global BM25
+        # recall window.  When the parser has recognized domain terminology,
+        # reserve a small candidate pool from the canonical handbook.  These are
+        # still scored normally, so an unrelated primary chunk cannot displace a
+        # substantially more relevant secondary result merely because of role.
+        if query_terms and (roles is None or PRIMARY_ROLE in roles):
+            primary_hits = self.lexical.search(
+                normalized,
+                limit=max(top_k, min(recall_k, PRIMARY_RECALL_LIMIT)),
+                roles=[PRIMARY_ROLE],
+            )
+            for rank, hit in enumerate(primary_hits, start=1):
+                candidates[hit["id"]] = hit
+                channel_ranks = ranks.setdefault(hit["id"], {})
+                channel_ranks["lexical"] = min(channel_ranks.get("lexical", rank), rank)
+
         if self.vectors is not None and self.embedder is not None:
             query_vectors = self.embedder.embed([normalized], batch_size=1)
             if query_vectors:
@@ -163,14 +183,21 @@ class HybridRetriever:
 
     @staticmethod
     def _dedupe_by_content(scored: list[tuple[dict, float, list[str]]]) -> list[tuple[dict, float, list[str]]]:
-        result: list[tuple[dict, float, list[str]]] = []
-        seen: set[str] = set()
+        canonical: dict[str, tuple[dict, float, list[str]]] = {}
         for item in scored:
             digest = str(item[0].get("content_sha256", "")) or item[0]["id"]
-            if digest not in seen:
-                seen.add(digest)
-                result.append(item)
-        return result
+            current = canonical.get(digest)
+            if current is None or (
+                int(item[0].get("authority", 0)), item[1]
+            ) > (
+                int(current[0].get("authority", 0)), current[1]
+            ):
+                canonical[digest] = item
+        return sorted(
+            canonical.values(),
+            key=lambda item: (item[1], int(item[0].get("authority", 0))),
+            reverse=True,
+        )
 
     def _to_result(self, row: dict, score: float, channels: list[str], expand_neighbors: int) -> RetrievalResult:
         context_rows: list[dict] = []

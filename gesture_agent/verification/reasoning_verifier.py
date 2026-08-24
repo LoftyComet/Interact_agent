@@ -120,6 +120,33 @@ class ReasoningVerifier:
             ),
         )
 
+    def sanitize(
+        self,
+        reasoning: str,
+        report: ReasoningReport,
+    ) -> tuple[str, ReasoningReport]:
+        """Remove unsafe lines while preserving explicitly hedged design ideas."""
+
+        if report.status != "issues_found" or not report.issues:
+            return reasoning, report
+        lines = reasoning.splitlines()
+        for issue in report.issues:
+            needle = _plain_text(issue.text)
+            if not needle:
+                continue
+            for index, line in enumerate(lines):
+                haystack = _plain_text(line)
+                if not haystack or (needle not in haystack and haystack not in needle):
+                    continue
+                if issue.issue_type == "unlabeled_assertion":
+                    lines[index] = _hedge_line(line)
+                else:
+                    lines[index] = ""
+        sanitized = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+        if not any(line.strip() and not line.lstrip().startswith("#") for line in sanitized.splitlines()):
+            sanitized = ""
+        return sanitized, ReasoningReport(status="pass")
+
 
 _REASONING_AUDIT_PROMPT = """你是严格的 IxDL 设计推导审计器。输入包含已明确标注的 design_reasoning 和本轮 evidence。
 
@@ -187,3 +214,30 @@ def _deterministic_policy_issues(
                 reason="设计推导使用了确定性或强度过高的表述，应改为待验证假设",
             ))
     return tuple(issues)
+
+
+def _plain_text(text: str) -> str:
+    cleaned = re.sub(r"<!--.*?-->", "", text)
+    cleaned = re.sub(r"(?<!!)\[\d+\](?!\()", "", cleaned)
+    cleaned = cleaned.replace("**", "").replace("__", "").replace("`", "")
+    return re.sub(r"\s+", "", cleaned).strip("-*+#：:|（）()。！？；;,.，")
+
+
+def _hedge_line(line: str) -> str:
+    replacements = {
+        "最佳方案": "可能较合适的方案候选",
+        "最优方案": "可能较合适的方案候选",
+        "必然": "可能",
+        "一定": "可能",
+        "完全": "在一定程度上",
+        "显著": "可能",
+        "绝不会": "可能不会",
+    }
+    for original, replacement in replacements.items():
+        line = line.replace(original, replacement)
+    if any(marker in line for marker in ("可以", "可能", "尝试", "建议", "需要验证", "待验证", "假设")):
+        return line
+    match = re.match(r"(\s*(?:[-*+]\s+|\d+[.)、]\s*)?)(.*)", line)
+    if not match:
+        return "可以尝试把以下内容作为待验证假设：" + line
+    return f"{match.group(1)}可以尝试把以下内容作为待验证假设：{match.group(2)}"

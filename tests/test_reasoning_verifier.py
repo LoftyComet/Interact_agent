@@ -60,3 +60,20 @@ def test_deterministic_audit_rejects_unsourced_parameter_and_absolute_claim() ->
     assert {issue.issue_type for issue in report.issues} == {
         "external_fact", "unlabeled_assertion"
     }
+
+
+def test_sanitize_removes_external_fact_and_hedges_unlabeled_idea() -> None:
+    verifier = ReasoningVerifier(FakeJudge([]))
+    reasoning = """## 设计建议
+
+- 把热区设置为 20pt。
+- 旋钮是最佳方案。
+- 可以尝试保留按钮作为替代入口。"""
+    report = verifier.verify(reasoning, [_source()])
+
+    sanitized, safe_report = verifier.sanitize(reasoning, report)
+
+    assert "20pt" not in sanitized
+    assert "旋钮是可能较合适的方案候选" in sanitized
+    assert "可以尝试保留按钮" in sanitized
+    assert safe_report.status == "pass"

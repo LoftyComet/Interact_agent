@@ -73,10 +73,7 @@ CLARIFY_OPTION_SPECS: dict[Intent, ClarifyOptionSpec] = {
             SubTypeOption(
                 label="非语言声学控制类",
                 value="非语言声学控制类语音交互：用音高、音量、持续、舌音等非语言声学特征做直接即时控制",
-                desc=(
-                    "用音高/音量/持续/舌音等非语言声学特征做直接即时控制"
-                    "（文章参考：Igarashi & Hughes, “Voice as Sound”, UIST 2001）"
-                ),
+                desc="用音高/音量/持续/舌音等非语言声学特征做直接即时控制",
                 keywords=("音高", "音量", "持续", "发声", "舌音", "声学", "音调", "直接控制", "连续发声"),
             ),
         ),

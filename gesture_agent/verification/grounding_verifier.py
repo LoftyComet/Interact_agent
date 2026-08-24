@@ -21,7 +21,7 @@ _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 _LIST_PREFIX_RE = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)、]\s*)")
 _FENCE_RE = re.compile(r"^```")
 _EVIDENCE_LIMIT = 4000
-_JUDGE_BATCH_SIZE = 20
+_JUDGE_BATCH_SIZE = 10
 _VALID_VERDICTS = {"supported", "partially_supported", "unsupported", "conflicted"}
 
 
@@ -344,7 +344,7 @@ def _extract_claims(answer: str) -> list[GroundingClaim]:
             if not citation_ids:
                 citation_ids = line_citations
             text = _clean_claim_text(sentence)
-            if len(text) < 8:
+            if len(text) < 8 or _is_clarification_question(text):
                 continue
             claims.append(GroundingClaim(
                 id=f"c{len(claims) + 1}",
@@ -401,6 +401,17 @@ def _is_evidence_limitation(text: str) -> bool:
         "现有语料无法确认",
         "资料不足以判断",
         "语料不足以判断",
+    ))
+
+
+def _is_clarification_question(text: str) -> bool:
+    normalized = text.strip(" -*_：:|（）()")
+    if not normalized.endswith(("？", "?")):
+        return False
+    return bool(re.search(
+        r"(?:^|[：:])(是否|能否|可否|有没有|有无|谁|什么|哪|几|多少|为何|为什么|怎么|如何)|"
+        r"还是|需不需要|要不要|请确认|请问",
+        normalized,
     ))
 
 

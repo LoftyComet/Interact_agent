@@ -6,7 +6,15 @@ from gesture_agent.indexing.indexes import ChunkVectorIndex, LexicalIndex
 from gesture_agent.retrieval import HybridRetriever
 
 
-def _chunk(chunk_id: str, title: str, text: str, digest: str) -> dict:
+def _chunk(
+    chunk_id: str,
+    title: str,
+    text: str,
+    digest: str,
+    *,
+    role: str = "primary",
+    authority: int = 100,
+) -> dict:
     return {
         "id": chunk_id,
         "document_id": "doc",
@@ -17,8 +25,8 @@ def _chunk(chunk_id: str, title: str, text: str, digest: str) -> dict:
         "retrieval_text": f"{title}\n{text}",
         "source_path": "book.docx",
         "source_locators": [{"paragraph": 1}],
-        "role": "primary",
-        "authority": 100,
+        "role": role,
+        "authority": authority,
         "content_sha256": digest,
         "previous_chunk_id": "",
         "next_chunk_id": "",
@@ -66,3 +74,68 @@ def test_retriever_combines_vector_and_lexical_ranks(tmp_path) -> None:
     assert retriever.mode == "hybrid"
     assert results[0].chunk_id == "click"
     assert results[0].channels == ["lexical", "vector"]
+
+
+def test_retriever_reserves_primary_candidates_for_recognized_terms(tmp_path) -> None:
+    chunks = [
+        _chunk(
+            f"secondary-{index}",
+            "旋钮操作",
+            f"背景资料中的旋钮讨论 {index}",
+            f"secondary-{index}",
+            role="secondary",
+            authority=60,
+        )
+        for index in range(35)
+    ]
+    primary = _chunk("primary-knob", "控件定义", "旋钮是一种控件形态。", "primary")
+    primary["heading_path"] = ["旋钮", "控件定义"]
+    chunks.append(primary)
+    lexical = LexicalIndex.build(
+        tmp_path / "knowledge.sqlite",
+        chunks,
+        {chunk["id"]: ["旋钮"] for chunk in chunks},
+    )
+    retriever = HybridRetriever(lexical, canonical_terms=["旋钮"])
+
+    results = retriever.retrieve("旋钮为什么适合小屏幕", top_k=6, recall_k=30, expand_neighbors=0)
+
+    assert any(result.chunk_id == "primary-knob" for result in results)
+
+
+def test_retriever_does_not_reserve_primary_candidates_without_domain_terms(tmp_path) -> None:
+    chunks = [
+        _chunk("secondary", "设计反馈", "请减少回答文字。", "secondary", role="secondary", authority=60),
+        _chunk("primary", "信息组织", "正文内容。", "primary"),
+    ]
+    lexical = LexicalIndex.build(tmp_path / "knowledge.sqlite", chunks, {})
+    retriever = HybridRetriever(lexical, canonical_terms=["旋钮"])
+
+    results = retriever.retrieve("请减少回答文字", top_k=1, expand_neighbors=0)
+
+    assert results[0].chunk_id == "secondary"
+
+
+def test_retriever_uses_authoritative_source_for_duplicate_content(tmp_path) -> None:
+    chunks = [
+        _chunk(
+            "secondary",
+            "旋钮操作",
+            "旋钮适合连续调节。",
+            "same-content",
+            role="secondary",
+            authority=60,
+        ),
+        _chunk("primary", "控件定义", "旋钮适合连续调节。", "same-content"),
+    ]
+    chunks[1]["heading_path"] = ["旋钮", "控件定义"]
+    lexical = LexicalIndex.build(
+        tmp_path / "knowledge.sqlite",
+        chunks,
+        {"secondary": ["旋钮"], "primary": ["旋钮"]},
+    )
+    retriever = HybridRetriever(lexical, canonical_terms=["旋钮"])
+
+    results = retriever.retrieve("旋钮操作", top_k=2, expand_neighbors=0)
+
+    assert [result.chunk_id for result in results] == ["primary"]

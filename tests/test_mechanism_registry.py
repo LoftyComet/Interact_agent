@@ -93,12 +93,23 @@ def test_normalizer_inserts_missing_code_for_formal_first_mention() -> None:
     assert normalized.count("2-a") == 1
 
 
-def test_normalizer_does_not_rewrite_mismatched_existing_code() -> None:
+def test_normalizer_repairs_mismatched_existing_code() -> None:
     registry = MechanismRegistry.load("data/term_inventory.json")
 
     normalized = registry.normalize_answer("采用 1-b 拖拽来移动对象。")
 
-    assert normalized == "采用 1-b 拖拽来移动对象。"
+    assert normalized == "采用 2-a 拖拽来移动对象。"
+
+
+def test_normalizer_repairs_comma_separated_candidate_codes() -> None:
+    registry = MechanismRegistry.load("data/term_inventory.json")
+    answer = "手势包括“单击”（1-a，1-b Single Tap）和“按下”（1-b，1-c Press）。"
+
+    normalized = registry.normalize_answer(answer, required_labels=["单击", "按下"])
+
+    assert "单击”（1-b Single Tap）" in normalized
+    assert "按下”（1-c Press）" in normalized
+    assert registry.validate_answer(normalized, required_labels=["单击", "按下"]) == ()
 
 
 def test_other_mechanism_code_in_same_clause_does_not_create_false_mismatch() -> None:

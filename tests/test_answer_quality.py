@@ -3,11 +3,18 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from gesture_agent.core.models import QuestionStructure
-from gesture_agent.verification import GroundingClaim, GroundingReport
+from gesture_agent.verification import (
+    GroundingClaim,
+    GroundingReport,
+    ReasoningIssue,
+    ReasoningReport,
+    ReasoningVerifier,
+)
 from gesture_agent.verification.models import OutputVerificationResult
 from gesture_agent.core.models import IntentOutputFrames
 from web.backend.app import (
     apply_grounding_safety_fallback,
+    apply_reasoning_safety_fallback,
     repair_safe_answer_contract,
     verify_answer_quality,
 )
@@ -168,3 +175,62 @@ def test_safe_contract_repair_fills_deleted_direct_answer_and_empty_section() ->
     assert "当前资料不足以支持更具体的结论" in repaired
     assert "## 优化建议\n\n当前资料没有直接证据" in repaired
     assert "有依据的诊断。[1]" in repaired
+
+
+def test_safe_contract_repair_does_not_duplicate_section_from_reasoning_block() -> None:
+    structure = QuestionStructure(
+        raw_query="测试", intent="design_suggestion",
+        layers=["design_evaluation"], terms=[], focus=["设计建议"], reasoning_allowed=True,
+    )
+    frames = IntentOutputFrames(frames={
+        "design_suggestion": ["需求理解", "初步建议"],
+    })
+    broken = """<!-- ixdl-answer-block:corpus_evidence -->
+有依据的结论。[1]
+## 需求理解
+有依据的需求说明。[1]
+<!-- ixdl-answer-block:design_reasoning -->
+## 初步建议
+可以尝试待验证方案。"""
+
+    repaired = repair_safe_answer_contract(broken, structure, frames)
+
+    assert repaired.count("## 初步建议") == 1
+    assert "可以尝试待验证方案" in repaired
+
+
+def test_reasoning_fallback_preserves_safe_ideas_instead_of_dropping_block() -> None:
+    runtime = SimpleNamespace(
+        config=SimpleNamespace(verification=SimpleNamespace(verify_output=True)),
+        output_verifier=PassOutputVerifier(),
+        reasoning_verifier=ReasoningVerifier(None),
+    )
+    structure = QuestionStructure(
+        raw_query="测试", intent="design_suggestion",
+        layers=["design_evaluation"], terms=[], focus=["设计建议"], reasoning_allowed=True,
+    )
+    answer = """<!-- ixdl-answer-block:corpus_evidence -->
+资料边界。[1]
+<!-- ixdl-answer-block:design_reasoning -->
+- 把热区设为 20pt。
+- 可以尝试保留按钮作为替代入口。"""
+    report = ReasoningReport(
+        status="issues_found",
+        issues=(ReasoningIssue(
+            issue_type="external_fact",
+            text="20pt",
+            reason="语料没有该参数",
+        ),),
+        should_retry=True,
+    )
+    quality = SimpleNamespace(grounding=None, reasoning=report)
+
+    sanitized, result = apply_reasoning_safety_fallback(
+        runtime, answer, structure, [], quality
+    )
+
+    assert "20pt" not in sanitized
+    assert "可以尝试保留按钮作为替代入口" in sanitized
+    assert "ixdl-answer-block:design_reasoning" in sanitized
+    assert result.reasoning.status == "pass"
+    assert result.safety_fallback_applied is True

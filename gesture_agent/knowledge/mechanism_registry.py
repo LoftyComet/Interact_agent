@@ -149,30 +149,61 @@ class MechanismRegistry:
         *,
         required_labels: Iterable[str] = (),
     ) -> str:
-        """Insert a missing code before first formal mentions when unambiguous.
-
-        Mismatched existing codes are intentionally left untouched so the
-        verifier can reject them instead of silently changing semantics.
-        """
+        """Canonicalize unambiguous codes and insert missing first-use codes."""
 
         required = {str(value) for value in required_labels}
+        normalized = self._normalize_existing_codes(text)
         edits: list[tuple[int, str]] = []
         handled: set[str] = set()
-        for start, end, _mention, entry in self._find_mentions(text):
+        for start, end, _mention, entry in self._find_mentions(normalized):
             if entry.code in handled:
                 continue
             is_required = bool(required.intersection({entry.label, *entry.aliases}))
-            if not is_required and not _is_formal_mention(text, start, end, entry):
+            if not is_required and not _is_formal_mention(normalized, start, end, entry):
                 continue
             handled.add(entry.code)
-            found_codes = set(_associated_codes(text, start, end))
+            found_codes = set(_associated_codes(normalized, start, end))
             if entry.code in found_codes or found_codes:
                 continue
             edits.append((start, f"{entry.code} "))
-        normalized = text
         for start, insertion in sorted(edits, reverse=True):
             normalized = normalized[:start] + insertion + normalized[start:]
         return normalized
+
+    def _normalize_existing_codes(self, text: str) -> str:
+        """Repair a code when its nearest mechanism name makes the intent clear."""
+
+        mentions = self._find_mentions(text)
+        edits: list[tuple[int, int, str]] = []
+        for match in _CODE_IN_TEXT_RE.finditer(text):
+            nearby: list[tuple[int, MechanismEntry]] = []
+            for start, end, _mention, entry in mentions:
+                distance = max(start - match.end(), match.start() - end, 0)
+                if distance <= 8:
+                    nearby.append((distance, entry))
+            if not nearby:
+                continue
+            minimum = min(distance for distance, _entry in nearby)
+            closest_codes = {
+                entry.code
+                for distance, entry in nearby
+                if distance == minimum
+            }
+            if len(closest_codes) != 1:
+                continue
+            expected = next(iter(closest_codes))
+            if match.group(1).lower() != expected:
+                edits.append((match.start(1), match.end(1), expected))
+
+        normalized = text
+        for start, end, replacement in sorted(edits, reverse=True):
+            normalized = normalized[:start] + replacement + normalized[end:]
+        return re.sub(
+            r"(?<![0-9A-Za-z-])(\d+-[a-z])\s*[，,、/]\s*\1(?![0-9A-Za-z-])",
+            r"\1",
+            normalized,
+            flags=re.IGNORECASE,
+        )
 
     def _find_mentions(self, text: str) -> list[tuple[int, int, str, MechanismEntry]]:
         candidates: list[tuple[int, int, str, MechanismEntry]] = []

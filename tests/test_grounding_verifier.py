@@ -163,7 +163,37 @@ def test_large_answer_is_judged_in_bounded_batches() -> None:
 
     assert report.status == "pass"
     assert len(report.claims) == 25
-    assert judge.batch_sizes == [20, 5]
+    assert judge.batch_sizes == [10, 10, 5]
+
+
+def test_clarification_questions_are_not_treated_as_corpus_claims() -> None:
+    verifier = GroundingVerifier(FakeJudge({}))
+    answer = """资料边界有直接依据。[1]
+
+## 需要澄清的信息
+
+- 目标用户是谁？
+- 是否需要盲操作？
+
+## 可参考的机制
+
+旋钮承载角度变化。[1]"""
+
+    report = verifier.verify(answer, [_source("资料边界有直接依据；旋钮承载角度变化。")])
+
+    assert report.status == "pass"
+    assert [claim.section for claim in report.claims] == ["直接回答", "可参考的机制"]
+
+
+def test_factual_statement_in_clarification_section_is_still_checked() -> None:
+    verifier = GroundingVerifier(FakeJudge({}))
+    report = verifier.verify(
+        "## 需要澄清的信息\n\n是否需要盲操作？\n老人偏好大旋钮。",
+        [_source("旋钮可以提供固定旋转轴。")],
+    )
+
+    assert report.status == "issues_found"
+    assert [claim.text for claim in report.claims] == ["老人偏好大旋钮。"]
 
 
 def test_sanitize_removes_only_claims_already_judged_unsafe() -> None:

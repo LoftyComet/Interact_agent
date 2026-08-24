@@ -361,7 +361,8 @@ def verify_answer_quality(
                 "移动后检查语料块不再残留建议，且不要出现“思路二/上述方案”等指向已删除内容的残句。"
                 "推导使用“可以尝试/需要验证”等措辞，并删除无来源的外部产品事实或具体参数。"
             )
-        descriptions.extend(grounding.issue_descriptions)
+        if grounding.status == "issues_found":
+            descriptions.extend(grounding.issue_descriptions)
         if grounding.status != "unavailable":
             # The semantic judge sees the cited corpus itself and supersedes the
             # older structured-knowledge heuristic when that heuristic only warns.
@@ -440,12 +441,20 @@ def repair_safe_answer_contract(
         return answer
     document = parse_answer_blocks(answer)
     parsed = parse_answer_markdown(document.corpus_markdown, expected).document
+    non_corpus_titles = {
+        section.title
+        for block in document.blocks
+        if block.type != "corpus_evidence"
+        for section in parse_answer_markdown(block.markdown, expected).document.sections
+    }
     fallback = "当前资料没有直接证据，无法在不进行额外推导的情况下展开这一部分。"
     direct_answer = parsed.direct_answer.strip() or "当前资料不足以支持更具体的结论。"
     sections_by_title = {section.title: section for section in parsed.sections}
     repaired_sections: list[AnswerSection] = []
     for title in expected:
         section = sections_by_title.get(title)
+        if section is None and title in non_corpus_titles:
+            continue
         body = section.body.strip() if section else ""
         if not body or body.endswith(("：", ":")):
             body = fallback
@@ -513,7 +522,20 @@ def apply_reasoning_safety_fallback(
     if report is None or report.status != "issues_found":
         return answer, quality
     document = parse_answer_blocks(answer)
-    sanitized = document.without_type("design_reasoning").render_markdown()
+    reasoning_markdown = document.markdown_for("design_reasoning")
+    reasoning_verifier = getattr(runtime, "reasoning_verifier", None)
+    if reasoning_verifier is None:
+        sanitized_reasoning = ""
+        safe_reasoning_report = ReasoningReport(status="pass")
+    else:
+        sanitized_reasoning, safe_reasoning_report = reasoning_verifier.sanitize(
+            reasoning_markdown,
+            report,
+        )
+    sanitized = document.replace_type_markdown(
+        "design_reasoning",
+        sanitized_reasoning,
+    ).render_markdown()
     output_issues = []
     hints: list[str] = []
     should_retry = False
@@ -541,7 +563,7 @@ def apply_reasoning_safety_fallback(
             *grounding_descriptions,
         ],
         grounding=quality.grounding,
-        reasoning=ReasoningReport(status="pass"),
+        reasoning=safe_reasoning_report,
         safety_fallback_applied=True,
     )
 
