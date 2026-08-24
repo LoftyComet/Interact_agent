@@ -97,5 +97,21 @@
       "检索结果"
     ]
   },
+  "subtype_frames": {
+    "control_form_compare": [
+      "对比对象",
+      "形态描述",
+      "包含属性",
+      "常用交互机制",
+      "适用场景",
+      "选择建议"
+    ],
+    "control_form_application": [
+      "资料边界说明",
+      "需要澄清的信息",
+      "可参考的属性与机制",
+      "初步建议"
+    ]
+  },
   "source": "output_frames.md"
 }

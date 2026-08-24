@@ -394,6 +394,31 @@ function setBubbleContent(bubble, text, { markdown }) {
   }
 }
 
+function setBubbleAnswerBlocks(bubble, blocks) {
+  if (!Array.isArray(blocks) || !blocks.length) return false;
+  bubble.innerHTML = "";
+  bubble.classList.add("answer-blocks");
+  for (const block of blocks) {
+    const section = document.createElement("section");
+    const type = block.type || "corpus_evidence";
+    section.className = `answer-block answer-block-${type}`;
+
+    const label = document.createElement("div");
+    label.className = "answer-block-label";
+    label.textContent = block.title || (type === "design_reasoning" ? "设计推导（仅供参考）" : "语料依据");
+    section.appendChild(label);
+
+    const content = document.createElement("div");
+    content.className = "answer-block-content";
+    content.innerHTML = renderMarkdown(block.markdown || "");
+    section.appendChild(content);
+    bubble.appendChild(section);
+  }
+  linkifyCitations(bubble);
+  bindImageZoom(bubble);
+  return true;
+}
+
 // 回答里的图默认缩到合适尺寸（案例图/白模图不撑满），点击可放大查看细节。
 function bindImageZoom(container) {
   const imgs = container.querySelectorAll("img");
@@ -798,7 +823,8 @@ async function sendOnce(question, images, style) {
     appendMessage({ role: "assistant", kind: "error", text: data.error });
     return;
   }
-  const { row } = appendMessage({ role: "assistant", text: data.answer || "(空响应)" });
+  const { row, bubble } = appendMessage({ role: "assistant", text: data.answer || "(空响应)" });
+  setBubbleAnswerBlocks(bubble, data.answer_blocks);
   attachChunkRefs(row, state.lastChunks);
 }
 
@@ -864,7 +890,9 @@ async function sendStream(question, images, style) {
         if (answerEl) answerEl.classList.remove("typing");
         if (payload.answer) {
           ensureAnswerEl();
-          setBubbleContent(answerEl, payload.answer, { markdown: true });
+          if (!setBubbleAnswerBlocks(answerEl, payload.answer_blocks)) {
+            setBubbleContent(answerEl, payload.answer, { markdown: true });
+          }
         }
         break;
       default:

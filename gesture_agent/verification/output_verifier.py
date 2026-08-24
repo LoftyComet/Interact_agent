@@ -4,8 +4,10 @@ import json
 import re
 from typing import TYPE_CHECKING, Optional
 
-from ..core.models import Intent, IntentOutputFrames, QuestionStructure, StructuredKnowledgeItem, TermInventory
+from ..core.models import IntentOutputFrames, QuestionStructure, StructuredKnowledgeItem, TermInventory
+from ..knowledge.mechanism_registry import MechanismRegistry
 from .answer_schema import parse_answer_markdown, render_answer_markdown
+from .answer_blocks import parse_answer_blocks
 from .models import OutputIssue, OutputVerificationResult
 from .prompts import OUTPUT_VERIFICATION_PROMPT, OUTPUT_VERIFICATION_SYSTEM
 
@@ -21,6 +23,7 @@ class OutputVerifier:
         structured_items: list[StructuredKnowledgeItem],
         client: Optional[SiliconFlowClient] = None,
         use_llm: bool = False,
+        mechanism_registry: Optional[MechanismRegistry] = None,
     ) -> None:
         self._inventory = term_inventory
         self._frames = output_frames
@@ -28,6 +31,7 @@ class OutputVerifier:
         self._client = client
         self._use_llm = use_llm and client is not None
         self._all_terms = set(term_inventory.all_terms())
+        self._mechanism_registry = mechanism_registry
 
     def verify(
         self,
@@ -36,8 +40,9 @@ class OutputVerifier:
         source_count: int | None = None,
     ) -> OutputVerificationResult:
         issues: list[OutputIssue] = []
-        issues.extend(self._check_contract(output, structure.intent, source_count))
+        issues.extend(self._check_contract(output, structure, source_count))
         issues.extend(self._check_term_validity(output, structure))
+        issues.extend(self._check_mechanism_naming(output))
         if self._use_llm and not issues:
             issues.extend(self._llm_verify(output, structure))
         if not issues:
@@ -54,8 +59,14 @@ class OutputVerifier:
     def normalize(self, output: str, structure: QuestionStructure) -> str:
         """Return canonical Markdown when the answer satisfies its contract."""
 
+        # Reordering headings after provenance markers have been added could move
+        # a marker away from the text it labels. Marked answers are already
+        # machine-readable, so preserve their block boundaries verbatim.
+        if parse_answer_blocks(output).explicit_markers:
+            return output
+
         try:
-            expected = self._frames.frame_for(structure.intent)
+            expected = self._frames.frame_for(structure.intent, structure.subtype)
         except KeyError:
             return output
         result = parse_answer_markdown(output, expected)
@@ -66,11 +77,11 @@ class OutputVerifier:
     def _check_contract(
         self,
         output: str,
-        intent: Intent,
+        structure: QuestionStructure,
         source_count: int | None,
     ) -> list[OutputIssue]:
         try:
-            expected = self._frames.frame_for(intent)
+            expected = self._frames.frame_for(structure.intent, structure.subtype)
         except KeyError:
             return []
         result = parse_answer_markdown(output, expected)
@@ -126,13 +137,33 @@ class OutputVerifier:
                     break
         return issues
 
+    def _check_mechanism_naming(self, output: str) -> list[OutputIssue]:
+        if self._mechanism_registry is None:
+            return []
+        issues: list[OutputIssue] = []
+        for issue in self._mechanism_registry.validate_answer(output):
+            found = "、".join(issue.found_codes)
+            if issue.issue_type == "missing_mechanism_code":
+                description = f"交互机制「{issue.mention}」缺少编号；应写为「{issue.expected}」"
+            elif issue.issue_type in {"mechanism_code_mismatch", "mechanism_name_mismatch"}:
+                description = f"交互机制名称与编号不匹配（检测到 {found}）；应写为「{issue.expected}」"
+            else:
+                description = f"交互机制编号「{issue.mention}」不在注册表中"
+            issues.append(OutputIssue(
+                issue_type=issue.issue_type,
+                location=issue.mention,
+                description=description,
+                severity="error",
+            ))
+        return issues
+
     def _llm_verify(self, output: str, structure: QuestionStructure) -> list[OutputIssue]:
         if self._client is None:
             return []
         inventory_excerpt = self._format_inventory_excerpt(structure)
         knowledge_excerpt = self._format_knowledge_excerpt(structure)
         try:
-            frame = self._frames.frame_for(structure.intent)
+            frame = self._frames.frame_for(structure.intent, structure.subtype)
         except KeyError:
             frame = []
         prompt = OUTPUT_VERIFICATION_PROMPT.format(

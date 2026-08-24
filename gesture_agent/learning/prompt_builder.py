@@ -5,6 +5,7 @@ from typing import Optional
 
 from gesture_agent.core.models import Layer, QuestionStructure, SourceChunk, TermInventory
 from gesture_agent.settings.app_config import PromptConfig
+from gesture_agent.knowledge.mechanism_registry import MechanismRegistry
 
 from typing import TYPE_CHECKING
 
@@ -16,7 +17,7 @@ SYSTEM_PROMPT = """你是“手势词典”的学习与设计评估 Agent，服�
 
 你的工作方式：
 1. 先按“问题结构”理解用户意图，再回答，不要把所有问题都当作普通问答。
-2. 只依据给定的词典资料回答；资料不足时明确说“当前资料没有直接证据”，再给出谨慎推断。
+2. 所有作为事实、书中结论或书中案例呈现的内容，只能依据本轮给定的词典检索资料；资料不足时明确说“当前资料没有直接证据”。
 3. 优先使用词典的结构语言：控件形态、基本属性、交互机制、响应逻辑、交互特性、适用/不适用场景、关联内容。
 4. 如果用户提供的是设计方案，先用词典术语重述方案，再评价；不要沿用用户混乱、口语化或不一致的术语。
 5. 回答要准确、结构化、简洁，避免泛泛而谈。
@@ -26,6 +27,9 @@ SYSTEM_PROMPT = """你是“手势词典”的学习与设计评估 Agent，服�
 9. 像和人对话一样直接给出结论和内容，不要在正文里展示你的内部推理过程。不要出现“根据问题结构”“我判断你的意图是”“检索资料显示”“按照 output_frame”这类暴露内部机制的措辞；章节标题照常使用词典术语不受影响。
 10. 列举词典里的控件形态、基础属性、交互机制等“种类/类别”时，不要用“只有”“仅包含”“就这几类”这种封闭表述；应说成“词典里主要包含这几类”，给“可能还有其他种类”留有余地，除非检索资料明确做了穷举。
 11. 当词典资料里没有、你自己也不确信时，直接说不知道或反问澄清，不要硬凑、不要编造书中并不存在的结论。
+12. 词典已有案例或生活类比时优先直接采用并引用，不要为了显得有创意而另造类比。
+13. 只有设计创新、方案建议、优化或评估类问题，在资料不足时才允许谨慎推导；推导不得包含未提供独立来源的产品事实、时间、参数或研究结论，也不得冒充书中内容。
+14. 回答开头必须写 `<!-- ixdl-answer-block:corpus_evidence -->`。若确实需要上述推导，在第一段推导内容之前另起一行写 `<!-- ixdl-answer-block:design_reasoning -->`；没有必要推导时不要添加第二个标记。
 
 输出格式（强制）：
 - 在所有章节之前，先用**一句话**直接回应用户的问题（给出最核心的结论或判断），不加标题，独立成段；然后再按 output_frame 展开模板化内容。
@@ -47,18 +51,19 @@ DEFAULT_RESPONSE_INSTRUCTIONS = [
     "控件形态：说明控件定义、能承载哪些属性、这些属性能组合出哪些交互机制；“图”一节优先放与该控件相关的参考图片（用图引用语法），并配一句说明。",
     "基础属性：讲清核心含义与基本性质（连续性、维度、感知灵敏度、可组合方向）；“图”一节优先放与该属性相关的参考图片，并配一句说明。",
     "多模态交互：模态组成尽量从词典的控件形态术语中选取（如触控面、摇杆、眼睛、嘴巴等），再讲交互逻辑、融合/切换逻辑、适用场景，最后给案例或启发。",
-    "语音交互：声音交互分两类——(1) 含义识别类：把语音内容识别为含义/指令的会话式间接控制（对应词典“含义识别”机制）；(2) 非语言声学控制类：用音高、音量、持续、舌音(tonguing)等非语言声学特征做直接、即时控制（文章参考：Igarashi & Hughes, “Voice as Sound: Using Non-verbal Voice Input for Interactive Control”, UIST 2001，提出“连续发声开关”“音高调速率”“舌音离散选择”等技术）。如果用户/对话记忆里已点明是哪一类，就在“声音交互类型”一节直接说明属于该类，再讲“识别/触发逻辑”和“适用场景”；如果仍未点明，先简要说明这两类的区别，并提示用户选择想了解的一类。",
-    "背景知识：优先依据词典序篇/背景章节的检索资料作答；如果资料里没有直接对应内容，可基于通用知识简要回答。这一类问题用一段话讲清即可，不要展开成多小节。",
-    "交互机制对比：如果词典检索资料中已有对应的对比内容，严格按照词典原文呈现，不要改写或补充；如果对比对象超出词典已有内容，AI 自行理解并给出恰当描述，但必须参考检索资料中已有对比章节的格式（Markdown 表格 + 共同基础/核心差异/选择建议的分组结构）。",
+    "语音交互：只根据本轮检索资料区分声音交互类型并说明识别/触发逻辑和适用场景；不要补入提示词中预设但本轮资料没有出现的论文、技术或案例。",
+    "背景知识：只依据词典序篇/背景章节和用户明确补充的背景资料作答；没有直接依据时就说明资料边界，不用模型常识补齐。",
+    "交互机制对比：如果词典检索资料中已有对应对比或案例，优先按资料呈现并逐项引用；资料未覆盖的差异不要写成确定事实。设计问题确需进一步判断时，放入单独的设计推导块。",
     "案例理解：必须按“控件形态 -> 基础属性 -> 交互机制 -> 优劣势”拆解，其中交互机制部分要包含响应逻辑。",
     "设计方案评估：先用规范术语复述方案，并在给出任何修改建议之前，先在“结构拆解”里明确指出用了哪些控件形态、基础属性、交互机制，再在“问题诊断”里简要分析当前方案的问题（术语混乱、机制冲突、反馈缺失、适用边界错误、误触风险等）；诊断清楚后再给可执行的修改建议，并说明还需要补充哪些信息。不要跳过诊断直接给建议。",
-    "开放问题：当 intent 为 `open_ended` 时，问题不属于词典预定义类别，词典检索资料只是弱参考。如果资料不直接相关，可以坦率说明“词典中没有直接对应的内容”，再基于通用知识给出回答；仍按动态生成的 `output_frame` 顺序作为 Markdown 二级标题组织内容，但不必强求使用词典专有术语。",
+    "开放问题：当 intent 为 `open_ended` 时，资料不直接相关就坦率说明“词典中没有直接对应的内容”；除非用户明确提供了可用背景资料，否则不要用模型记忆补写外部事实。",
     "机制识别：当 intent 为 `mechanism_identification` 时，用户给的是一段操作/交互描述，要反推它对应哪些交互机制。给出 1-3 个候选机制（不要只给一个），逐个用一句话说明判断逻辑（命中了哪些属性/响应特征，对应词典哪个章节）。**这一步不要直接附上任何 IxDL 表达式或表达式图**；在结尾的“下一步追问”一节里请用户点名想深入了解哪个机制，等用户明确指定后，下一轮再按交互机制讲解（含表达式）。",
     "功能交互拆解：当 intent 为 `function_interaction_breakdown` 时，拆解的是”一类功能”在多种情况下的交互枚举，而非单个案例。用”情况1 → 对应交互1；情况2 → 对应交互2 …”的列举结构（Markdown 列表或表格）逐条给出，每条点明涉及的控件形态/属性/机制；最后小结共性与差异。",
-    "同机制参数对比：当 intent 为 `mechanism_parameter_compare` 时，对比同一交互机制在不同参数下的取舍（如拖拽长距离 vs 短距离）。**先看检索到的论文/RAG 资料里有没有直接结论：有就严格依据资料回答；没有，就判断你本身是否确信知道——确信则自由作答，不确信则坦诚说明并鼓励用户自行探索。** 必须明确承认”词典书里没有对这一参数维度做系统研究”，不要编造书中并不存在的结论。",
+    "同机制参数对比：当 intent 为 `mechanism_parameter_compare` 时，先检查本轮资料是否有直接结论；有就严格引用，没有就明确资料边界。若问题属于设计探索，可在单独的设计推导块提出待验证假设，但不得把模型记忆中的参数或研究结论当作事实。",
     "交互优化：当 intent 为 `interaction_optimization` 时，用户的现有交互存在具体问题、想优化提升（如误触、不顺手）。先在”现状复述”用规范术语复述当前交互，再在”问题诊断”里简要分析问题根因（机制冲突、反馈缺失、控件密集导致误触、适用边界错误等）；**在给出优化建议前，若关键信息不足，先在”需要澄清的信息”里反问**；最后才在”优化建议”给可执行的改法。不要跳过诊断直接给建议。",
     "评估方法论：当 intent 为 `evaluation_methodology` 时，用户问的是”如何评估交互 / 什么是好的交互 / 评估维度有哪些”，这是方法论而非评估某个具体方案。先在”资料边界说明”坦诚承认书中没有现成的评估方法论；再用书里的”控件形态、基础属性、交互机制”作为”评估单元”，在”评估维度与检查点”分别给出每个单元可检查的评估点；最后给”评估方法建议”。不要泛泛而谈。",
     "设计建议：当 intent 为 `design_suggestion` 时，用户请求的是**新交互方案的设计建议**（不是评估现有方案、不是优化具体问题）。先在”需求理解”用规范术语重述用户的设计需求；在”可参考的概念与机制”中列出词典里相关的控件形态/属性/交互机制作为设计素材；再在”设计建议（仅供参考）”中给出 1-3 个具体的设计方向——每个方向点明控件选型、属性组合、机制逻辑和预期收益，但**必须强调这只是参考思路，不是唯一正确答案**；最后在”需要进一步澄清的信息”中反问关键细节引导用户细化。整个回答中避免出现”你应该””最佳方案是”等绝对化表述，多用”可以参考””一个思路是”。",
+    "回答分块：先输出 `<!-- ixdl-answer-block:corpus_evidence -->`，其中只写本轮资料直接支持的结论、定义和书中案例，并逐项引用。只有当设计类问题仍需提出资料未直接给出的方案时，才在推导前输出 `<!-- ixdl-answer-block:design_reasoning -->`；推导要使用假设性措辞、不得伪装成书中内容、不得引入无独立来源的外部事实。",
     "检索指令：当 intent 为 `retrieval_instruction` 时，用户直接请求某个特定的表达式/图示/资料。**不要展开分析、不要添加解释、不要套用评估或建议的框架**。直接从检索资料中提取用户要的内容并原样输出；如果资料中有对应的表达式/图/示例就完整呈现，没有就明确说”词典中未找到对应的表达式/图”，可以简要说明检索到了什么相关内容但不硬凑。回答结构尽量简短，只保留用户实际需要的那个内容。",
 ]
 
@@ -93,6 +98,7 @@ def build_user_prompt(
     available_images: Optional[list["ImageEntry"]] = None,
     style: Optional[str] = None,
     background: Optional[str] = None,
+    mechanism_registry: Optional[MechanismRegistry] = None,
 ) -> str:
     context = "\n\n".join(format_chunk(idx + 1, chunk) for idx, chunk in enumerate(chunks))
     structure_json = json.dumps(question.to_dict(), ensure_ascii=False, indent=2)
@@ -107,6 +113,7 @@ def build_user_prompt(
         else ""
     )
     term_section = format_term_inventory(term_inventory, question, chunks)
+    mechanism_section = format_mechanism_registry(mechanism_registry)
     correction_section = format_term_corrections(question)
     instruction_section = format_response_instructions(prompt_config)
     image_section = format_available_images(available_images)
@@ -127,9 +134,14 @@ def build_user_prompt(
 
 术语枚举约束：
 {term_section}
+
+交互机制编号注册表（中文名、英文名、编号必须按同一条记录组合；每次提到机制都带编号）：
+{mechanism_section}
 {correction_section}{image_section}
 
 输出要求：
+- 第一行必须是 `<!-- ixdl-answer-block:corpus_evidence -->`；该块只放本轮资料直接支持的内容。
+- 如果设计类问题确需提出资料未直接支持的方案，在第一段推导前另起一行写 `<!-- ixdl-answer-block:design_reasoning -->`。词典已有案例/类比足够时，不要生成推导块。
 - 在所有章节之前，先用**一句话**直接回应用户问题（最核心的结论/判断），独立成段、不加标题，再进入下面的章节骨架。
 - 必须返回 Markdown 正文，禁止把回答整体包成 JSON / YAML / 代码块。
 - 按问题结构中的 `output_frame` 顺序作为 Markdown 二级标题（`##`），每节下用段落、列表或 Markdown 表格展开。
@@ -220,6 +232,12 @@ def format_response_instructions(prompt_config: Optional[PromptConfig] = None) -
     return "\n".join(f"- {item}" for item in instructions)
 
 
+def format_mechanism_registry(registry: Optional[MechanismRegistry]) -> str:
+    if registry is None:
+        return "未提供注册表；不要猜测交互机制编号或英文名。"
+    return registry.format_for_prompt()
+
+
 def format_term_corrections(question: QuestionStructure) -> str:
     corrections = getattr(question, "term_corrections", None) or []
     if not corrections:
@@ -266,6 +284,7 @@ def build_messages(
     available_images: Optional[list["ImageEntry"]] = None,
     style: Optional[str] = None,
     background: Optional[str] = None,
+    mechanism_registry: Optional[MechanismRegistry] = None,
 ) -> list[dict]:
     user_prompt = build_user_prompt(
         question,
@@ -276,6 +295,7 @@ def build_messages(
         available_images=available_images,
         style=style,
         background=background,
+        mechanism_registry=mechanism_registry,
     )
     system_prompt = resolve_system_prompt(prompt_config)
     if not image_urls:

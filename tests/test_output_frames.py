@@ -45,6 +45,21 @@ def test_output_frames_replace_mode_applies_custom_frame(tmp_path) -> None:
     assert parser.output_frames.frames["interaction_compare"] == ["对比对象", "共同基础", "核心差异", "选择建议"]
 
 
+def test_output_frames_support_subtype_overrides(tmp_path) -> None:
+    config = tmp_path / "output_frames.json"
+    config.write_text(
+        json.dumps({
+            "mode": "merge",
+            "subtype_frames": {"control_form_compare": ["形态对比", "选型建议"]},
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    output_frames = load_output_frames("data", output_frames_path=config)
+
+    assert output_frames.frame_for("interaction_compare", "control_form_compare") == ["形态对比", "选型建议"]
+
+
 def test_output_frames_config_rejects_unknown_intent(tmp_path) -> None:
     config = tmp_path / "output_frames.json"
     config.write_text(
@@ -79,4 +94,3 @@ def test_output_frames_replace_mode_requires_all_intents(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="missing intents"):
         load_output_frames("data", output_frames_path=config)
-

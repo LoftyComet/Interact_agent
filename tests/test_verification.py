@@ -221,3 +221,25 @@ class TestOutputVerifier:
 
         assert result.should_retry
         assert any(issue.issue_type == "invalid_citation" for issue in result.issues)
+
+    def test_subtype_uses_its_own_output_frame(self, term_inventory, structured_items):
+        frames = IntentOutputFrames(
+            frames={"interaction_compare": ["共同基础", "核心差异"]},
+            subtype_frames={"control_form_compare": ["形态描述", "选择建议"]},
+        )
+        verifier = OutputVerifier(term_inventory, frames, structured_items)
+        structure = QuestionStructure(
+            raw_query="按钮和旋钮怎么选",
+            intent="interaction_compare",
+            subtype="control_form_compare",
+            layers=["control_form"],
+            terms=["按钮", "旋钮"],
+            focus=["适用边界"],
+        )
+
+        result = verifier.verify(
+            "结论。\n\n## 形态描述\n内容\n\n## 选择建议\n内容",
+            structure,
+        )
+
+        assert result.status == "pass"

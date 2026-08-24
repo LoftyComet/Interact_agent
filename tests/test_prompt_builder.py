@@ -14,13 +14,20 @@ def test_prompt_includes_term_inventory_constraints() -> None:
     structure = parser.parse("请评估这个设计方案：用户长按音量旋钮后拖动来调节音量。")
     chunks = kb.search(structure.raw_query, top_k=3, prefer_terms=structure.terms)
 
-    messages = build_messages(structure, chunks, term_inventory=kb.term_inventory)
+    messages = build_messages(
+        structure,
+        chunks,
+        term_inventory=kb.term_inventory,
+        mechanism_registry=kb.mechanism_registry,
+    )
     prompt = messages[1]["content"]
 
     assert "术语枚举约束" in prompt
     assert "不要创造新的交互机制名或控件名" in prompt
     assert "长按拖拽" in prompt
     assert "旋钮" in prompt
+    assert "1-a 开关（Switch）" in prompt
+    assert "4-i 捏合解耦（Pinch Decoupling）" in prompt
 
 
 def test_prompt_config_can_override_system_and_append_instructions() -> None:
@@ -74,4 +81,3 @@ def test_term_inventory_query_terms_appear_first() -> None:
             for term, pos in positions.items():
                 assert pos < mid, f"Expected '{term}' in first half, pos={pos}"
             break
-

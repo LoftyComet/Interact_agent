@@ -229,6 +229,30 @@ def test_plain_mechanism_compare_stays_interaction_compare() -> None:
     assert structure.intent == "interaction_compare"
 
 
+def test_control_form_compare_has_subtype_frame() -> None:
+    parser = QuestionParser(KnowledgeBase.load("data"))
+
+    structure = parser.parse("在车上设计交互，是装旋钮好还是用触控面好？")
+
+    assert structure.intent == "interaction_compare"
+    assert structure.subtype == "control_form_compare"
+    assert structure.output_frame == [
+        "对比对象", "形态描述", "包含属性", "常用交互机制", "适用场景", "选择建议"
+    ]
+
+
+def test_control_form_application_has_subtype_frame() -> None:
+    parser = QuestionParser(KnowledgeBase.load("data"))
+
+    structure = parser.parse("做适老化界面时应该用按钮还是手势？")
+
+    assert structure.intent == "design_suggestion"
+    assert structure.subtype == "control_form_application"
+    assert structure.output_frame == [
+        "资料边界说明", "需要澄清的信息", "可参考的属性与机制", "初步建议"
+    ]
+
+
 def test_design_suggestion_intent() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)

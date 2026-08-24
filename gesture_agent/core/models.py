@@ -25,6 +25,11 @@ Intent = Literal[
     "retrieval_instruction",
 ]
 
+QuestionSubtype = Literal[
+    "control_form_compare",
+    "control_form_application",
+]
+
 Layer = Literal[
     "basic_property",
     "interaction_mechanism",
@@ -108,9 +113,14 @@ class TermInventory:
 @dataclass
 class IntentOutputFrames:
     frames: dict[Intent, list[str]] = field(default_factory=dict)
+    subtype_frames: dict[QuestionSubtype, list[str]] = field(default_factory=dict)
     source: str = "defaults"
 
-    def frame_for(self, intent: Intent) -> list[str]:
+    def frame_for(self, intent: Intent, subtype: Optional[QuestionSubtype] = None) -> list[str]:
+        if subtype:
+            subtype_frame = self.subtype_frames.get(subtype)
+            if subtype_frame is not None:
+                return list(subtype_frame)
         if intent == "open_ended":
             return list(self.frames.get("open_ended", []))
         frame = self.frames.get(intent)
@@ -140,6 +150,7 @@ class QuestionStructure:
     layers: list[Layer]
     terms: list[str]
     focus: list[str]
+    subtype: Optional[QuestionSubtype] = None
     compare_targets: list[str] = field(default_factory=list)
     case_modality: list[str] = field(default_factory=list)
     missing_info: list[str] = field(default_factory=list)

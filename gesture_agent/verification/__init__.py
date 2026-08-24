@@ -18,6 +18,9 @@ __all__ = [
     "AnswerSection",
     "parse_answer_markdown",
     "render_answer_markdown",
+    "AnswerBlock",
+    "AnswerBlockDocument",
+    "parse_answer_blocks",
 ]
 from .answer_schema import (
     AnswerDocument,
@@ -25,4 +28,9 @@ from .answer_schema import (
     AnswerSection,
     parse_answer_markdown,
     render_answer_markdown,
+)
+from .answer_blocks import (
+    AnswerBlock,
+    AnswerBlockDocument,
+    parse_answer_blocks,
 )

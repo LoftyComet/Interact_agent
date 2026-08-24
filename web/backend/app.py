@@ -43,7 +43,13 @@ from gesture_agent.providers import (
     resolve_provider_id,
 )
 from gesture_agent.settings.app_config import load_agent_config
-from gesture_agent.verification import GroundingReport, GroundingVerifier, InputVerifier, OutputVerifier
+from gesture_agent.verification import (
+    GroundingReport,
+    GroundingVerifier,
+    InputVerifier,
+    OutputVerifier,
+    parse_answer_blocks,
+)
 from gesture_agent.verification.prompts import OUTPUT_CORRECTION_PROMPT
 
 
@@ -173,6 +179,7 @@ class AgentRuntime:
             structured_items=self.kb.structured_items,
             client=output_verifier_client,
             use_llm=self.config.verification.verify_output_llm,
+            mechanism_registry=self.kb.mechanism_registry,
         )
         grounding_client = self._maybe_build_grounding_client()
         self.grounding_verifier = GroundingVerifier(
@@ -320,7 +327,9 @@ def verify_answer_quality(
 
     grounding = None
     if runtime.config.verification.verify_grounding:
-        grounding = runtime.grounding_verifier.verify(answer, chunks)
+        answer_document = parse_answer_blocks(answer)
+        corpus_answer = answer_document.corpus_markdown
+        grounding = runtime.grounding_verifier.verify(corpus_answer, chunks)
         should_retry = should_retry or grounding.should_retry
         if grounding.correction_hints:
             hints.append(grounding.correction_hints)
@@ -353,9 +362,12 @@ def apply_grounding_safety_fallback(
     report = quality.grounding
     if report is None or report.status != "issues_found":
         return answer, quality
-    sanitized, safe_report = runtime.grounding_verifier.sanitize(answer, report)
-    if sanitized == answer:
+    answer_document = parse_answer_blocks(answer)
+    corpus_answer = answer_document.corpus_markdown
+    sanitized_corpus, safe_report = runtime.grounding_verifier.sanitize(corpus_answer, report)
+    if sanitized_corpus == corpus_answer:
         return answer, quality
+    sanitized = answer_document.replace_corpus_markdown(sanitized_corpus).render_markdown()
 
     output_issues = []
     hints = []
@@ -398,6 +410,14 @@ def serialize_structure(structure: Optional[QuestionStructure]) -> Optional[dict
     if structure is None:
         return None
     return structure.to_dict()
+
+
+def serialize_answer_blocks(answer: str, image_index: Optional[ImageIndex]) -> list[dict[str, Any]]:
+    document = parse_answer_blocks(answer)
+    blocks = document.to_list()
+    for block in blocks:
+        block["markdown"] = resolve_image_refs(block["markdown"], image_index)
+    return blocks
 
 
 def create_app(config_path: Optional[str] = None) -> Flask:
@@ -574,6 +594,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     "session_id": session_id,
                     "status": "ready",
                     "answer": answer,
+                    "answer_blocks": serialize_answer_blocks(answer, rt.image_index),
                     "structure": serialize_structure(structure),
                     "chunks": [serialize_chunk(c) for c in chunks],
                     "memory_context": session_result.memory_context,
@@ -595,6 +616,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 available_images=available_images,
                 style=style,
                 background=background,
+                mechanism_registry=rt.kb.mechanism_registry,
             )
             client = rt.make_chat_client(use_vision=bool(image_paths), provider_id=provider_id)
             answer = client.chat(
@@ -656,6 +678,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             "session_id": session_id,
             "status": "ready",
             "answer": answer,
+            "answer_blocks": serialize_answer_blocks(answer, rt.image_index),
             "error": error_text,
             "input_corrections": input_corrections,
             "output_issues": output_issues,
@@ -754,7 +777,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         structure=structure,
                     )
                 full = resolve_image_refs(answer, rt.image_index)
-                yield sse("done", {"session_id": session_id, "answer": full, "output_issues": []})
+                yield sse("done", {
+                    "session_id": session_id,
+                    "answer": full,
+                    "answer_blocks": serialize_answer_blocks(answer, rt.image_index),
+                    "output_issues": [],
+                })
 
             return Response(stream_with_context(retrieval_stream()), mimetype="text/event-stream")
         # --- 检索指令快速路径结束 ---
@@ -783,6 +811,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     available_images=available_images,
                     style=style,
                     background=background,
+                    mechanism_registry=rt.kb.mechanism_registry,
                 )
                 client = rt.make_chat_client(use_vision=bool(image_paths), provider_id=provider_id)
                 for delta in client.chat_stream(
@@ -859,6 +888,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             yield sse("done", {
                 "session_id": session_id,
                 "answer": full_answer,
+                "answer_blocks": serialize_answer_blocks(full_answer, rt.image_index),
                 "output_issues": output_issues,
                 "grounding": grounding_report.to_dict() if grounding_report else None,
             })

@@ -10,6 +10,7 @@ from typing import Any, Optional, Union
 from gesture_agent.core.models import Layer, SourceChunk, StructuredKnowledgeItem, TermInventory
 from gesture_agent.core.text_utils import clean_text, compact_whitespace, strip_heading_prefix, tokenize
 from gesture_agent.retrieval import HybridRetriever
+from gesture_agent.knowledge.mechanism_registry import MechanismRegistry
 
 
 MECHANISM_HEADING_RE = re.compile(r"^\d+-[a-z]\s+[^、，,]{1,80}$", re.IGNORECASE)
@@ -86,6 +87,7 @@ class KnowledgeBase:
         self.terms: list[str] = []
         self.structured_items: list[StructuredKnowledgeItem] = []
         self.term_inventory = TermInventory()
+        self.mechanism_registry = MechanismRegistry(())
         self.retriever: Optional[HybridRetriever] = None
         self.index_chunk_count = 0
         self._index_dir = Path(index_dir) if index_dir else None
@@ -134,6 +136,7 @@ class KnowledgeBase:
         self.terms = sorted(term_set, key=lambda item: (-len(item), item))
         generated_inventory = self._build_term_inventory(chunks)
         self.term_inventory = self._load_term_inventory_config(generated_inventory)
+        self.mechanism_registry = MechanismRegistry.load(self.term_inventory_path)
         term_set.update(self.term_inventory.all_terms())
         self.terms = sorted(term_set, key=lambda item: (-len(item), item))
         generated_structured = self._build_structured_items(chunks)

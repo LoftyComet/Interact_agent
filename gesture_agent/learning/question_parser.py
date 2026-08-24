@@ -3,7 +3,15 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-from gesture_agent.core.models import Intent, IntentCandidate, IntentOutputFrames, IntentResolution, Layer, QuestionStructure
+from gesture_agent.core.models import (
+    Intent,
+    IntentCandidate,
+    IntentOutputFrames,
+    IntentResolution,
+    Layer,
+    QuestionStructure,
+    QuestionSubtype,
+)
 from gesture_agent.evaluation import parse_design_evaluation
 from gesture_agent.knowledge.base import KnowledgeBase
 from gesture_agent.learning.intent_examples import (
@@ -105,12 +113,13 @@ class QuestionParser:
         image_paths = image_paths or []
         terms = self.kb.find_terms(query)
         intent = forced_intent or self._detect_intent(query, image_paths, terms)
+        subtype = self._detect_subtype(intent, query, terms)
         layers = self._detect_layers(query, terms, intent)
         focus = self._detect_focus(query)
         compare_targets = self._detect_compare_targets(query, terms) if intent == "interaction_compare" else []
         case_modality = self._detect_case_modality(query, image_paths)
         missing_info = self._missing_info(intent, query, image_paths)
-        output_frame = output_frame_override or self._output_frame(intent)
+        output_frame = output_frame_override or self._output_frame(intent, subtype)
         if output_frame_override:
             output_frame_source = "cot"
         elif intent == "open_ended":
@@ -129,6 +138,7 @@ class QuestionParser:
             layers=layers,
             terms=terms,
             focus=focus,
+            subtype=subtype,
             compare_targets=compare_targets,
             case_modality=case_modality,
             missing_info=missing_info,
@@ -434,10 +444,32 @@ class QuestionParser:
             options.append({"label": label, "value": value, "desc": desc})
         return options
 
-    def _output_frame(self, intent: Intent) -> list[str]:
+    def _output_frame(
+        self,
+        intent: Intent,
+        subtype: Optional[QuestionSubtype] = None,
+    ) -> list[str]:
         if intent == "open_ended":
             return []
-        return self.output_frames.frame_for(intent)
+        return self.output_frames.frame_for(intent, subtype)
+
+    def _detect_subtype(
+        self,
+        intent: Intent,
+        query: str,
+        terms: list[str],
+    ) -> Optional[QuestionSubtype]:
+        control_forms = set(self.kb.term_inventory.by_layer.get("control_form", []))
+        mentioned_forms = [term for term in terms if term in control_forms]
+        if intent == "interaction_compare" and len(mentioned_forms) >= 2:
+            return "control_form_compare"
+        if (
+            intent == "design_suggestion"
+            and mentioned_forms
+            and (CONTEXTUAL_SELECTION_RE.search(query) or "场景" in query or "界面" in query)
+        ):
+            return "control_form_application"
+        return None
 
     def _has_interaction_mechanism_match(self, query: str, terms: list[str], *, query_text: Optional[str] = None) -> bool:
         if not terms:
