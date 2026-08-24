@@ -41,6 +41,7 @@ class ClarifyOptionSpec:
 
     message: str
     options: tuple[SubTypeOption, ...] = field(default_factory=tuple)
+    broad_query_keywords: tuple[str, ...] = ()
 
     def matched_subtype(self, text: str) -> Optional[SubTypeOption]:
         """若文本已点明某个子类型，返回该选项；否则 None。"""
@@ -50,12 +51,18 @@ class ClarifyOptionSpec:
                     return option
         return None
 
+    def should_clarify(self, text: str) -> bool:
+        if self.matched_subtype(text) is not None:
+            return False
+        return not any(keyword in text for keyword in self.broad_query_keywords)
+
 
 # —— 配置表：意图 -> 选项式追问 ——
 # voice_interaction 是首个使用者；未来其他意图按同样结构追加即可。
 CLARIFY_OPTION_SPECS: dict[Intent, ClarifyOptionSpec] = {
     "voice_interaction": ClarifyOptionSpec(
         message="声音交互可分为两类，你想了解哪一类？",
+        broad_query_keywords=("场景", "适合", "不适合", "优点", "缺点", "局限", "问题", "两类", "区别", "对比"),
         options=(
             SubTypeOption(
                 label="含义识别类",
@@ -135,6 +142,6 @@ def needs_subtype_clarification(intent: Optional[Intent], text: str) -> Optional
     spec = get_clarify_spec(intent)
     if spec is None:
         return None
-    if spec.matched_subtype(text) is not None:
+    if not spec.should_clarify(text):
         return None
     return spec

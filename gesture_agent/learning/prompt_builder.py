@@ -120,6 +120,11 @@ def build_user_prompt(
     image_section = format_available_images(available_images)
     style_section = format_answer_style(style)
     output_frame = question.output_frame or []
+    reasoning_policy = (
+        "本题允许在语料不足时增加设计推导块，但必须先穷尽并引用语料中的直接答案/案例。"
+        if question.reasoning_allowed
+        else "本题属于可由语料核实的事实/概念问题，禁止生成设计推导块；资料不足就明确说明，不要补写推测。"
+    )
     output_skeleton = "\n".join(f"## {item}\n（这一节的内容）" for item in output_frame) if output_frame else "（按问题结构内的小节自由组织）"
     return f"""用户原问题：
 {question.raw_query}
@@ -143,6 +148,7 @@ def build_user_prompt(
 输出要求：
 - 第一行必须是 `<!-- ixdl-answer-block:corpus_evidence -->`；该块只放本轮资料直接支持的内容。
 - 如果设计类问题确需提出资料未直接支持的方案，在第一段推导前另起一行写 `<!-- ixdl-answer-block:design_reasoning -->`。词典已有案例/类比足够时，不要生成推导块。
+- 本题推导策略：{reasoning_policy}
 - 在所有章节之前，先用**一句话**直接回应用户问题（最核心的结论/判断），独立成段、不加标题，再进入下面的章节骨架。
 - 必须返回 Markdown 正文，禁止把回答整体包成 JSON / YAML / 代码块。
 - 按问题结构中的 `output_frame` 顺序作为 Markdown 二级标题（`##`），每节下用段落、列表或 Markdown 表格展开。

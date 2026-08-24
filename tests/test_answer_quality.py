@@ -111,7 +111,7 @@ def test_grounding_checks_only_corpus_evidence_block() -> None:
     )
     structure = QuestionStructure(
         raw_query="测试", intent="design_suggestion",
-        layers=["design_evaluation"], terms=[], focus=["设计评估"],
+        layers=["design_evaluation"], terms=[], focus=["设计评估"], reasoning_allowed=True,
     )
     answer = """<!-- ixdl-answer-block:corpus_evidence -->
 语料结论。[1]
@@ -132,7 +132,7 @@ def test_safety_fallback_preserves_labeled_reasoning_block() -> None:
     )
     structure = QuestionStructure(
         raw_query="测试", intent="design_suggestion",
-        layers=["design_evaluation"], terms=[], focus=["设计评估"],
+        layers=["design_evaluation"], terms=[], focus=["设计评估"], reasoning_allowed=True,
     )
     answer = """<!-- ixdl-answer-block:corpus_evidence -->
 没有依据的结论。

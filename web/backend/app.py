@@ -51,6 +51,7 @@ from gesture_agent.verification import (
     InputVerifier,
     OutputVerifier,
     ReasoningReport,
+    ReasoningIssue,
     ReasoningVerifier,
     parse_answer_blocks,
     parse_answer_markdown,
@@ -371,7 +372,26 @@ def verify_answer_quality(
     reasoning = None
     reasoning_answer = answer_document.markdown_for("design_reasoning")
     reasoning_verifier = getattr(runtime, "reasoning_verifier", None)
-    if reasoning_answer and reasoning_verifier is not None:
+    if reasoning_answer and not structure.reasoning_allowed:
+        reasoning = ReasoningReport(
+            status="issues_found",
+            issues=(ReasoningIssue(
+                issue_type="unlabeled_assertion",
+                text="本题不允许设计推导",
+                reason="这是可由语料核实的事实/概念问题；资料不足时应说明边界，而不是增加推测",
+            ),),
+            should_retry=True,
+            correction_hints=(
+                "删除整个 `<!-- ixdl-answer-block:design_reasoning -->` 块。"
+                "本题只允许语料直接支持的回答；资料不足处明确说明即可。"
+            ),
+        )
+        should_retry = True
+        hints.append(reasoning.correction_hints)
+        descriptions.extend(
+            f"设计推导：{issue.text}（{issue.reason}）" for issue in reasoning.issues
+        )
+    elif reasoning_answer and reasoning_verifier is not None:
         reasoning = reasoning_verifier.verify(reasoning_answer, chunks)
         should_retry = should_retry or reasoning.should_retry
         if reasoning.correction_hints:

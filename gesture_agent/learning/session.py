@@ -200,7 +200,7 @@ class ConversationSession:
         # - 未点明 -> 返回带选项的追问，由前端渲染成可点击按钮。
         clarify_spec = get_clarify_spec(resolution.intent)
         if clarify_spec is not None:
-            if clarify_spec.matched_subtype(user_query) is None:
+            if clarify_spec.should_clarify(user_query):
                 return SessionResult(
                     status="clarify",
                     message=clarify_spec.message,

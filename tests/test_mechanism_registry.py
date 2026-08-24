@@ -99,3 +99,30 @@ def test_normalizer_does_not_rewrite_mismatched_existing_code() -> None:
     normalized = registry.normalize_answer("采用 1-b 拖拽来移动对象。")
 
     assert normalized == "采用 1-b 拖拽来移动对象。"
+
+
+def test_other_mechanism_code_in_same_clause_does_not_create_false_mismatch() -> None:
+    registry = MechanismRegistry.load("data/term_inventory.json")
+
+    normalized = registry.normalize_answer(
+        "3-b 长按拖拽与 2-a 拖拽不同，内部是先长按再拖拽。",
+        required_labels=["长按拖拽", "拖拽", "长按"],
+    )
+    issues = registry.validate_answer(
+        normalized,
+        required_labels=["长按拖拽", "拖拽", "长按"],
+    )
+
+    assert "1-e 长按" in normalized
+    assert "2-a 拖拽" in normalized
+    assert not any(issue.issue_type == "mechanism_code_mismatch" for issue in issues)
+
+
+def test_ordinary_press_is_not_linked_to_distant_switch_code() -> None:
+    registry = MechanismRegistry.load("data/term_inventory.json")
+
+    issues = registry.validate_answer(
+        "书中把 2-d 滑动切换误用为越界切换，触发时机会根据按下的位置变化。"
+    )
+
+    assert not any(issue.mention == "按下" for issue in issues)

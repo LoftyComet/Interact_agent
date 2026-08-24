@@ -49,6 +49,10 @@ OPTIMIZATION_RE = re.compile(r"(优化|提升.*体验|提升.*交互|改善.*交
 DESIGN_SUGGESTION_RE = re.compile(r"(有什么建议|给我建议|设计建议|如何设计|怎么设计|帮我设计|给我推荐.*交互|推荐.*交互方式|建议.*交互|交互.*建议|想做.*交互|想设计.*交互|新设计|从零.*设计|有什么推荐|交互方案|帮我看看.*设计|设计.*建议)")
 CONTEXTUAL_SELECTION_RE = re.compile(r"(适老|老人|驾驶员|这种情况下选什么|选什么控件|什么控件形态.*合理|应该用.*(?:按钮|旋钮|控件|手势)|做.*界面.*应该用)")
 MECHANISM_EXPLANATION_RE = re.compile(r"(看不懂|没看懂|更直观|直观.*讲|什么含义|啥意思|细说|讲法|怎么理解)")
+REASONING_REQUEST_RE = re.compile(
+    r"(设计|方案|建议|优化|改进|怎么选|如何选择|什么时候该用|实际.*选|实际.*用|"
+    r"生活中.*例|生活类比|举个.*例|比如|直观.*讲|应用场景|适用场景)"
+)
 # 检索指令：直接请求输出特定表达式/图示/案例等内容，不需要展开分析。
 RETRIEVAL_INSTRUCTION_RE = re.compile(
     r"(给我.*表达式|给我.*表达式图|给我.*图|给我.*示例|给我.*案例|"
@@ -114,6 +118,7 @@ class QuestionParser:
         terms = self.kb.find_terms(query)
         intent = forced_intent or self._detect_intent(query, image_paths, terms)
         subtype = self._detect_subtype(intent, query, terms)
+        reasoning_allowed = self._reasoning_allowed(intent, subtype, query)
         layers = self._detect_layers(query, terms, intent)
         focus = self._detect_focus(query)
         compare_targets = self._detect_compare_targets(query, terms) if intent == "interaction_compare" else []
@@ -139,6 +144,7 @@ class QuestionParser:
             terms=terms,
             focus=focus,
             subtype=subtype,
+            reasoning_allowed=reasoning_allowed,
             compare_targets=compare_targets,
             case_modality=case_modality,
             missing_info=missing_info,
@@ -470,6 +476,28 @@ class QuestionParser:
         ):
             return "control_form_application"
         return None
+
+    def _reasoning_allowed(
+        self,
+        intent: Intent,
+        subtype: Optional[QuestionSubtype],
+        query: str,
+    ) -> bool:
+        if intent in {
+            "design_evaluation",
+            "mechanism_identification",
+            "function_interaction_breakdown",
+            "mechanism_parameter_compare",
+            "interaction_optimization",
+            "evaluation_methodology",
+            "design_suggestion",
+        }:
+            return True
+        if intent == "voice_interaction":
+            return False
+        if subtype in {"control_form_compare", "control_form_application"}:
+            return True
+        return bool(REASONING_REQUEST_RE.search(query))
 
     def _has_interaction_mechanism_match(self, query: str, terms: list[str], *, query_text: Optional[str] = None) -> bool:
         if not terms:

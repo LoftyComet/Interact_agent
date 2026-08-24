@@ -105,10 +105,7 @@ class MechanismRegistry:
             if not is_required and not _is_formal_mention(text, start, end, entry):
                 continue
             checked_entries.add(entry.code)
-            clause = _surrounding_clause(text, start, end)
-            found_codes = tuple(dict.fromkeys(
-                match.group(1).lower() for match in _CODE_IN_TEXT_RE.finditer(clause)
-            ))
+            found_codes = _associated_codes(text, start, end)
             if entry.code in found_codes:
                 continue
             issue_type = "mechanism_code_mismatch" if found_codes else "missing_mechanism_code"
@@ -130,7 +127,7 @@ class MechanismRegistry:
                     found_codes=(code,),
                 ))
                 continue
-            clause = _surrounding_clause(text, match.start(), match.end())
+            clause = _nearby_text(text, match.start(), match.end())
             if not any(_contains_name(clause, name) for name in entry.names):
                 other_names = [
                     other.label
@@ -168,10 +165,7 @@ class MechanismRegistry:
             if not is_required and not _is_formal_mention(text, start, end, entry):
                 continue
             handled.add(entry.code)
-            clause = _surrounding_clause(text, start, end)
-            found_codes = {
-                match.group(1).lower() for match in _CODE_IN_TEXT_RE.finditer(clause)
-            }
+            found_codes = set(_associated_codes(text, start, end))
             if entry.code in found_codes or found_codes:
                 continue
             edits.append((start, f"{entry.code} "))
@@ -215,6 +209,31 @@ def _surrounding_clause(text: str, start: int, end: int) -> str:
     return text[left:right]
 
 
+def _nearby_text(text: str, start: int, end: int, radius: int = 8) -> str:
+    return text[max(0, start - radius):min(len(text), end + radius)]
+
+
+def _associated_codes(text: str, start: int, end: int) -> tuple[str, ...]:
+    before = text[max(0, start - 16):start]
+    after = text[end:min(len(text), end + 16)]
+    values: list[str] = []
+    before_match = re.search(
+        r"(?<![0-9A-Za-z-])(\d+-[a-z])\s*(?:\*\*)?\s*$",
+        before,
+        flags=re.IGNORECASE,
+    )
+    if before_match:
+        values.append(before_match.group(1).lower())
+    after_match = re.match(
+        r"\s*(?:[（(]\s*)?(\d+-[a-z])(?![0-9A-Za-z-])",
+        after,
+        flags=re.IGNORECASE,
+    )
+    if after_match and after_match.group(1).lower() not in values:
+        values.append(after_match.group(1).lower())
+    return tuple(values)
+
+
 def _contains_name(text: str, name: str) -> bool:
     if not name:
         return False
@@ -222,8 +241,8 @@ def _contains_name(text: str, name: str) -> bool:
 
 
 def _is_formal_mention(text: str, start: int, end: int, entry: MechanismEntry) -> bool:
-    clause = _surrounding_clause(text, start, end)
-    if _CODE_IN_TEXT_RE.search(clause):
+    clause = _nearby_text(text, start, end)
+    if _associated_codes(text, start, end):
         return True
     if entry.label_en and _contains_name(clause, entry.label_en):
         return True

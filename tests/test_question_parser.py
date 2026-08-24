@@ -217,6 +217,16 @@ def test_mechanism_parameter_compare_intent() -> None:
 
     assert structure.intent == "mechanism_parameter_compare"
     assert "资料依据" in structure.output_frame
+    assert structure.reasoning_allowed is True
+
+
+def test_factual_mechanism_sequence_question_forbids_reasoning() -> None:
+    parser = QuestionParser(KnowledgeBase.load("data"))
+
+    structure = parser.parse("长按拖拽到底是先长按再拖拽，还是同时做？")
+
+    assert structure.intent == "interaction_compare"
+    assert structure.reasoning_allowed is False
 
 
 def test_plain_mechanism_compare_stays_interaction_compare() -> None:

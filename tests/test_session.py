@@ -83,6 +83,25 @@ def test_clarification_answer_with_shared_intent_still_combines() -> None:
     assert session.pending is None
 
 
+def test_broad_voice_scenario_question_does_not_force_subtype_clarification() -> None:
+    session = ConversationSession(QuestionParser(KnowledgeBase.load("data")))
+
+    result = session.receive("语音交互适合什么场景、不适合什么场景？")
+
+    assert result.status == "ready"
+    assert result.structure is not None
+    assert result.structure.intent == "voice_interaction"
+
+
+def test_specific_voice_question_still_offers_subtype_choices() -> None:
+    session = ConversationSession(QuestionParser(KnowledgeBase.load("data")))
+
+    result = session.receive("我想系统了解语音交互。")
+
+    assert result.status == "clarify"
+    assert len(result.options) == 2
+
+
 def test_follow_up_uses_previous_turn_memory() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)

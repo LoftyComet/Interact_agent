@@ -151,6 +151,7 @@ class QuestionStructure:
     terms: list[str]
     focus: list[str]
     subtype: Optional[QuestionSubtype] = None
+    reasoning_allowed: bool = False
     compare_targets: list[str] = field(default_factory=list)
     case_modality: list[str] = field(default_factory=list)
     missing_info: list[str] = field(default_factory=list)
