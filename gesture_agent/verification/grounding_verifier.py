@@ -276,16 +276,45 @@ class GroundingVerifier:
             ],
             "evidence": evidence,
         }
+        messages = [
+            {"role": "system", "content": _GROUNDING_SYSTEM_PROMPT},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ]
         response = self._judge.chat(
-            [
-                {"role": "system", "content": _GROUNDING_SYSTEM_PROMPT},
-                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
-            ],
+            messages,
             temperature=0.0,
             max_tokens=2400,
             enable_thinking=False,
         )
-        raw = _parse_json_object(response)
+        try:
+            raw = _parse_json_object(response)
+        except (json.JSONDecodeError, ValueError) as first_error:
+            # A semantic verdict is unusable when the judge emits malformed
+            # JSON. Retry only this batch once with an explicit format repair;
+            # provider/network failures still surface immediately.
+            response = self._judge.chat(
+                [
+                    *messages,
+                    {"role": "assistant", "content": response[:5000]},
+                    {
+                        "role": "user",
+                        "content": (
+                            "上一条结果不是可解析的完整 JSON。请重新审计同一批 claims，"
+                            "不要省略任何 id，只输出符合系统消息 schema 的 JSON 对象；"
+                            "字符串中的引号必须正确转义。"
+                        ),
+                    },
+                ],
+                temperature=0.0,
+                max_tokens=2400,
+                enable_thinking=False,
+            )
+            try:
+                raw = _parse_json_object(response)
+            except (json.JSONDecodeError, ValueError) as second_error:
+                raise ValueError(
+                    f"校验模型连续返回无效 JSON：{second_error}"
+                ) from first_error
         rows = raw.get("claims")
         if not isinstance(rows, list):
             raise ValueError("校验模型没有返回 claims 数组")

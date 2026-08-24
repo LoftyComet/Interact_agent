@@ -141,6 +141,35 @@ def test_judge_failure_is_reported_as_unavailable() -> None:
     assert report.error
 
 
+def test_malformed_judge_json_is_retried_once() -> None:
+    class FlakyJsonJudge(FakeJudge):
+        def __init__(self) -> None:
+            super().__init__({})
+            self.calls = 0
+
+        def chat(self, messages, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return '{"claims":[{"id":"c1" "verdict":"supported"}]}'
+            return json.dumps({
+                "claims": [{
+                    "id": "c1",
+                    "verdict": "supported",
+                    "confidence": 1.0,
+                    "reason": "资料直接支持",
+                }]
+            }, ensure_ascii=False)
+
+    judge = FlakyJsonJudge()
+    report = GroundingVerifier(judge).verify(
+        "旋钮可以连续调节。[1]",
+        [_source("旋钮可以连续调节。")],
+    )
+
+    assert report.status == "pass"
+    assert judge.calls == 2
+
+
 def test_large_answer_is_judged_in_bounded_batches() -> None:
     class CountingJudge(FakeJudge):
         def __init__(self) -> None:
