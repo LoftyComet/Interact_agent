@@ -12,3 +12,4 @@ data/papers/*.jsonl
 data/papers/*.meta.json
 paper_agent_config.json
 knowledge_index/
+runtime/

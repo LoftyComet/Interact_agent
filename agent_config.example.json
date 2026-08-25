@@ -91,5 +91,19 @@
     "grounding_model": "deepseek-v4-flash",
     "grounding_strict": true,
     "grounding_minimum_score": 0.85
+  },
+
+  // 真实失败评测候选采集。数据库独立于 data/ 和 knowledge_index/，不会参与检索。
+  "failure_collection": {
+    // 开启后自动收集：发生重试、末端安全降级、校验失败或用户点踩的回答。
+    "enabled": false,
+    "database_path": "runtime/evaluation_candidates.sqlite",
+    // 生成评测题需要保留问题文本；关闭后只保存问题哈希。
+    "store_raw_query": true,
+    "collect_retries": true,
+    // 自动遮盖 API Key、邮箱、手机号和身份证号等敏感片段。
+    "redact_sensitive_data": true,
+    // 仅用于等待前端反馈的内存缓存，不会把正常回答写入数据库。
+    "max_recent_responses": 256
   }
 }

@@ -129,6 +129,10 @@ API Key 仍读取项目根的 `.env`：`DEEPSEEK_API_KEY`（DeepSeek 官方）�
 | `error`   | `{message}` |
 | `done`    | `{session_id, answer?, output_issues?}` |
 
+启用 `failure_collection.enabled` 后，`done` 还会返回 `response_id`，前端据此提交有帮助/
+有问题反馈。自动失败与点踩候选保存在 `runtime/evaluation_candidates.sqlite`，不会进入
+知识索引；人工审核和评测草稿导出见 [`evals/README.md`](../evals/README.md#自动收集真实失败候选)。
+
 ### 输入对齐 / 输出校验
 
 `/api/ask` 与 `/api/ask_stream` 在回答前后会按 `agent_config.json` 的 `verification` 配置：

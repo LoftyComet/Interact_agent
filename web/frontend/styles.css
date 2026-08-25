@@ -980,6 +980,35 @@ body {
   line-height: 1.4;
 }
 
+.answer-feedback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0 46px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.answer-feedback button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-soft);
+  padding: 4px 10px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.answer-feedback button:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.answer-feedback button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .chunk-summary .citation {
   font-size: 11px;
   color: var(--muted);

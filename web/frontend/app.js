@@ -534,6 +534,40 @@ function appendMessage({ role, text, kind, persist = true, markdown, images }) {
   return { row, bubble };
 }
 
+function attachAnswerFeedback(messageRow, responseId) {
+  if (!messageRow || !responseId || messageRow.querySelector(".answer-feedback")) return;
+  const bar = document.createElement("div");
+  bar.className = "answer-feedback";
+  const label = document.createElement("span");
+  label.textContent = "这个回答有帮助吗？";
+  bar.appendChild(label);
+
+  for (const [rating, text] of [["up", "有帮助"], ["down", "有问题"]]) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = text;
+    button.addEventListener("click", async () => {
+      const note = rating === "down"
+        ? (window.prompt("可选：哪里不正确？这会帮助形成真实失败评测题。", "") || "")
+        : "";
+      bar.querySelectorAll("button").forEach((item) => (item.disabled = true));
+      try {
+        await api("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ response_id: responseId, rating, note }),
+        });
+        label.textContent = rating === "down" ? "已加入待审核失败候选" : "已记录，谢谢";
+      } catch (err) {
+        label.textContent = `反馈记录失败：${err.message}`;
+        bar.querySelectorAll("button").forEach((item) => (item.disabled = false));
+      }
+    });
+    bar.appendChild(button);
+  }
+  messageRow.appendChild(bar);
+}
+
 // 渲染一条带可点击选项按钮的追问。点击某个按钮即把它的 value 作为下一轮输入发送。
 function appendClarifyOptions(message, options) {
   const { row } = appendMessage({ role: "system", text: message || "需要澄清。" });
@@ -826,6 +860,7 @@ async function sendOnce(question, images, style) {
   const { row, bubble } = appendMessage({ role: "assistant", text: data.answer || "(空响应)" });
   setBubbleAnswerBlocks(bubble, data.answer_blocks);
   attachChunkRefs(row, state.lastChunks);
+  attachAnswerFeedback(row, data.response_id);
 }
 
 async function sendStream(question, images, style) {
@@ -893,6 +928,9 @@ async function sendStream(question, images, style) {
           if (!setBubbleAnswerBlocks(answerEl, payload.answer_blocks)) {
             setBubbleContent(answerEl, payload.answer, { markdown: true });
           }
+        }
+        if (answerEl) {
+          attachAnswerFeedback(answerEl.closest(".message"), payload.response_id);
         }
         break;
       default:

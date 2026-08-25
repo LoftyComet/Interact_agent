@@ -146,3 +146,30 @@ def test_load_agent_config_reads_grounding_settings(tmp_path) -> None:
     assert loaded.verification.grounding_model == "deepseek-v4-flash"
     assert loaded.verification.grounding_strict is False
     assert loaded.verification.grounding_minimum_score == 0.7
+
+
+def test_load_agent_config_reads_failure_collection_settings(tmp_path) -> None:
+    config = tmp_path / "agent_config.json"
+    config.write_text(
+        """
+{
+  "failure_collection": {
+    "enabled": true,
+    "database_path": "runtime/custom.sqlite",
+    "store_raw_query": false,
+    "collect_retries": false,
+    "redact_sensitive_data": true,
+    "max_recent_responses": 32
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    loaded = load_agent_config(config)
+
+    assert loaded.failure_collection.enabled is True
+    assert loaded.failure_collection.database_path == "runtime/custom.sqlite"
+    assert loaded.failure_collection.store_raw_query is False
+    assert loaded.failure_collection.collect_retries is False
+    assert loaded.failure_collection.max_recent_responses == 32

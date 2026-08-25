@@ -40,3 +40,46 @@
 
 评分器检查意图/subtype、`answer_blocks`、引用范围、机制注册表、输出验证器和
 grounding 状态。内容覆盖度与“推导是否确有必要”仍需在语料审计完成后加入语义评分。
+
+## 自动收集真实失败候选
+
+在本地 `agent_config.json` 开启独立的失败采集器：
+
+```json
+{
+  "failure_collection": {
+    "enabled": true,
+    "database_path": "runtime/evaluation_candidates.sqlite",
+    "store_raw_query": true,
+    "collect_retries": true,
+    "redact_sensitive_data": true
+  }
+}
+```
+
+它只收集发生重试、安全降级、校验失败、Provider 错误或前端点踩的回答。正常回答只在
+内存中短暂保留，等待用户反馈；不会写入数据库。候选库位于 `runtime/`，该目录被 Git
+忽略，并且不会被知识索引扫描。记录只保存 chunk ID、标题和来源定位，不复制原始语料正文。
+
+审核流程：
+
+```bash
+# 查看待审核候选
+.venv/bin/python scripts/review_failure_candidates.py list
+
+# 导出供人工检查
+.venv/bin/python scripts/review_failure_candidates.py export \
+  --output /private/tmp/ixdl_failure_review.jsonl
+
+# 人工确认某些案例确实有评测价值
+.venv/bin/python scripts/review_failure_candidates.py set-status \
+  --status approved --ids fail_xxxxxxxxxxxxxxxx
+
+# 生成仍需人工补充期望答案/证据的评测草稿
+.venv/bin/python scripts/review_failure_candidates.py promote \
+  --output evals/ixdl_real_failures_draft.jsonl
+```
+
+`promote` 不会把候选写进原语料或知识索引，也不会把模型的错误答案当成金标准；导出的
+`expected_output.criteria_status` 固定为 `needs_human_review`，必须人工核对书中原文后才能
+加入正式回归集。

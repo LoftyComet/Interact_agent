@@ -24,6 +24,16 @@ class VerificationConfig:
 
 
 @dataclass
+class FailureCollectionConfig:
+    enabled: bool = False
+    database_path: str = "runtime/evaluation_candidates.sqlite"
+    store_raw_query: bool = True
+    collect_retries: bool = True
+    redact_sensitive_data: bool = True
+    max_recent_responses: int = 256
+
+
+@dataclass
 class PromptConfig:
     system_prompt: Optional[str] = None
     extra_system_prompt: str = ""
@@ -61,6 +71,7 @@ class AgentConfig:
     llm_output_frame_confidence_threshold: float = 0.80
     prompt: PromptConfig = field(default_factory=PromptConfig)
     verification: VerificationConfig = field(default_factory=VerificationConfig)
+    failure_collection: FailureCollectionConfig = field(default_factory=FailureCollectionConfig)
 
 
 def load_agent_config(config_path: Optional[Union[str, Path]] = None) -> AgentConfig:
@@ -85,6 +96,7 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
     media = _object_section(raw, "media")
     prompt = _object_section(raw, "prompt")
     verification = _object_section(raw, "verification")
+    failure_collection = _object_section(raw, "failure_collection")
 
     return AgentConfig(
         source=source,
@@ -132,6 +144,23 @@ def agent_config_from_dict(raw: dict[str, Any], *, source: str = "config") -> Ag
             grounding_minimum_score=_bounded_float(
                 verification.get("grounding_minimum_score", 0.85),
                 "verification.grounding_minimum_score",
+            ),
+        ),
+        failure_collection=FailureCollectionConfig(
+            enabled=bool(failure_collection.get("enabled", False)),
+            database_path=str(
+                failure_collection.get(
+                    "database_path", "runtime/evaluation_candidates.sqlite"
+                )
+            ),
+            store_raw_query=bool(failure_collection.get("store_raw_query", True)),
+            collect_retries=bool(failure_collection.get("collect_retries", True)),
+            redact_sensitive_data=bool(
+                failure_collection.get("redact_sensitive_data", True)
+            ),
+            max_recent_responses=_int_value(
+                failure_collection.get("max_recent_responses", 256),
+                "failure_collection.max_recent_responses",
             ),
         ),
     )

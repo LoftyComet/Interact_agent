@@ -413,4 +413,4 @@ def test_corpus_only_generation_uses_near_deterministic_temperature() -> None:
     )
 
     assert generation_temperature(runtime, factual) == 0.05
-    assert generation_temperature(runtime, design) == 0.2
+    assert generation_temperature(runtime, design) == 0.1

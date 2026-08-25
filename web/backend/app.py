@@ -8,6 +8,7 @@ PromptBuilder → SiliconFlowClient.
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import re
 import sys
@@ -28,6 +29,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory, stream
 from flask_cors import CORS
 
 from gesture_agent.core.models import QuestionStructure, SourceChunk
+from gesture_agent.evaluation import FailureCollector, detect_failure_signals
 from gesture_agent.knowledge import KnowledgeBase
 from gesture_agent.knowledge.image_index import ImageIndex
 from gesture_agent.learning import ClarificationIntentResolver, ConversationSession, LLMOutputFrameResolver, LLMTurnRelationResolver, QuestionParser, TurnClassifier
@@ -199,6 +201,14 @@ class AgentRuntime:
             minimum_score=self.config.verification.grounding_minimum_score,
         )
         self.reasoning_verifier = ReasoningVerifier(grounding_client)
+        failure_config = self.config.failure_collection
+        self.failure_collector = FailureCollector(
+            failure_config.database_path,
+            enabled=failure_config.enabled,
+            store_raw_query=failure_config.store_raw_query,
+            redact_sensitive_data=failure_config.redact_sensitive_data,
+            max_recent_responses=failure_config.max_recent_responses,
+        )
         index_path = Path(self.config.data_dir) / "pictures" / "extracted" / "image_index.json"
         self.image_index = ImageIndex.load(index_path)
 
@@ -438,12 +448,12 @@ def generation_temperature(
     runtime: AgentRuntime,
     structure: Optional[QuestionStructure],
 ) -> float:
-    """Use near-deterministic generation when design inference is forbidden."""
+    """Favor repeatable grounded answers while retaining limited design variety."""
 
     configured = float(runtime.config.temperature)
     if structure is not None and not structure.reasoning_allowed:
         return min(configured, 0.05)
-    return configured
+    return min(configured, 0.1)
 
 
 _DESIGN_BOUNDARY_INTENTS = {
@@ -711,6 +721,74 @@ def serialize_structure(structure: Optional[QuestionStructure]) -> Optional[dict
     return structure.to_dict()
 
 
+def observe_failure_candidate(
+    runtime: AgentRuntime,
+    *,
+    session_id: str,
+    query: str,
+    resolved_query: str,
+    structure: Optional[QuestionStructure],
+    answer: str,
+    chunks: list[SourceChunk],
+    provider_id: Optional[str],
+    style: str,
+    endpoint: str,
+    image_count: int,
+    retry_count: int,
+    initial_answer: str,
+    error_text: str = "",
+    output_issues: Optional[list[str]] = None,
+    grounding_report: Optional[GroundingReport] = None,
+    reasoning_report: Optional[ReasoningReport] = None,
+    safety_fallback_applied: bool = False,
+) -> tuple[str, Optional[str]]:
+    """Remember one response and persist it only when a failure signal fires."""
+
+    collector = runtime.failure_collector
+    if not collector.enabled:
+        return "", None
+    signals = detect_failure_signals(
+        provider_error=error_text,
+        output_issues=output_issues or [],
+        grounding_status=grounding_report.status if grounding_report else "",
+        reasoning_status=reasoning_report.status if reasoning_report else "",
+        safety_fallback_applied=safety_fallback_applied,
+        retry_count=retry_count,
+        collect_retries=runtime.config.failure_collection.collect_retries,
+    )
+    response_id = f"resp_{uuid.uuid4().hex}"
+    result = collector.observe(
+        {
+            "response_id": response_id,
+            "query": query,
+            "resolved_query": resolved_query,
+            "structure": serialize_structure(structure) or {},
+            "provider": provider_id or "default",
+            "model": runtime.config.model or "provider_default",
+            "answer": answer,
+            "answer_blocks": parse_answer_blocks(answer).to_list() if answer else [],
+            "chunks": [serialize_chunk(chunk) for chunk in chunks],
+            "diagnostics": {
+                "output_issues": output_issues or [],
+                "grounding": grounding_report.to_dict() if grounding_report else None,
+                "reasoning": reasoning_report.to_dict() if reasoning_report else None,
+                "safety_fallback_applied": safety_fallback_applied,
+                "retry_count": retry_count,
+            },
+            "metadata": {
+                "endpoint": endpoint,
+                "style": style,
+                "image_count": image_count,
+                "session_hash": hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:16],
+                "resolved_query": resolved_query,
+                "initial_answer": initial_answer,
+            },
+        },
+        triggers=signals,
+    )
+    return result.response_id, result.candidate_id
+
+
 def serialize_answer_blocks(answer: str, image_index: Optional[ImageIndex]) -> list[dict[str, Any]]:
     document = parse_answer_blocks(answer)
     blocks = document.to_list()
@@ -791,6 +869,41 @@ def create_app(config_path: Optional[str] = None) -> Flask:
     @app.get("/api/providers")
     def providers() -> Response:
         return jsonify({"providers": list_providers()})
+
+    @app.get("/api/failure_collection")
+    def failure_collection_status() -> Response:
+        rt: AgentRuntime = app.config["AGENT_RUNTIME"]
+        return jsonify({
+            "enabled": rt.failure_collector.enabled,
+            "database_path": str(rt.failure_collector.path) if rt.failure_collector.enabled else "",
+        })
+
+    @app.post("/api/feedback")
+    def answer_feedback() -> Response:
+        rt: AgentRuntime = app.config["AGENT_RUNTIME"]
+        payload = request.get_json(silent=True) or {}
+        response_id = str(payload.get("response_id") or "").strip()
+        rating = str(payload.get("rating") or "").strip().lower()
+        note = str(payload.get("note") or "")
+        if not response_id:
+            return jsonify({"error": "missing response_id"}), 400
+        try:
+            candidate_id = rt.failure_collector.record_feedback(
+                response_id,
+                rating=rating,
+                note=note,
+            )
+        except RuntimeError:
+            return jsonify({"error": "failure collection is disabled"}), 409
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+        if rating == "down" and candidate_id is None:
+            return jsonify({"error": "response is no longer available"}), 404
+        return jsonify({
+            "status": "recorded",
+            "rating": rating,
+            "candidate_id": candidate_id,
+        })
 
     @app.post("/api/reset")
     def reset() -> Response:
@@ -903,6 +1016,8 @@ def create_app(config_path: Optional[str] = None) -> Flask:
         # --- 检索指令快速路径结束 ---
 
         answer = ""
+        initial_answer = ""
+        retry_count = 0
         error_text: Optional[str] = None
         try:
             image_urls = [image_path_to_data_url(p) for p in image_paths]
@@ -927,6 +1042,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             )
             answer = repair_unlabeled_design_reasoning(answer, structure)
             answer = normalize_mechanism_codes(rt, answer, structure)
+            initial_answer = answer
         except ProviderError as exc:
             error_text = str(exc)
 
@@ -967,6 +1083,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     )
                     answer = repair_unlabeled_design_reasoning(answer, structure)
                     answer = normalize_mechanism_codes(rt, answer, structure)
+                    retry_count += 1
                 except ProviderError:
                     break
                 quality_result = verify_answer_quality(rt, answer, structure, chunks)
@@ -1034,6 +1151,27 @@ def create_app(config_path: Optional[str] = None) -> Flask:
 
         answer = resolve_image_refs(answer, rt.image_index)
 
+        response_id, evaluation_candidate_id = observe_failure_candidate(
+            rt,
+            session_id=session_id,
+            query=session_result.user_query,
+            resolved_query=session_result.resolved_query,
+            structure=structure,
+            answer=answer,
+            chunks=chunks,
+            provider_id=provider_id,
+            style=style,
+            endpoint="/api/ask",
+            image_count=len(image_paths),
+            retry_count=retry_count,
+            initial_answer=initial_answer,
+            error_text=error_text or "",
+            output_issues=output_issues,
+            grounding_report=grounding_report,
+            reasoning_report=reasoning_report,
+            safety_fallback_applied=safety_fallback_applied,
+        )
+
         body = {
             "session_id": session_id,
             "status": "ready",
@@ -1053,6 +1191,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             "structure": serialize_structure(structure),
             "chunks": [serialize_chunk(c) for c in chunks],
             "memory_context": session_result.memory_context,
+            **({"response_id": response_id} if response_id else {}),
+            **(
+                {"evaluation_candidate_id": evaluation_candidate_id}
+                if evaluation_candidate_id
+                else {}
+            ),
         }
         status_code = 200 if not error_text else 502
         return jsonify(body), status_code
@@ -1166,6 +1310,8 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 },
             )
             answer_parts: list[str] = []
+            initial_answer = ""
+            retry_count = 0
             try:
                 image_urls = [image_path_to_data_url(p) for p in image_paths]
                 messages = build_messages(
@@ -1190,8 +1336,28 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     answer_parts.append(delta)
                     yield sse("delta", {"text": delta})
             except ProviderError as exc:
+                response_id, candidate_id = observe_failure_candidate(
+                    rt,
+                    session_id=session_id,
+                    query=session_result.user_query,
+                    resolved_query=session_result.resolved_query,
+                    structure=structure,
+                    answer="",
+                    chunks=chunks,
+                    provider_id=provider_id,
+                    style=style,
+                    endpoint="/api/ask_stream",
+                    image_count=len(image_paths),
+                    retry_count=0,
+                    initial_answer="",
+                    error_text=str(exc),
+                )
                 yield sse("error", {"message": str(exc)})
-                yield sse("done", {"session_id": session_id})
+                yield sse("done", {
+                    "session_id": session_id,
+                    **({"response_id": response_id} if response_id else {}),
+                    **({"evaluation_candidate_id": candidate_id} if candidate_id else {}),
+                })
                 return
             except Exception as exc:  # pragma: no cover - defensive
                 yield sse("error", {"message": f"unexpected error: {exc}"})
@@ -1204,6 +1370,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             if normalized_mechanisms != full_answer:
                 full_answer = normalized_mechanisms
                 yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
+            initial_answer = full_answer
 
             # --- 输出验证 ---
             output_issues: list[str] = []
@@ -1238,6 +1405,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                             full_answer, structure
                         )
                         full_answer = normalize_mechanism_codes(rt, full_answer, structure)
+                        retry_count += 1
                         yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
                     except ProviderError:
                         break
@@ -1274,6 +1442,25 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     structure=structure,
                 )
             full_answer = resolve_image_refs(full_answer, rt.image_index)
+            response_id, evaluation_candidate_id = observe_failure_candidate(
+                rt,
+                session_id=session_id,
+                query=session_result.user_query,
+                resolved_query=session_result.resolved_query,
+                structure=structure,
+                answer=full_answer,
+                chunks=chunks,
+                provider_id=provider_id,
+                style=style,
+                endpoint="/api/ask_stream",
+                image_count=len(image_paths),
+                retry_count=retry_count,
+                initial_answer=initial_answer,
+                output_issues=output_issues,
+                grounding_report=grounding_report,
+                reasoning_report=reasoning_report,
+                safety_fallback_applied=safety_fallback_applied,
+            )
             yield sse("done", {
                 "session_id": session_id,
                 "answer": full_answer,
@@ -1282,6 +1469,12 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 "grounding": grounding_report.to_dict() if grounding_report else None,
                 "reasoning_audit": reasoning_report.to_dict() if reasoning_report else None,
                 "safety_fallback_applied": safety_fallback_applied,
+                **({"response_id": response_id} if response_id else {}),
+                **(
+                    {"evaluation_candidate_id": evaluation_candidate_id}
+                    if evaluation_candidate_id
+                    else {}
+                ),
             })
 
         return Response(stream_with_context(generate()), mimetype="text/event-stream")

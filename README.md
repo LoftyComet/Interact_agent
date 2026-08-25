@@ -167,10 +167,17 @@ PYTHONPATH=. python web/backend/app.py
 | `POST` | `/api/reset` | 清空指定会话的多轮记忆 |
 | `POST` | `/api/ask` | `{question, session_id, images?, style?, provider?}` 一次性回答 |
 | `POST` | `/api/ask_stream` | 同上，返回 SSE 流式输出 |
+| `GET` | `/api/failure_collection` | 查看真实失败候选采集是否启用 |
+| `POST` | `/api/feedback` | 提交 `{response_id, rating: "up"|"down", note?}` 回答反馈 |
 
 `/api/ask` 与 `/api/ask_stream` 在回答前后会按 `agent_config.json` 的 `verification` 配置做输入对齐、输出格式校验和 Claim—Evidence 语料一致性校验。校验器逐条检查事实陈述是否被其引用片段支持，将结果分为 `supported`、`partially_supported`、`unsupported`、`conflicted`；失败时让模型重写一次。结果通过 `input_corrections`、`output_issues` 和 `grounding` 返回。SSE 在重写时会额外发 `retry` 和 `replace` 事件。
 
 所有 Web 端收到的用户问题会按行追加到 `data/logs/web_questions.jsonl`，用于后续标注和分析。
+
+如需把真实失败自动沉淀为评测候选，在本机 `agent_config.json` 中将
+`failure_collection.enabled` 设为 `true`。系统会自动收集重试、校验失败、安全降级和
+Provider 错误，前端也会显示“有帮助 / 有问题”反馈按钮。候选保存在 Git 忽略的独立
+SQLite 数据库中；审核和导出流程见 [评测说明](evals/README.md#自动收集真实失败候选)。
 
 ## 服务器部署
 
