@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -22,6 +23,13 @@ class ImageEntry:
 
     def all_text(self) -> str:
         return f"{self.heading} {self.annotation}"
+
+    @property
+    def reference_id(self) -> str:
+        """Return a compact token that models can reproduce without truncation."""
+
+        digest = hashlib.sha256(self.id.encode("utf-8")).hexdigest()[:12]
+        return f"img_{digest}"
 
 
 class ImageIndex:
@@ -48,7 +56,7 @@ class ImageIndex:
 
     def get_filename(self, image_id: str) -> Optional[str]:
         for entry in self.entries:
-            if entry.id == image_id:
+            if entry.id == image_id or entry.reference_id == image_id:
                 return entry.filename
         return None
 

@@ -125,7 +125,7 @@ def build_retrieval_answer(
     if available_images:
         img_lines = []
         for img in available_images:
-            img_lines.append(f"![{img.annotation}](image:{img.id})")
+            img_lines.append(f"![{img.annotation}](image:{img.reference_id})")
         return "\n\n".join(img_lines)
 
     # 没图片时给文本
@@ -851,6 +851,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
             "term_count": len(rt.kb.term_inventory.all_terms()),
             "doc_count": len(rt.kb.chunks),
             "index_chunk_count": rt.kb.index_chunk_count,
+            "image_count": len(rt.image_index.entries) if rt.image_index else 0,
             "retrieval_mode": rt.kb.retriever.mode if rt.kb.retriever else "legacy",
         }
         return jsonify(info)

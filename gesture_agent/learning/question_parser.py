@@ -48,6 +48,10 @@ EVAL_METHODOLOGY_RE = re.compile(r"(如何评估|怎么评估|怎样评估|如�
 OPTIMIZATION_RE = re.compile(r"(优化|提升.*体验|提升.*交互|改善.*交互|改善.*体验|经常.*误触|容易误|冲突.*怎么解决|冲突.*解决|不顺手|卡顿)")
 # 设计建议：请求新交互方案的建议/推荐（不是评估现有方案、不是优化具体问题）。
 DESIGN_SUGGESTION_RE = re.compile(r"(有什么建议|给我建议|设计建议|如何设计|怎么设计|帮我设计|给我推荐.*交互|推荐.*交互方式|建议.*交互|交互.*建议|想做.*交互|想设计.*交互|新设计|从零.*设计|有什么推荐|交互方案|帮我看看.*设计|设计.*建议)")
+INNOVATION_SCENARIO_RE = re.compile(
+    r"(创新.*(?:使用|应用)?场景|创新.*(?:用法|应用)|新的?.*(?:使用|应用)场景|"
+    r"拓展.*场景|还能.*(?:怎么用|用在哪|做什么))"
+)
 CONTEXTUAL_SELECTION_RE = re.compile(r"(适老|老人|驾驶员|这种情况下选什么|选什么控件|什么控件形态.*合理|应该用.*(?:按钮|旋钮|控件|手势)|做.*界面.*应该用)")
 MECHANISM_EXPLANATION_RE = re.compile(r"(看不懂|没看懂|更直观|直观.*讲|什么含义|啥意思|细说|讲法|怎么理解)")
 REASONING_REQUEST_RE = re.compile(
@@ -198,6 +202,11 @@ class QuestionParser:
             return []
         return self.example_bank.relevant(query)
 
+    def is_explicit_innovation_request(self, query: str) -> bool:
+        """Whether the user explicitly asks to explore a new application."""
+
+        return bool(INNOVATION_SCENARIO_RE.search(query))
+
     def _detect_intent(self, query: str, image_paths: list[str], terms: list[str]) -> Intent:
         candidates = self._intent_candidates(query, image_paths, terms)
         return candidates[0].intent if candidates else "background_knowledge"
@@ -246,6 +255,8 @@ class QuestionParser:
         if MULTIMODAL_RE.search(query):
             add("multimodal_interaction", 0.96, "问题包含多模态或跨模态分工信号。")
         # 设计建议：请求新交互方案的建议（不是评估现有方案、不是优化具体问题）。
+        if self.is_explicit_innovation_request(query) and not OPTIMIZATION_RE.search(query):
+            add("design_suggestion", 0.995, "问题明确请求探索交互机制的创新用法或新使用场景。")
         if DESIGN_SUGGESTION_RE.search(query) and not OPTIMIZATION_RE.search(query):
             add("design_suggestion", 0.91, "问题在请求新交互方案的设计建议（不是评估现有方案或优化具体问题）。")
         if CONTEXTUAL_SELECTION_RE.search(query) and not OPTIMIZATION_RE.search(query):

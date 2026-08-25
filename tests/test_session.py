@@ -127,6 +127,55 @@ def test_follow_up_uses_previous_turn_memory() -> None:
     assert "对话记忆" in second.resolved_query
 
 
+def test_mechanism_innovation_scenario_follow_up_switches_to_design_suggestion() -> None:
+    session = ConversationSession(QuestionParser(KnowledgeBase.load("data")))
+    first = session.receive("向量菜单是什么，怎么理解")
+    assert first.status == "ready"
+    assert first.structure is not None
+    session.record_turn(
+        user_query=first.user_query,
+        resolved_query=first.resolved_query,
+        structure=first.structure,
+    )
+
+    second = session.receive("这个交互机制有没有可能有什么创新的使用场景")
+
+    assert second.status == "ready"
+    assert second.structure is not None
+    assert second.structure.intent == "design_suggestion"
+    assert second.structure.reasoning_allowed is True
+    assert "设计建议（仅供参考）" in second.structure.output_frame
+    assert "向量菜单" in second.resolved_query
+
+
+def test_explicit_innovation_follow_up_is_not_overridden_by_llm_basic_intent() -> None:
+    class StaleIntentResolver:
+        def resolve(self, query, **kwargs):
+            return IntentResolution(
+                intent="basic_interaction_mechanism",
+                confidence=0.96,
+                needs_clarification=False,
+            )
+
+    session = ConversationSession(
+        QuestionParser(KnowledgeBase.load("data")),
+        intent_resolver=StaleIntentResolver(),  # type: ignore[arg-type]
+    )
+    first = session.receive("向量菜单是什么，怎么理解")
+    assert first.structure is not None
+    session.record_turn(
+        user_query=first.user_query,
+        resolved_query=first.resolved_query,
+        structure=first.structure,
+    )
+
+    second = session.receive("这个交互机制有没有可能有什么创新的使用场景")
+
+    assert second.structure is not None
+    assert second.structure.intent == "design_suggestion"
+    assert second.structure.reasoning_allowed is True
+
+
 def test_design_evaluation_follow_up_keeps_evaluation_intent() -> None:
     kb = KnowledgeBase.load("data")
     parser = QuestionParser(kb)

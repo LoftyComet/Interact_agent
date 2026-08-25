@@ -181,6 +181,16 @@ class ConversationSession:
                 ],
                 needs_clarification=False,
             )
+        elif self.parser.is_explicit_innovation_request(query):
+            # “创新用法/新使用场景”是高置信度的目标切换：保留上一轮机制
+            # 作为设计素材，但不能让可选 LLM 把意图拉回概念讲解。
+            resolution = self.parser.resolve_intent(
+                query,
+                image_paths=image_paths,
+                clarification_history=(
+                    clarification_history if self.dynamic_clarify_question else None
+                ),
+            )
         elif self.intent_resolver:
             resolution = self.intent_resolver.resolve(
                 query,

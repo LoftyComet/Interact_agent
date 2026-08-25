@@ -21,7 +21,7 @@ def test_basic_interaction_mechanism_intent() -> None:
     structure = parser.parse("什么是单击？")
 
     assert structure.intent == "basic_interaction_mechanism"
-    assert structure.output_frame == ["核心定义", "基础属性", "响应逻辑", "收益与代价", "典型案例", "适用与不适用", "关联机制"]
+    assert structure.output_frame == ["核心定义", "基础属性", "响应逻辑", "交互特性", "典型案例", "适用与不适用", "关联机制"]
 
 
 def test_advanced_mechanism_folds_into_basic_intent() -> None:
@@ -273,6 +273,14 @@ def test_design_suggestion_intent() -> None:
 
     assert structure.intent == "design_suggestion"
     assert "设计建议（仅供参考）" in structure.output_frame
+
+
+def test_possible_inapplicable_scenario_is_not_mistaken_for_innovation() -> None:
+    parser = QuestionParser(KnowledgeBase.load("data"))
+
+    structure = parser.parse("这个交互机制有没有可能不适用于车载场景？")
+
+    assert structure.intent != "design_suggestion"
 
 
 def test_retrieval_instruction_intent() -> None:

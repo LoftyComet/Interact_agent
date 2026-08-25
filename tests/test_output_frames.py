@@ -8,7 +8,7 @@ from gesture_agent.learning.output_frames import load_output_frames
 
 
 REPLACE_FRAMES = {
-    "basic_interaction_mechanism": ["核心定义", "基础属性", "响应逻辑", "收益与代价", "典型案例", "适用与不适用", "关联机制"],
+    "basic_interaction_mechanism": ["核心定义", "基础属性", "响应逻辑", "交互特性", "典型案例", "适用与不适用", "关联机制"],
     "control_form": ["控件定义", "图", "可用属性", "典型案例"],
     "basic_property": ["核心含义", "图", "相关案例", "基本性质"],
     "multimodal_interaction": ["模态组成", "交互逻辑", "融合/切换逻辑", "适用场景", "案例或启发"],
@@ -58,6 +58,15 @@ def test_output_frames_support_subtype_overrides(tmp_path) -> None:
     output_frames = load_output_frames("data", output_frames_path=config)
 
     assert output_frames.frame_for("interaction_compare", "control_form_compare") == ["形态对比", "选型建议"]
+
+
+def test_basic_mechanism_frame_uses_corpus_term_interaction_characteristics() -> None:
+    output_frames = load_output_frames("data")
+
+    frame = output_frames.frame_for("basic_interaction_mechanism")
+
+    assert "交互特性" in frame
+    assert "收益与代价" not in frame
 
 
 def test_output_frames_config_rejects_unknown_intent(tmp_path) -> None:
