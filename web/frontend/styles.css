@@ -258,6 +258,16 @@ body {
   animation: blink 1s infinite;
 }
 
+.message .bubble.verifying::after {
+  content: "正在核对语料，内容可能调整…";
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  animation: none;
+}
+
 .bubble.markdown {
   white-space: normal;
 }

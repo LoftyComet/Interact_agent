@@ -123,8 +123,9 @@ API Key 仍读取项目根的 `.env`：`DEEPSEEK_API_KEY`（DeepSeek 官方）�
 |---|---|
 | `meta`    | `{structure, chunks, memory_context, input_corrections, session_id}` |
 | `delta`   | `{text}` 单段增量回答 |
+| `verification` | `{status: "checking"}` 正在执行输出与语料一致性校验 |
 | `retry`   | `{reason}` 输出校验未通过，开始重写 |
-| `replace` | `{text}` 用重写后的完整答案整体替换 |
+| `replace` | `{text, answer_blocks}` 用完整答案整体替换，可在校验期间提前显示图片与分块样式 |
 | `clarify` | `{message}` 需要用户澄清 |
 | `error`   | `{message}` |
 | `done`    | `{session_id, answer?, output_issues?}` |

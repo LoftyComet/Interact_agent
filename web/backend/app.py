@@ -797,6 +797,22 @@ def serialize_answer_blocks(answer: str, image_index: Optional[ImageIndex]) -> l
     return blocks
 
 
+def stream_answer_payload(
+    answer: str,
+    image_index: Optional[ImageIndex],
+) -> dict[str, Any]:
+    """Build a complete UI replacement payload for a streamed answer.
+
+    Replacement events carry both the resolved Markdown and its provenance
+    blocks so the frontend can show images and final block styling while the
+    consistency verifier continues running.
+    """
+    return {
+        "text": resolve_image_refs(answer, image_index),
+        "answer_blocks": serialize_answer_blocks(answer, image_index),
+    }
+
+
 def create_app(config_path: Optional[str] = None) -> Flask:
     runtime = AgentRuntime(config_path=config_path)
     app = Flask(
@@ -1367,10 +1383,11 @@ def create_app(config_path: Optional[str] = None) -> Flask:
 
             full_answer = "".join(answer_parts)
             full_answer = repair_unlabeled_design_reasoning(full_answer, structure)
-            normalized_mechanisms = normalize_mechanism_codes(rt, full_answer, structure)
-            if normalized_mechanisms != full_answer:
-                full_answer = normalized_mechanisms
-                yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
+            full_answer = normalize_mechanism_codes(rt, full_answer, structure)
+            # The streamed deltas may still contain internal image references and
+            # incomplete Markdown. Send one complete render as soon as generation
+            # finishes; verification remains enabled and may replace it again.
+            yield sse("replace", stream_answer_payload(full_answer, rt.image_index))
             initial_answer = full_answer
 
             # --- 输出验证 ---
@@ -1382,6 +1399,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 rt.config.verification.verify_output or rt.config.verification.verify_grounding
             )
             if full_answer and verification_enabled and structure:
+                yield sse("verification", {"status": "checking"})
                 quality_result = verify_answer_quality(rt, full_answer, structure, chunks)
                 max_retries = rt.config.verification.output_max_retries
                 for _ in range(max_retries):
@@ -1407,9 +1425,10 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                         )
                         full_answer = normalize_mechanism_codes(rt, full_answer, structure)
                         retry_count += 1
-                        yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
+                        yield sse("replace", stream_answer_payload(full_answer, rt.image_index))
                     except ProviderError:
                         break
+                    yield sse("verification", {"status": "checking"})
                     quality_result = verify_answer_quality(rt, full_answer, structure, chunks)
                 sanitized_answer, quality_result = apply_grounding_safety_fallback(
                     rt, full_answer, structure, chunks, quality_result
@@ -1425,7 +1444,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                 )
                 if sanitized_answer != full_answer:
                     full_answer = sanitized_answer
-                    yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
+                    yield sse("replace", stream_answer_payload(full_answer, rt.image_index))
                 output_issues = quality_result.issue_descriptions
                 grounding_report = quality_result.grounding
                 reasoning_report = quality_result.reasoning
@@ -1434,7 +1453,7 @@ def create_app(config_path: Optional[str] = None) -> Flask:
                     normalized_answer = rt.output_verifier.normalize(full_answer, structure)
                     if normalized_answer != full_answer:
                         full_answer = normalized_answer
-                        yield sse("replace", {"text": resolve_image_refs(full_answer, rt.image_index)})
+                        yield sse("replace", stream_answer_payload(full_answer, rt.image_index))
 
             if structure is not None:
                 session.record_turn(

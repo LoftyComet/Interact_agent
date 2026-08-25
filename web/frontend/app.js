@@ -882,6 +882,12 @@ async function sendStream(question, images, style) {
   let buffer = "";
   let answerEl = null;
   let answerText = "";
+  let answerRenderTimer = null;
+
+  // DeepSeek can emit many very small deltas in the same frame. Re-parsing and
+  // replacing the full Markdown DOM for every token causes visible layout
+  // thrashing, so coalesce updates to at most 20 renders per second.
+  const STREAM_RENDER_INTERVAL_MS = 50;
 
   function ensureAnswerEl() {
     if (!answerEl) {
@@ -890,6 +896,35 @@ async function sendStream(question, images, style) {
       answerEl.classList.add("typing");
     }
     return answerEl;
+  }
+
+  function renderPendingAnswer() {
+    answerRenderTimer = null;
+    setBubbleContent(ensureAnswerEl(), answerText, { markdown: true });
+    els.messages.scrollTop = els.messages.scrollHeight;
+  }
+
+  function scheduleAnswerRender() {
+    ensureAnswerEl();
+    if (answerRenderTimer !== null) return;
+    answerRenderTimer = window.setTimeout(renderPendingAnswer, STREAM_RENDER_INTERVAL_MS);
+  }
+
+  function cancelScheduledAnswerRender() {
+    if (answerRenderTimer === null) return;
+    window.clearTimeout(answerRenderTimer);
+    answerRenderTimer = null;
+  }
+
+  function renderAnswerReplacement(payload) {
+    cancelScheduledAnswerRender();
+    answerText = payload.text || "";
+    const bubble = ensureAnswerEl();
+    if (!setBubbleAnswerBlocks(bubble, payload.answer_blocks)) {
+      bubble.classList.remove("answer-blocks");
+      setBubbleContent(bubble, answerText, { markdown: true });
+    }
+    els.messages.scrollTop = els.messages.scrollHeight;
   }
 
   function handleEvent(event, data) {
@@ -906,10 +941,17 @@ async function sendStream(question, images, style) {
         renderChunks(payload.chunks);
         break;
       case "delta":
-        ensureAnswerEl();
         answerText += payload.text || "";
-        setBubbleContent(answerEl, answerText, { markdown: true });
-        els.messages.scrollTop = els.messages.scrollHeight;
+        scheduleAnswerRender();
+        break;
+      case "verification":
+        ensureAnswerEl().classList.add("verifying");
+        break;
+      case "retry":
+        ensureAnswerEl().classList.add("verifying");
+        break;
+      case "replace":
+        renderAnswerReplacement(payload);
         break;
       case "clarify":
         if (Array.isArray(payload.options) && payload.options.length) {
@@ -922,7 +964,8 @@ async function sendStream(question, images, style) {
         appendMessage({ role: "assistant", kind: "error", text: payload.message || "请求失败" });
         break;
       case "done":
-        if (answerEl) answerEl.classList.remove("typing");
+        cancelScheduledAnswerRender();
+        if (answerEl) answerEl.classList.remove("typing", "verifying");
         if (payload.answer) {
           ensureAnswerEl();
           if (!setBubbleAnswerBlocks(answerEl, payload.answer_blocks)) {
@@ -958,8 +1001,9 @@ async function sendStream(question, images, style) {
       }
     }
   } finally {
+    cancelScheduledAnswerRender();
     if (answerEl) {
-      answerEl.classList.remove("typing");
+      answerEl.classList.remove("typing", "verifying");
       const msgRow = answerEl.closest(".message");
       if (msgRow) attachChunkRefs(msgRow, state.lastChunks);
     }
